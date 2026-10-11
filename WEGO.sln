@@ -5,11 +5,11 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wego.Api", "src\Wego.Api\Wego.Api.csproj", "{BB95E722-4F54-4BCB-ADCD-F669A30273DB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Wego.Api", "src\Wego.Api\Wego.Api.csproj", "{BB95E722-4F54-4BCB-ADCD-F669A30273DB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wego.Api.Tests", "tests\Wego.Api.Tests\Wego.Api.Tests.csproj", "{B43FC3E3-CED3-40BB-9CFA-612026260B3A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Wego.Api.Tests", "tests\Wego.Api.Tests\Wego.Api.Tests.csproj", "{B43FC3E3-CED3-40BB-9CFA-612026260B3A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

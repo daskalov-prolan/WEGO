@@ -92,3 +92,26 @@ export function weekOf(iso: string): Day[] {
 export function formatDateLong(iso: string): string {
   return `${WEEKDAYS_LONG[parseIso(iso).getUTCDay()]}, ${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`
 }
+
+/** ISO 8601 week number ("KW"): the week that contains the Thursday decides the year. */
+export function isoWeek(iso: string): number {
+  const date = parseIso(iso)
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1)
+  return Math.ceil(((date.getTime() - yearStart) / 86400000 + 1) / 7)
+}
+
+/** All days of the month that contains the given day. */
+export function monthOf(iso: string): Day[] {
+  const year = Number(iso.slice(0, 4))
+  const month = Number(iso.slice(5, 7))
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return daysBetween(`${iso.slice(0, 8)}01`, `${iso.slice(0, 8)}${String(lastDay).padStart(2, '0')}`)
+}
+
+/** The first day of the month the given number of months away. */
+export function addMonths(iso: string, count: number): string {
+  const date = parseIso(`${iso.slice(0, 8)}01`)
+  date.setUTCMonth(date.getUTCMonth() + count)
+  return date.toISOString().slice(0, 10)
+}

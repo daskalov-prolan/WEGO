@@ -41,7 +41,7 @@ export function DayDialog({ employee, date, entries, customers, onClose, onSaved
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    dialog.current?.showModal()
+    dialog.current?.showModal?.()
   }, [])
 
   const update = (index: number, change: Partial<Row>) =>
