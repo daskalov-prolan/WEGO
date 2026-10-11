@@ -100,7 +100,7 @@ export interface EmployeeReport {
   totalHours: number
   customers: ReportRow[]
   entries: Entry[]
-  vacation: Vacation | null
+  vacation: Vacation
 }
 
 export interface Employee {

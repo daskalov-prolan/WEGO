@@ -69,8 +69,9 @@ export default function App() {
 
   let content
   if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
-  else if (page === 'baustellen') content = <CustomerReportPage year={year} customerId={selectedId} />
-  else if (page === 'mitarbeiter') content = <EmployeeReportPage year={year} user={user} employeeId={selectedId} />
+  // Reports and administration are for planners only.
+  else if (page === 'baustellen' && isPlaner) content = <CustomerReportPage year={year} customerId={selectedId} />
+  else if (page === 'mitarbeiter' && isPlaner) content = <EmployeeReportPage year={year} user={user} employeeId={selectedId} />
   else if (page === 'verwaltung' && isPlaner) content = <AdminPage year={year} />
   else content = <PlanPage year={year} canEdit={isPlaner} userId={user.id} />
 

@@ -20,13 +20,13 @@ public static class EmployeeEndpoints
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
-        // Names only, for every signed-in user (report selection).
+        // Names only, for the selection in the employee report.
         app.MapGet("/api/employees/names", async (WegoDbContext db) =>
             await db.Employees
                 .Where(e => e.ShowInPlan)
                 .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
                 .Select(e => new EmployeeListItem(e.Id, e.Name))
-                .ToListAsync());
+                .ToListAsync()).RequireAuthorization(Roles.Planer);
 
         var group = app.MapGroup("/api/employees").RequireAuthorization(Roles.Planer);
 

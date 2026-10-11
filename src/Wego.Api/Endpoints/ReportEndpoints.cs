@@ -15,7 +15,7 @@ public static class ReportEndpoints
     public record VacationDto(int EmployeeId, string EmployeeName, int Entitlement, int Used, int Remaining,
         int SickDays);
     public record EmployeeReportDto(int EmployeeId, string EmployeeName, int Year, int TotalDays, double TotalHours,
-        IReadOnlyList<ReportRow> Customers, IReadOnlyList<EntryDto> Entries, VacationDto? Vacation);
+        IReadOnlyList<ReportRow> Customers, IReadOnlyList<EntryDto> Entries, VacationDto Vacation);
 
     public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
@@ -40,10 +40,13 @@ public static class ReportEndpoints
 
             return Results.Ok(new CustomerReportDto(customer.Id, customer.Name, year,
                 rows.Sum(r => r.Days), rows.Sum(r => r.Hours), rows, entries));
-        });
+        }).RequireAuthorization(Roles.Planer);
 
+        // Planners see every employee, everybody else only their own report.
         group.MapGet("/employees/{id:int}", async (int id, int year, ClaimsPrincipal user, WegoDbContext db) =>
         {
+            if (!user.IsPlaner() && user.EmployeeId() != id) return Results.Forbid();
+
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
 
@@ -59,8 +62,7 @@ public static class ReportEndpoints
                 .OrderByDescending(r => r.Days).ThenBy(r => r.Name)
                 .ToList();
 
-            // Vacation and sick day totals are only for planners and the employee concerned.
-            var vacation = user.IsPlaner() || user.EmployeeId() == id ? ToVacation(employee, all) : null;
+            var vacation = ToVacation(employee, all);
 
             return Results.Ok(new EmployeeReportDto(employee.Id, employee.Name, year,
                 entries.Select(e => e.Date).Distinct().Count(), rows.Sum(r => r.Hours), rows, entries, vacation));

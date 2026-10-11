@@ -100,7 +100,7 @@ public static class PlanEndpoints
             await db.Customers
                 .OrderBy(c => c.Name)
                 .Select(c => new CustomerDto(c.Id, c.Name, c.Location, c.Description))
-                .ToListAsync());
+                .ToListAsync()).RequireAuthorization(Roles.Planer);
 
         // Renaming to the name of another customer merges both, which is how typos get cleaned up.
         app.MapPut("/api/customers/{id:int}", async (int id, UpdateCustomerRequest request, WegoDbContext db) =>

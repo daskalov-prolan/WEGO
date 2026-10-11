@@ -9,7 +9,7 @@ interface Props {
   employeeId: number | null
 }
 
-/** Where one employee worked during the year. Vacation figures only for planners and the employee concerned. */
+/** Planner-only: where one employee worked during the year, with vacation and sick days. */
 export function EmployeeReportPage({ year, user, employeeId }: Props) {
   const [employees, setEmployees] = useState<NamedItem[]>([])
   const [report, setReport] = useState<EmployeeReport | null>(null)
@@ -28,9 +28,8 @@ export function EmployeeReportPage({ year, user, employeeId }: Props) {
   }, [selectedId, year])
 
   useEffect(() => {
-    if (user.role !== 'Planer') return
     api.vacationOverview(year).then(setOverview, (e) => setError(messageOf(e)))
-  }, [user.role, year])
+  }, [year])
 
   return (
     <div className="page">
@@ -65,7 +64,7 @@ export function EmployeeReportPage({ year, user, employeeId }: Props) {
               <div className="value">{report.customers.length}</div>
               <div className="label">Baustellen</div>
             </div>
-            {report.vacation && (
+            {
               <>
                 <div className="stat">
                   <div className="value">
@@ -82,7 +81,7 @@ export function EmployeeReportPage({ year, user, employeeId }: Props) {
                   <div className="label">Krankheitstage</div>
                 </div>
               </>
-            )}
+            }
           </div>
 
           <h2>Nach Baustelle</h2>
@@ -136,7 +135,7 @@ export function EmployeeReportPage({ year, user, employeeId }: Props) {
 
       {overview.length > 0 && (
         <>
-          <h2>Urlaubsübersicht {year} (nur für Planer sichtbar)</h2>
+          <h2>Urlaubsübersicht {year}</h2>
           <table className="table">
             <thead>
               <tr>

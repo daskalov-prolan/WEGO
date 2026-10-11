@@ -98,10 +98,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.Forbidden, put.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/employees")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync($"/api/reports/vacation?year={Year}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/employees/names")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync($"/api/reports/customers/1?year={Year}")).StatusCode);
     }
 
     [Fact]
-    public async Task Vacation_balance_is_visible_only_to_planers_and_the_employee()
+    public async Task Employee_report_with_vacation_balance_is_only_for_planers_and_the_employee()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var annaId = await CreateEmployeeAsync(planer, "Anna", "anna", "anna-passwort");
@@ -127,8 +130,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(28, forAnna.GetProperty("remaining").GetInt32());
 
         var bernd = await LoginAsync("bernd", "bernd-passwort");
-        var forBernd = (await bernd.GetFromJsonAsync<JsonElement>(url)).GetProperty("vacation");
-        Assert.Equal(JsonValueKind.Null, forBernd.ValueKind);
+        Assert.Equal(HttpStatusCode.Forbidden, (await bernd.GetAsync(url)).StatusCode);
     }
 
     [Fact]

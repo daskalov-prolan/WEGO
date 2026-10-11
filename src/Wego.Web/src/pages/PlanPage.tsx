@@ -135,7 +135,7 @@ export function PlanPage({ year, canEdit, userId }: Props) {
         {matchingDates ? (
           <span className="muted">
             {matchingDates.size} {matchingDates.size === 1 ? 'Tag' : 'Tage'} mit Einsätzen
-            {filteredCustomer && (
+            {filteredCustomer && canEdit && (
               <>
                 {' · '}
                 <a href={`#/baustellen/${filteredCustomer.id}`}>Auswertung öffnen</a>
@@ -168,9 +168,13 @@ export function PlanPage({ year, canEdit, userId }: Props) {
               <th className="col-holiday">Schulferien</th>
               {plan.employees.map((employee) => (
                 <th key={employee.id}>
-                  <a href={`#/mitarbeiter/${employee.id}`} style={{ color: 'inherit' }}>
-                    {employee.name}
-                  </a>
+                  {canEdit ? (
+                    <a href={`#/mitarbeiter/${employee.id}`} style={{ color: 'inherit' }}>
+                      {employee.name}
+                    </a>
+                  ) : (
+                    employee.name
+                  )}
                 </th>
               ))}
             </tr>

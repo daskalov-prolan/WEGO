@@ -16,8 +16,8 @@ interface Props {
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
   { page: 'plan', label: 'Gesamtplan', visible: () => true },
-  { page: 'baustellen', label: 'Baustellen', visible: () => true },
-  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true },
+  { page: 'baustellen', label: 'Baustellen', visible: (user: User) => user.role === 'Planer' },
+  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: (user: User) => user.role === 'Planer' },
   { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'Planer' },
 ]
 
