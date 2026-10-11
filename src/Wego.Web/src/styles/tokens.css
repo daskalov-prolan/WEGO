@@ -1,0 +1,18 @@
+/* Colours taken from www.wego-badcenter.de (theme stylesheet and logo). */
+:root {
+  --wego-teal: #007c87;
+  --wego-teal-dark: #004b50;
+  --wego-aqua: #39bbcf;
+  --wego-green: #009748;
+  --wego-red: #d71f27;
+
+  --surface: #ffffff;
+  --surface-muted: #f1f6f7;
+  --surface-weekend: #e6eef0;
+  --surface-holiday: #fff6d6;
+  --border: #c9d8db;
+  --text: #17292b;
+  --text-muted: #5c7275;
+
+  --font: 'europa', 'Segoe UI', system-ui, sans-serif;
+}

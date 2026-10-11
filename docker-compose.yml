@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wego
+      POSTGRES_PASSWORD: wego_dev
+      POSTGRES_DB: wego
+    ports:
+      - "5432:5432"
+    volumes:
+      - wego-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wego -d wego"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  wego-pgdata:
