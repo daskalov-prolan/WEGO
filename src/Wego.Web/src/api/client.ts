@@ -1,4 +1,5 @@
 import type {
+  Access,
   CustomerReport,
   DayEntryInput,
   Employee,
@@ -83,6 +84,8 @@ export const api = {
   employees: () => request<Employee[]>('GET', '/api/employees'),
   createEmployee: (input: EmployeeInput) => request<Employee>('POST', '/api/employees', input),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>('PUT', `/api/employees/${id}`, input),
+
+  createAccess: (id: number) => request<Access>('POST', `/api/employees/${id}/access`),
 
   addSchoolHoliday: (name: string, startDate: string, endDate: string) =>
     request<SchoolHoliday>('POST', '/api/schoolholidays', { name, startDate, endDate }),

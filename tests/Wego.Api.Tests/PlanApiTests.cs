@@ -148,6 +148,38 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.Unauthorized, (await former.GetAsync($"/api/plan?year={Year}")).StatusCode);
     }
 
+    [Fact]
+    public async Task Generated_access_lets_the_employee_sign_in_and_asks_for_an_own_password()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateEmployeeAsync(planer, "Jörg Müßig", null, null);
+
+        var access = await (await planer.PostAsync($"/api/employees/{id}/access", null))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var userName = access.GetProperty("userName").GetString()!;
+        var initialPassword = access.GetProperty("initialPassword").GetString()!;
+        Assert.Equal("joerg.muessig", userName);
+
+        var employee = await LoginAsync(userName, initialPassword);
+        var me = await employee.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.True(me.GetProperty("mustChangePassword").GetBoolean());
+        Assert.True(me.GetProperty("showInPlan").GetBoolean());
+
+        var change = await employee.PostAsJsonAsync("/api/auth/password",
+            new { currentPassword = initialPassword, newPassword = "mein-eigenes-passwort" });
+        Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
+
+        me = await employee.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.False(me.GetProperty("mustChangePassword").GetBoolean());
+        await LoginAsync(userName, "mein-eigenes-passwort");
+
+        // A second employee with the same name gets a different user name.
+        var secondId = await CreateEmployeeAsync(planer, "Jörg Müßig", null, null);
+        var second = await (await planer.PostAsync($"/api/employees/{secondId}/access", null))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("joerg.muessig2", second.GetProperty("userName").GetString());
+    }
+
     private async Task<HttpClient> LoginAsync(string userName, string password)
     {
         var client = factory.CreateClient();

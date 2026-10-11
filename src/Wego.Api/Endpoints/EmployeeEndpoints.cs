@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Wego.Api.Data;
@@ -11,6 +12,9 @@ public static class EmployeeEndpoints
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword);
 
     /// <summary>Password is only changed when it is not empty.</summary>
+    /// <summary>The initial password is returned once and stored only as a hash.</summary>
+    public record AccessDto(int EmployeeId, string Name, string UserName, string InitialPassword);
+
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
         string? UserName, string Role, string? Password);
 
@@ -58,7 +62,44 @@ public static class EmployeeEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(employee));
         });
+
+        // Creates the login of an employee (user name from the name) or resets a forgotten password.
+        // The employee has to choose their own password at the first sign-in.
+        group.MapPost("/{id:int}/access", async (int id, WegoDbContext db, IPasswordHasher<Employee> hasher) =>
+        {
+            var employee = await db.Employees.FindAsync(id);
+            if (employee is null) return Results.NotFound();
+            if (!employee.IsActive) return ApiErrors.BadRequest("Für inaktive Mitarbeiter gibt es keinen Zugang.");
+
+            employee.UserName ??= await UniqueUserName(db, employee.Name);
+            var password = NewInitialPassword();
+            employee.PasswordHash = hasher.HashPassword(employee, password);
+            employee.MustChangePassword = true;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new AccessDto(employee.Id, employee.Name, employee.UserName, password));
+        });
     }
+
+    private static async Task<string> UniqueUserName(WegoDbContext db, string name)
+    {
+        var slug = name.Trim().ToLowerInvariant()
+            .Replace("ä", "ae").Replace("ö", "oe").Replace("ü", "ue").Replace("ß", "ss");
+        slug = string.Join('.', new string(slug.Select(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' ? c : ' ').ToArray())
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (slug.Length == 0) slug = "benutzer";
+
+        var candidate = slug;
+        for (var number = 2; await db.Employees.AnyAsync(e => e.UserName == candidate); number++)
+            candidate = $"{slug}{number}";
+        return candidate;
+    }
+
+    // Without characters that are easily confused when read from a note (0/O, 1/l/I).
+    private const string PasswordAlphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+    private static string NewInitialPassword() =>
+        new(RandomNumberGenerator.GetItems<char>(PasswordAlphabet, 10));
 
     private static bool CanPlan(Employee e) =>
         e.IsActive && e.Role == Roles.Planer && e.UserName is not null && e.PasswordHash is not null;
@@ -86,6 +127,7 @@ public static class EmployeeEndpoints
             if (input.Password.Length < AuthEndpoints.MinPasswordLength)
                 return $"Das Passwort muss mindestens {AuthEndpoints.MinPasswordLength} Zeichen lang sein.";
             employee.PasswordHash = hasher.HashPassword(employee, input.Password);
+            employee.MustChangePassword = true;
         }
 
         if (userName is null) employee.PasswordHash = null;

@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, NamedItem, Plan } from '../api/types'
+import { Chip } from '../components/Chip'
 import { DayDialog } from '../components/DayDialog'
-import { daysBetween, daysOfYear, formatTimeRange, MONTHS, todayIso } from '../lib/dates'
+import { MobilePlan } from '../components/MobilePlan'
+import { useIsPhone } from '../lib/useIsPhone'
+import { daysBetween, daysOfYear, MONTHS, todayIso } from '../lib/dates'
 
 interface Props {
   year: number
   canEdit: boolean
+  /** Employee id of the signed-in user: the phone view starts with their own week. */
+  userId?: number
 }
 
 const cellKey = (employeeId: number, date: string) => `${employeeId}|${date}`
 
-/** The yearly overview as in the Excel sheet: one row per day, one column per employee. */
-export function PlanPage({ year, canEdit }: Props) {
+/**
+ * The staff plan. On wide screens the yearly overview as in the Excel sheet (one row per day, one column
+ * per employee), on phones a day and week view.
+ */
+export function PlanPage({ year, canEdit, userId }: Props) {
+  const isPhone = useIsPhone()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
@@ -65,6 +74,39 @@ export function PlanPage({ year, canEdit }: Props) {
 
   if (error) return <p className="error page">{error}</p>
   if (!plan) return null
+
+  const dialog = editing && (
+    <DayDialog
+      key={cellKey(editing.employee.id, editing.date)}
+      employee={editing.employee}
+      date={editing.date}
+      entries={entriesByCell.get(cellKey(editing.employee.id, editing.date)) ?? []}
+      customers={plan.customers}
+      onClose={() => setEditing(null)}
+      onSaved={() => {
+        setEditing(null)
+        load()
+      }}
+    />
+  )
+
+  if (isPhone) {
+    return (
+      <>
+        <MobilePlan
+          key={year}
+          year={year}
+          employees={plan.employees}
+          entriesOf={(employeeId, date) => entriesByCell.get(cellKey(employeeId, date)) ?? []}
+          holidayByDate={holidayByDate}
+          canEdit={canEdit}
+          userId={userId}
+          onEdit={(employee, date) => setEditing({ employee, date })}
+        />
+        {dialog}
+      </>
+    )
+  }
 
   const visibleDays = matchingDates ? days.filter((day) => matchingDates.has(day.iso)) : days
   const filteredCustomer = plan.customers.find((customer) => customer.name.toLowerCase() === needle)
@@ -200,36 +242,12 @@ export function PlanPage({ year, canEdit }: Props) {
         </table>
       </div>
 
-      {editing && (
-        <DayDialog
-          key={cellKey(editing.employee.id, editing.date)}
-          employee={editing.employee}
-          date={editing.date}
-          entries={entriesByCell.get(cellKey(editing.employee.id, editing.date)) ?? []}
-          customers={plan.customers}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null)
-            load()
-          }}
-        />
-      )}
+      {dialog}
+
     </div>
   )
 }
 
 function scrollToRow(id: string) {
   document.getElementById(id)?.scrollIntoView({ block: 'start' })
-}
-
-function Chip({ entry, dimmed }: { entry: Entry; dimmed: boolean }) {
-  const time = formatTimeRange(entry)
-  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
-  return (
-    <span className={className}>
-      {time && <span className="time">{time}</span>}
-      {entry.type === 'Baustelle' ? entry.customerName : entry.type}
-      {entry.note && <span className="note">{entry.note}</span>}
-    </span>
-  )
 }

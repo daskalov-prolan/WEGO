@@ -6,6 +6,16 @@ export interface User {
   name: string
   userName: string
   role: Role
+  /** The user has a column of their own in the plan, i.e. is scheduled on construction sites. */
+  showInPlan: boolean
+  mustChangePassword: boolean
+}
+
+export interface Access {
+  employeeId: number
+  name: string
+  userName: string
+  initialPassword: string
 }
 
 export interface NamedItem {

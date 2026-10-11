@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Employee, EmployeeInput, NamedItem, Role, SchoolHoliday } from '../api/types'
+import type { Access, Employee, EmployeeInput, NamedItem, Role, SchoolHoliday } from '../api/types'
 import { formatDate } from '../lib/dates'
 
 /** Planner-only: employees and their rights, school holidays, customer names. */
@@ -31,6 +31,20 @@ function EmployeesSection() {
   // id 0 = new employee
   const [editing, setEditing] = useState<{ id: number; input: EmployeeInput } | null>(null)
   const [error, setError] = useState('')
+  // Initial passwords exist only here until the page is left: the server stores hashes.
+  const [accesses, setAccesses] = useState<Access[]>([])
+
+  const createAccesses = async (targets: Employee[]) => {
+    setError('')
+    try {
+      const created: Access[] = []
+      for (const employee of targets) created.push(await api.createAccess(employee.id))
+      setAccesses((current) => [...created, ...current.filter((a) => !created.some((c) => c.employeeId === a.employeeId))])
+      load()
+    } catch (e) {
+      setError(messageOf(e))
+    }
+  }
 
   const load = useCallback(() => {
     api.employees().then(setEmployees, (e) => setError(messageOf(e)))
@@ -106,7 +120,23 @@ function EmployeesSection() {
                   }
                 >
                   Bearbeiten
-                </button>
+                </button>{' '}
+                {employee.isActive && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    onClick={() => {
+                      if (
+                        !employee.hasPassword ||
+                        window.confirm(`Neues Startpasswort für ${employee.name} erzeugen? Das bisherige Passwort gilt dann nicht mehr.`)
+                      ) {
+                        void createAccesses([employee])
+                      }
+                    }}
+                  >
+                    {employee.hasPassword ? 'Passwort zurücksetzen' : 'Zugang anlegen'}
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -114,6 +144,50 @@ function EmployeesSection() {
       </table>
 
       {error && <p className="error">{error}</p>}
+
+      {employees.some((employee) => employee.isActive && !employee.hasPassword) && (
+        <p>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => createAccesses(employees.filter((employee) => employee.isActive && !employee.hasPassword))}
+          >
+            Zugänge für alle ohne Anmeldung anlegen
+          </button>
+        </p>
+      )}
+
+      {accesses.length > 0 && (
+        <div className="panel access-panel">
+          <strong>Neue Zugangsdaten – bitte jetzt notieren oder weitergeben.</strong>
+          <p className="muted">
+            Die Startpasswörter werden nicht gespeichert und nach dem Verlassen dieser Seite nicht wieder angezeigt.
+            Bei der ersten Anmeldung wählt jeder sein eigenes Passwort.
+          </p>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Benutzername</th>
+                <th>Startpasswort</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accesses.map((access) => (
+                <tr key={access.employeeId}>
+                  <td>{access.name}</td>
+                  <td>
+                    <code>{access.userName}</code>
+                  </td>
+                  <td>
+                    <code>{access.initialPassword}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {editing ? (
         <form className="panel" onSubmit={submit} style={{ marginTop: 12 }}>

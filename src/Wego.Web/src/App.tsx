@@ -5,7 +5,8 @@ import { AppShell } from './components/AppShell'
 import { AdminPage } from './pages/AdminPage'
 import { CustomerReportPage } from './pages/CustomerReportPage'
 import { EmployeeReportPage } from './pages/EmployeeReportPage'
-import { LoginPage } from './pages/LoginPage'
+import { LoginPage, NewPasswordPage } from './pages/LoginPage'
+import { MyPlanPage } from './pages/MyPlanPage'
 import { PlanPage } from './pages/PlanPage'
 import { CURRENT_YEAR } from './lib/dates'
 
@@ -23,6 +24,8 @@ export default function App() {
   // undefined: not known yet, null: signed out
   const [user, setUser] = useState<User | null | undefined>(undefined)
   const [year, setYear] = useState(CURRENT_YEAR)
+  // Kept in memory only, so that somebody with an initial password does not have to type it twice.
+  const [loginPassword, setLoginPassword] = useState('')
   const [page, param] = useHashRoute()
 
   useEffect(() => {
@@ -33,21 +36,48 @@ export default function App() {
   }, [])
 
   if (user === undefined) return null
-  if (user === null) return <LoginPage onLogin={setUser} />
+  if (user === null) {
+    return (
+      <LoginPage
+        onLogin={(signedIn, password) => {
+          setLoginPassword(password)
+          setUser(signedIn)
+        }}
+      />
+    )
+  }
+  if (user.mustChangePassword) {
+    return (
+      <NewPasswordPage
+        user={user}
+        knownPassword={loginPassword}
+        onDone={() => {
+          setLoginPassword('')
+          setUser({ ...user, mustChangePassword: false })
+        }}
+        onLogout={() => api.logout().finally(() => setUser(null))}
+      />
+    )
+  }
 
   const isPlaner = user.role === 'Planer'
   const selectedId = param ? Number(param) : null
 
+  // Craftsmen start with their own week, planners with the plan of everybody.
+  const startPage = user.showInPlan && !isPlaner ? 'mein-plan' : 'plan'
+  const current = page || startPage
+
   let content
-  if (page === 'baustellen') content = <CustomerReportPage year={year} customerId={selectedId} />
+  if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
+  else if (page === 'baustellen') content = <CustomerReportPage year={year} customerId={selectedId} />
   else if (page === 'mitarbeiter') content = <EmployeeReportPage year={year} user={user} employeeId={selectedId} />
   else if (page === 'verwaltung' && isPlaner) content = <AdminPage year={year} />
-  else content = <PlanPage year={year} canEdit={isPlaner} />
+  else content = <PlanPage year={year} canEdit={isPlaner} userId={user.id} />
 
   return (
     <AppShell
       user={user}
-      page={page || 'plan'}
+      page={current}
       year={year}
       onYearChange={setYear}
       onLogout={() => api.logout().finally(() => setUser(null))}

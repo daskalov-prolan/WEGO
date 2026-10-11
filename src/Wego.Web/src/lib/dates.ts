@@ -73,3 +73,22 @@ export function formatHours(hours: number): string {
 }
 
 export const CURRENT_YEAR = new Date().getFullYear()
+
+const WEEKDAYS_LONG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
+
+export function addDays(iso: string, count: number): string {
+  const date = parseIso(iso)
+  date.setUTCDate(date.getUTCDate() + count)
+  return date.toISOString().slice(0, 10)
+}
+
+/** Monday to Sunday of the week that contains the given day. */
+export function weekOf(iso: string): Day[] {
+  const monday = addDays(iso, -((parseIso(iso).getUTCDay() + 6) % 7))
+  return daysBetween(monday, addDays(monday, 6))
+}
+
+/** "2026-10-12" -> "Montag, 12.10.2026" */
+export function formatDateLong(iso: string): string {
+  return `${WEEKDAYS_LONG[parseIso(iso).getUTCDay()]}, ${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`
+}

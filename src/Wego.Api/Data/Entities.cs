@@ -30,6 +30,9 @@ public class Employee
     public string? PasswordHash { get; set; }
     public string Role { get; set; } = Roles.Mitarbeiter;
 
+    /// <summary>Set when a planner assigned the password, so that only the employee knows the final one.</summary>
+    public bool MustChangePassword { get; set; }
+
     public List<PlanEntry> Entries { get; set; } = [];
 }
 

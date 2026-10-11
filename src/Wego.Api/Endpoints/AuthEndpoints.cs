@@ -14,7 +14,8 @@ public static class AuthEndpoints
 
     public record LoginRequest(string UserName, string Password);
     public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
-    public record UserDto(int Id, string Name, string UserName, string Role);
+    public record UserDto(int Id, string Name, string UserName, string Role, bool ShowInPlan,
+        bool MustChangePassword);
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -75,7 +76,11 @@ public static class AuthEndpoints
             if ((request.NewPassword ?? "").Length < MinPasswordLength)
                 return ApiErrors.BadRequest($"Das neue Passwort muss mindestens {MinPasswordLength} Zeichen lang sein.");
 
+            if (request.NewPassword == request.CurrentPassword)
+                return ApiErrors.BadRequest("Das neue Passwort muss sich vom aktuellen unterscheiden.");
+
             employee.PasswordHash = hasher.HashPassword(employee, request.NewPassword!);
+            employee.MustChangePassword = false;
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
@@ -92,7 +97,8 @@ public static class AuthEndpoints
 
     public static bool IsPlaner(this ClaimsPrincipal user) => user.IsInRole(Roles.Planer);
 
-    private static UserDto ToDto(Employee e) => new(e.Id, e.Name, e.UserName ?? "", e.Role);
+    private static UserDto ToDto(Employee e) =>
+        new(e.Id, e.Name, e.UserName ?? "", e.Role, e.ShowInPlan, e.MustChangePassword);
 }
 
 public static class ApiErrors

@@ -14,10 +14,11 @@ interface Props {
 }
 
 const NAV = [
-  { page: 'plan', label: 'Einsatzplan', planerOnly: false },
-  { page: 'baustellen', label: 'Baustellen', planerOnly: false },
-  { page: 'mitarbeiter', label: 'Mitarbeiter', planerOnly: false },
-  { page: 'verwaltung', label: 'Verwaltung', planerOnly: true },
+  { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
+  { page: 'plan', label: 'Gesamtplan', visible: () => true },
+  { page: 'baustellen', label: 'Baustellen', visible: () => true },
+  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true },
+  { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'Planer' },
 ]
 
 export function AppShell({ user, page, year, onYearChange, onLogout, children }: Props) {
@@ -30,11 +31,16 @@ export function AppShell({ user, page, year, onYearChange, onLogout, children }:
         <img src={logo} alt="WEGO Badcenter" />
         <span className="shell-title">Personaleinsatzplanung</span>
         <div className="shell-user">
-          <span>
+          <select aria-label="Jahr" value={year} onChange={(e) => onYearChange(Number(e.target.value))}>
+            {years.map((y) => (
+              <option key={y}>{y}</option>
+            ))}
+          </select>
+          <span className="shell-user-name">
             {user.name} ({user.role})
           </span>
           <button type="button" onClick={() => passwordDialog.current?.showModal()}>
-            Passwort ändern
+            Passwort<span className="wide-only"> ändern</span>
           </button>
           <button type="button" onClick={onLogout}>
             Abmelden
@@ -43,20 +49,13 @@ export function AppShell({ user, page, year, onYearChange, onLogout, children }:
       </header>
 
       <nav className="shell-nav" aria-label="Hauptnavigation">
-        {NAV.filter((item) => !item.planerOnly || user.role === 'Planer').map((item) => (
+        {NAV.filter((item) => item.visible(user)).map((item) => (
           <a key={item.page} href={`#/${item.page}`} aria-current={page === item.page ? 'page' : undefined}>
             {item.label}
           </a>
         ))}
-        <label className="year">
-          Jahr
-          <select value={year} onChange={(e) => onYearChange(Number(e.target.value))}>
-            {years.map((y) => (
-              <option key={y}>{y}</option>
-            ))}
-          </select>
-        </label>
       </nav>
+
 
       <main className="shell-main">{children}</main>
 
