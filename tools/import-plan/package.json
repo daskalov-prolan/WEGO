@@ -1,0 +1,10 @@
+{
+  "name": "wego-import-plan",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "One-off import of a year sheet from the Excel staff plan into the WEGO application",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

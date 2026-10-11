@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Planning sheets with customer and staff names stay out of the repository
+*.xlsx
+import/
