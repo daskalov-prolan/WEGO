@@ -22,6 +22,8 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         modelBuilder.Entity<Customer>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Location).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
             e.HasIndex(x => x.Name).IsUnique();
         });
 

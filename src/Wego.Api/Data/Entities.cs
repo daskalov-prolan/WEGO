@@ -42,6 +42,12 @@ public class Customer
     public int Id { get; set; }
     public required string Name { get; set; }
 
+    /// <summary>Address or district of the site, as the craftsmen need it to get there.</summary>
+    public string? Location { get; set; }
+
+    /// <summary>What is done there: kind of conversion, tiles, remarks.</summary>
+    public string? Description { get; set; }
+
     public List<PlanEntry> Entries { get; set; } = [];
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
+import { SiteLocation } from '../components/SiteLocation'
 import { addDays, daysBetween, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
 
 interface Props {
@@ -61,6 +62,8 @@ export function MyPlanPage({ year, user }: Props) {
     }
     return map
   }, [plan])
+
+  const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
 
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
@@ -125,10 +128,13 @@ export function MyPlanPage({ year, user }: Props) {
                   )
                 }
                 const colleagues = colleaguesOf(entry)
+                const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
                 return (
                   <div className="my-entry" key={entry.id}>
                     <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
                     <span className="where">{entry.customerName}</span>
+                    {site?.location && <SiteLocation location={site.location} />}
+                    {site?.description && <span className="detail">{site.description}</span>}
                     {entry.note && <span className="detail">{entry.note}</span>}
                     <span className="detail">{colleagues.length > 0 ? `mit ${colleagues.join(', ')}` : 'allein'}</span>
                   </div>

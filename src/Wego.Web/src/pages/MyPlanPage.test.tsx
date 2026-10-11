@@ -20,7 +20,7 @@ const plan: Plan = {
     { id: 2, name: 'Bernd' },
     { id: 3, name: 'Carla' },
   ],
-  customers: [],
+  customers: [{ id: 10, name: 'Familie Schulze', location: 'Musterweg 3, 13125 Berlin', description: 'Komplettbad' }],
   schoolHolidays: [],
   entries: [
     entry(1, 1, 'Anna', '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
@@ -61,6 +61,9 @@ describe('MyPlanPage', () => {
     expect(within(monday).getByText('8–10 Uhr')).toBeInTheDocument()
     expect(within(monday).getByText('Familie Schulze')).toBeInTheDocument()
     expect(within(monday).getByText('mit Bernd')).toBeInTheDocument()
+    expect(within(monday).getByText(/Musterweg 3, 13125 Berlin/)).toBeInTheDocument()
+    expect(within(monday).getByRole('link', { name: 'Karte' })).toHaveAttribute('href', expect.stringContaining('Musterweg%203'))
+    expect(within(monday).getByText('Komplettbad')).toBeInTheDocument()
     expect(within(monday).getByText('allein')).toBeInTheDocument()
 
     // Somebody else's site is none of this employee's business here.

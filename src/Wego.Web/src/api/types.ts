@@ -23,6 +23,12 @@ export interface NamedItem {
   name: string
 }
 
+/** A construction site, named after the customer. */
+export interface Customer extends NamedItem {
+  location: string | null
+  description: string | null
+}
+
 export interface SchoolHoliday {
   id: number
   name: string
@@ -49,7 +55,7 @@ export interface Plan {
   employees: NamedItem[]
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
-  customers: NamedItem[]
+  customers: Customer[]
 }
 
 export interface DayEntryInput {

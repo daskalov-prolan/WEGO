@@ -806,6 +806,25 @@ button.mcard {
   border-left-color: var(--wego-red);
 }
 
+.site-location {
+  font-size: 0.95rem;
+}
+
+.site-location a {
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+.site-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-left: 3px solid var(--wego-teal);
+}
+
 .access-panel {
   border-top: 3px solid var(--wego-green);
   margin-top: 12px;

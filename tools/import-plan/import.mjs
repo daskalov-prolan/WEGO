@@ -2,6 +2,7 @@
 //
 //   node import.mjs <file.xlsx> <year>            dry run: prints what would be imported
 //   node import.mjs <file.xlsx> <year> --apply    writes to the application
+//   ... --only=sites | --only=plan                restrict to the project list or to the day cells
 //
 // Environment: WEGO_URL (default http://localhost:5284), WEGO_USER, WEGO_PASSWORD (a Planer account).
 //
@@ -12,6 +13,8 @@
 // - A text cell is split on "/" into several construction sites of that day.
 // - "Krank" becomes a sick day, an empty yellow cell on a working day becomes a vacation day.
 // - The unnamed last column of each month (office absences, events) is not imported.
+// - Below the days each month lists its projects: customer, place, kind of conversion, tiles. They
+//   become place and description of the construction sites that already exist under that name.
 import ExcelJS from 'exceljs'
 
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
@@ -25,6 +28,7 @@ const SKIPPED_COLUMNS = new Set(['Elektro'])
 const [file, yearArg, ...flags] = process.argv.slice(2)
 const year = Number(yearArg)
 const apply = flags.includes('--apply')
+const only = flags.find((flag) => flag.startsWith('--only='))?.slice(7)
 if (!file || !Number.isInteger(year)) {
   console.error('Usage: node import.mjs <file.xlsx> <year> [--apply]')
   process.exit(1)
@@ -47,7 +51,7 @@ function isYellow(cell) {
 }
 
 /** "15.00 Stammler" -> { name: "Stammler", note: "ab 15.00" }, "Kuntz mit 2 Helfer" -> note "mit 2 Helfer" */
-export function parsePart(raw) {
+function parsePart(raw) {
   let name = raw.replace(/\s+/g, ' ').trim()
   const notes = []
 
@@ -76,7 +80,7 @@ export function parsePart(raw) {
   return { name, note: notes.join(', ') || null }
 }
 
-export function parseCell(raw) {
+function parseCell(raw) {
   const value = raw.replace(/\s+/g, ' ').trim()
   if (/^krank$/i.test(value)) return [{ type: 'Krank', customerName: null, startTime: null, endTime: null, note: null }]
 
@@ -108,6 +112,8 @@ async function readSheet() {
   }
   if (blocks.length !== 12) throw new Error(`Expected 12 month blocks in row 1, found ${blocks.length}.`)
 
+  const sites = readProjects(sheet, blocks)
+
   const employees = [] // in the order of first appearance
   const days = [] // { employee, date, entries }
   const pad = (n) => String(n).padStart(2, '0')
@@ -138,10 +144,55 @@ async function readSheet() {
     }
   })
 
-  return { employees, days }
+  return { employees, days, sites }
 }
 
-function summarize({ employees, days }) {
+// A postal code, a street, or one of the districts and towns the company works in.
+const PLACE =
+  /^\d{5}\b|\b(chaussee|straße|str\.|weg|allee|damm|platz)\b|\b(karow|bernau|panketal|buch|buchholz|wilhelmsruh|schildow|schlidow|weissensee|weißensee|glienicke|falkenberg|pankow|niederschönhausen|reinickendorf|konradshöhe|lübars|neuendorf)\b/i
+
+/** The project list below the day rows: one row per project, laid out a little differently every month. */
+function readProjects(sheet, blocks) {
+  const sites = new Map() // lower-case name -> { name, location, description, month }
+
+  blocks.forEach((block, index) => {
+    const end = (blocks[index + 1]?.start ?? sheet.columnCount + 1) - 1
+    for (let row = 33; row <= sheet.rowCount; row++) {
+      const cells = []
+      for (let column = block.start + 2; column <= end; column++) {
+        const value = text(sheet.getCell(row, column)).replace(/\s+/g, ' ').trim()
+        if (value) cells.push({ offset: column - block.start, value })
+      }
+      // The name is the first cell and stands directly next to the date columns.
+      if (cells.length === 0 || cells[0].offset > 3) continue
+
+      const name = cells[0].value.replace(/[\s/,;]+$/, '')
+      const rest = cells.slice(1).map((cell) => cell.value)
+      const location = rest.find((value) => PLACE.test(value)) ?? null
+      const description = rest.filter((value) => value !== location).join('; ') || null
+
+      const key = name.toLowerCase()
+      const known = sites.get(key)
+      if (known && known.month === block.month) {
+        // Two jobs for the same customer in one month.
+        known.description = [known.description, description].filter(Boolean).join(' / ') || null
+        known.location ??= location
+      } else {
+        sites.set(key, { name, location, description, month: block.month })
+      }
+    }
+  })
+
+  return [...sites.values()]
+}
+
+/** The site a project row belongs to: same name, or the name without first name or addition. */
+function matchSite(project, customers) {
+  const byName = new Map(customers.map((customer) => [customer.name.toLowerCase(), customer]))
+  return byName.get(project.name.toLowerCase()) ?? byName.get(project.name.split(/[\s,]+/)[0].toLowerCase()) ?? null
+}
+
+function summarize({ employees, days, sites }) {
   const count = (type) => days.reduce((n, d) => n + d.entries.filter((e) => e.type === type).length, 0)
   const customers = new Map()
   for (const day of days) {
@@ -163,9 +214,14 @@ function summarize({ employees, days }) {
   const sorted = [...customers.values()].sort((a, b) => b.days - a.days)
   console.log(`Construction sites (${sorted.length} distinct names), most used: ${sorted.slice(0, 15).map((c) => `${c.name} (${c.days})`).join(', ')}`)
   console.log(`Names used only once: ${sorted.filter((c) => c.days === 1).length}`)
+
+  console.log(`Project list: ${sites.length} projects, ${sites.filter((s) => s.location).length} with a place`)
+  for (const site of sites) {
+    console.log(`  ${site.name.padEnd(20)} ${(site.location ?? '-').padEnd(26)} ${site.description ?? ''}`)
+  }
 }
 
-async function importAll({ employees, days }) {
+async function importAll({ employees, days, sites }) {
   const base = process.env.WEGO_URL ?? 'http://localhost:5284'
   const { WEGO_USER: userName, WEGO_PASSWORD: password } = process.env
   if (!userName || !password) throw new Error('Set WEGO_USER and WEGO_PASSWORD (a Planer account).')
@@ -185,6 +241,35 @@ async function importAll({ employees, days }) {
 
   await call('POST', '/api/auth/login', { userName, password })
 
+  if (only !== 'sites') await importPlan(call, base, employees, days)
+  if (only !== 'plan') await importSites(call, base, sites)
+}
+
+async function importSites(call, base, sites) {
+  const customers = await call('GET', '/api/customers')
+  let updated = 0
+  const unmatched = []
+  for (const project of sites) {
+    const customer = matchSite(project, customers)
+    if (!customer) {
+      unmatched.push(project.name)
+      continue
+    }
+    // What a planner already entered in the application is kept.
+    const location = customer.location ?? project.location
+    const description = customer.description ?? project.description
+    if (location === customer.location && description === customer.description) continue
+    const saved = await call('PUT', `/api/customers/${customer.id}`, { name: customer.name, location, description })
+    Object.assign(customer, saved)
+    updated++
+  }
+  console.log(
+    `Sites in ${base}: ${updated} updated, ${unmatched.length} projects without a site of that name` +
+      (unmatched.length ? `: ${unmatched.join(', ')}` : ''),
+  )
+}
+
+async function importPlan(call, base, employees, days) {
   const existing = await call('GET', '/api/employees')
   const ids = new Map(existing.map((e) => [e.name.toLowerCase(), e.id]))
   let created = 0

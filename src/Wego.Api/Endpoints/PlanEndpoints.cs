@@ -8,7 +8,7 @@ public static class PlanEndpoints
     public const int MaxEntriesPerDay = 10;
 
     public record PlanEmployeeDto(int Id, string Name);
-    public record CustomerDto(int Id, string Name);
+    public record CustomerDto(int Id, string Name, string? Location, string? Description);
     public record SchoolHolidayDto(int Id, string Name, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? CustomerId, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime, string? Note);
@@ -17,7 +17,7 @@ public static class PlanEndpoints
 
     public record DayEntryInput(EntryType Type, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime,
         string? Note);
-    public record RenameCustomerRequest(string Name);
+    public record UpdateCustomerRequest(string Name, string? Location, string? Description);
 
     public static void MapPlanEndpoints(this IEndpointRouteBuilder app)
     {
@@ -47,7 +47,7 @@ public static class PlanEndpoints
 
             var customers = await db.Customers
                 .OrderBy(c => c.Name)
-                .Select(c => new CustomerDto(c.Id, c.Name))
+                .Select(c => new CustomerDto(c.Id, c.Name, c.Location, c.Description))
                 .ToListAsync();
 
             return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, customers);
@@ -97,14 +97,22 @@ public static class PlanEndpoints
         }).RequireAuthorization(Roles.Planer);
 
         app.MapGet("/api/customers", async (WegoDbContext db) =>
-            await db.Customers.OrderBy(c => c.Name).Select(c => new CustomerDto(c.Id, c.Name)).ToListAsync());
+            await db.Customers
+                .OrderBy(c => c.Name)
+                .Select(c => new CustomerDto(c.Id, c.Name, c.Location, c.Description))
+                .ToListAsync());
 
         // Renaming to the name of another customer merges both, which is how typos get cleaned up.
-        app.MapPut("/api/customers/{id:int}", async (int id, RenameCustomerRequest request, WegoDbContext db) =>
+        app.MapPut("/api/customers/{id:int}", async (int id, UpdateCustomerRequest request, WegoDbContext db) =>
         {
             var name = request.Name?.Trim();
             if (string.IsNullOrEmpty(name) || name.Length > 200)
                 return ApiErrors.BadRequest("Bitte einen Kundennamen mit höchstens 200 Zeichen angeben.");
+            var location = Clean(request.Location);
+            var description = Clean(request.Description);
+            if (location?.Length > 200) return ApiErrors.BadRequest("Der Ort darf höchstens 200 Zeichen lang sein.");
+            if (description?.Length > 1000)
+                return ApiErrors.BadRequest("Die Beschreibung darf höchstens 1000 Zeichen lang sein.");
 
             var customer = await db.Customers.FindAsync(id);
             if (customer is null) return Results.NotFound();
@@ -114,19 +122,28 @@ public static class PlanEndpoints
             if (target is null)
             {
                 customer.Name = name;
+                customer.Location = location;
+                customer.Description = description;
                 await db.SaveChangesAsync();
-                return Results.Ok(new CustomerDto(customer.Id, customer.Name));
+                return Results.Ok(ToDto(customer));
             }
 
+            // The site that remains keeps its own details and takes over only what it is missing.
             await using var transaction = await db.Database.BeginTransactionAsync();
             await db.PlanEntries.Where(e => e.CustomerId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.CustomerId, target.Id));
+            target.Location ??= location;
+            target.Description ??= description;
             db.Customers.Remove(customer);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            return Results.Ok(new CustomerDto(target.Id, target.Name));
+            return Results.Ok(ToDto(target));
         }).RequireAuthorization(Roles.Planer);
     }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static CustomerDto ToDto(Customer c) => new(c.Id, c.Name, c.Location, c.Description);
 
     public static (DateOnly From, DateOnly To) YearRange(int year) =>
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));

@@ -1,5 +1,6 @@
 import type {
   Access,
+  Customer,
   CustomerReport,
   DayEntryInput,
   Employee,
@@ -71,8 +72,9 @@ export const api = {
   saveDay: (employeeId: number, date: string, entries: DayEntryInput[]) =>
     request<Entry[]>('PUT', `/api/plan/${employeeId}/${date}`, entries),
 
-  customers: () => request<NamedItem[]>('GET', '/api/customers'),
-  renameCustomer: (id: number, name: string) => request<NamedItem>('PUT', `/api/customers/${id}`, { name }),
+  customers: () => request<Customer[]>('GET', '/api/customers'),
+  updateCustomer: (id: number, input: Omit<Customer, 'id'>) =>
+    request<Customer>('PUT', `/api/customers/${id}`, input),
 
   customerReport: (id: number, year: number) =>
     request<CustomerReport>('GET', `/api/reports/customers/${id}?year=${year}`),

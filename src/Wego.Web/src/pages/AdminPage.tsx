@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Access, Employee, EmployeeInput, NamedItem, Role, SchoolHoliday } from '../api/types'
+import type { Access, Customer, Employee, EmployeeInput, Role, SchoolHoliday } from '../api/types'
 import { formatDate } from '../lib/dates'
 
 /** Planner-only: employees and their rights, school holidays, customer names. */
@@ -395,7 +395,9 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 }
 
 function CustomersSection() {
-  const [customers, setCustomers] = useState<NamedItem[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [editing, setEditing] = useState<Customer | null>(null)
+  const [search, setSearch] = useState('')
   const [error, setError] = useState('')
 
   const load = useCallback(() => {
@@ -403,14 +405,16 @@ function CustomersSection() {
   }, [])
   useEffect(load, [load])
 
-  const rename = async (customer: NamedItem) => {
-    const name = window.prompt(
-      'Neuer Name. Gibt es den Namen schon, werden beide Baustellen zusammengeführt.',
-      customer.name,
-    )
-    if (!name || name.trim() === customer.name) return
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!editing) return
     try {
-      await api.renameCustomer(customer.id, name)
+      await api.updateCustomer(editing.id, {
+        name: editing.name,
+        location: editing.location,
+        description: editing.description,
+      })
+      setEditing(null)
       setError('')
       load()
     } catch (e) {
@@ -418,30 +422,91 @@ function CustomersSection() {
     }
   }
 
+  const needle = search.trim().toLowerCase()
+  const visible = needle ? customers.filter((customer) => customer.name.toLowerCase().includes(needle)) : customers
+
   return (
     <>
       <h2>Baustellen (Kunden)</h2>
       <p className="muted">
-        Baustellen entstehen beim Eintragen im Einsatzplan. Hier lassen sich Schreibfehler korrigieren und doppelte
-        Namen zusammenführen.
+        Baustellen entstehen beim Eintragen im Gesamtplan. Ort und Beschreibung sehen die Handwerker in „Mein
+        Plan“. Wer einer Baustelle den Namen einer anderen gibt, führt beide zusammen – so lassen sich
+        Schreibvarianten bereinigen.
       </p>
+
+      <div className="toolbar">
+        <label className="field">
+          Suchen
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kundenname" />
+        </label>
+        <span className="muted">
+          {visible.length} von {customers.length} Baustellen
+        </span>
+      </div>
+
       {error && <p className="error">{error}</p>}
+
+      {editing && (
+        <form className="panel" onSubmit={submit}>
+          <div className="toolbar">
+            <label className="field">
+              Kunde
+              <input
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                required
+                maxLength={200}
+              />
+            </label>
+            <label className="field" style={{ flex: 1, minWidth: 220 }}>
+              Ort / Adresse
+              <input
+                value={editing.location ?? ''}
+                onChange={(e) => setEditing({ ...editing, location: e.target.value || null })}
+                maxLength={200}
+                placeholder="z. B. Musterstraße 5, 13125 Berlin"
+              />
+            </label>
+            <label className="field" style={{ flex: 2, minWidth: 260 }}>
+              Beschreibung (Art des Umbaus, Fliesen, Hinweise)
+              <input
+                value={editing.description ?? ''}
+                onChange={(e) => setEditing({ ...editing, description: e.target.value || null })}
+                maxLength={1000}
+              />
+            </label>
+          </div>
+          <div className="dialog-actions">
+            <button type="submit" className="btn btn-primary">
+              Speichern
+            </button>
+            <button type="button" className="btn" onClick={() => setEditing(null)}>
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      )}
+
       <table className="table">
         <thead>
           <tr>
             <th>Kunde</th>
+            <th>Ort / Adresse</th>
+            <th>Beschreibung</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {customers.map((customer) => (
+          {visible.map((customer) => (
             <tr key={customer.id}>
               <td>
                 <a href={`#/baustellen/${customer.id}`}>{customer.name}</a>
               </td>
+              <td>{customer.location}</td>
+              <td>{customer.description}</td>
               <td>
-                <button type="button" className="btn btn-small" onClick={() => rename(customer)}>
-                  Umbenennen
+                <button type="button" className="btn btn-small" onClick={() => setEditing(customer)}>
+                  Bearbeiten
                 </button>
               </td>
             </tr>

@@ -11,8 +11,8 @@ const plan: Plan = {
     { id: 2, name: 'Bernd' },
   ],
   customers: [
-    { id: 10, name: 'Familie Schulze' },
-    { id: 11, name: 'Familie Meier' },
+    { id: 10, name: 'Familie Schulze', location: null, description: null },
+    { id: 11, name: 'Familie Meier', location: null, description: null },
   ],
   schoolHolidays: [{ id: 5, name: 'Winterferien', startDate: '2026-02-02', endDate: '2026-02-07' }],
   entries: [

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { CustomerReport, NamedItem } from '../api/types'
+import type { Customer, CustomerReport } from '../api/types'
+import { SiteLocation } from '../components/SiteLocation'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 
 /** How many days were worked on one construction site, and by whom. */
 export function CustomerReportPage({ year, customerId }: Props) {
-  const [customers, setCustomers] = useState<NamedItem[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [report, setReport] = useState<CustomerReport | null>(null)
   const [error, setError] = useState('')
 
@@ -22,6 +23,8 @@ export function CustomerReportPage({ year, customerId }: Props) {
     if (customerId === null) return
     api.customerReport(customerId, year).then(setReport, (e) => setError(messageOf(e)))
   }, [customerId, year])
+
+  const site = customers.find((customer) => customer.id === customerId)
 
   return (
     <div className="page">
@@ -45,6 +48,13 @@ export function CustomerReportPage({ year, customerId }: Props) {
       </div>
 
       {error && <p className="error">{error}</p>}
+
+      {site && (site.location || site.description) && (
+        <p className="site-details">
+          {site.location && <SiteLocation location={site.location} />}
+          {site.description && <span>{site.description}</span>}
+        </p>
+      )}
 
       {report && report.customerId === customerId && report.year === year && (
         <>

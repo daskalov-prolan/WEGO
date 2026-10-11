@@ -149,6 +149,37 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Site_details_are_kept_and_survive_merging_two_spellings()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var employeeId = await CreateEmployeeAsync(planer, "Stammdaten Tester", null, null);
+        await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-06-01",
+            new object[] { new { type = "Baustelle", customerName = "Samarrai" } });
+        await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-06-02",
+            new object[] { new { type = "Baustelle", customerName = "Sammarai" } });
+
+        var customers = await planer.GetFromJsonAsync<JsonElement>("/api/customers");
+        int IdOf(string name) => customers.EnumerateArray()
+            .Single(c => c.GetProperty("name").GetString() == name).GetProperty("id").GetInt32();
+
+        var update = await planer.PutAsJsonAsync($"/api/customers/{IdOf("Samarrai")}",
+            new { name = "Samarrai", location = "13125 Karow", description = "Komplettbad" });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+
+        // Renaming the misspelt one to the correct name merges both.
+        var merged = await (await planer.PutAsJsonAsync($"/api/customers/{IdOf("Sammarai")}",
+            new { name = "Samarrai", location = (string?)null, description = "sollte nicht überschreiben" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(IdOf("Samarrai"), merged.GetProperty("id").GetInt32());
+        Assert.Equal("13125 Karow", merged.GetProperty("location").GetString());
+        Assert.Equal("Komplettbad", merged.GetProperty("description").GetString());
+
+        var report = await planer.GetFromJsonAsync<JsonElement>(
+            $"/api/reports/customers/{IdOf("Samarrai")}?year={Year}");
+        Assert.Equal(2, report.GetProperty("totalDays").GetInt32());
+    }
+
+    [Fact]
     public async Task Generated_access_lets_the_employee_sign_in_and_asks_for_an_own_password()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
