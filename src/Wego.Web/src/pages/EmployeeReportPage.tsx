@@ -1,13 +1,11 @@
-import { Alert, Anchor, Badge, Paper, SimpleGrid, Table, Text, Title } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
+import { Alert, Anchor, Badge, Group, SimpleGrid, Table, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Employee, EmployeeReport, Vacation } from '../api/types'
-import { ActivitiesEditor, ActivityBadges } from '../components/EmployeeActivities'
+import { ActivityBadges } from '../components/EmployeeActivities'
 import { EmployeeMiniPlan } from '../components/EmployeeMiniPlan'
 import { Stat } from '../components/Stat'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
-import { toEmployeeInput } from '../lib/employees'
 
 interface Props {
   year: number
@@ -15,17 +13,14 @@ interface Props {
 }
 
 /**
- * Planner-only: the page of one employee. Their activities, their planning, and where they worked during
- * the year, with vacation and sick days.
+ * Planner-only: the page of one employee. Their activities (edited in the administration), their planning,
+ * and where they worked during the year, with vacation and sick days.
  */
 export function EmployeeReportPage({ year, employeeId }: Props) {
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [report, setReport] = useState<EmployeeReport | null>(null)
   const [overview, setOverview] = useState<Vacation[]>([])
   const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-  // Counts saved changes of the activities: the planning below loads again with them.
-  const [skillsVersion, setSkillsVersion] = useState(0)
 
   useEffect(() => {
     api.employees().then(
@@ -43,22 +38,6 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
   }, [year])
 
   const current = report && report.employeeId === employeeId && report.year === year ? report : null
-
-  /** Saves the activities right away; the planning then offers what fits them. */
-  const saveSkills = async (skills: Pick<Employee, 'mainActivity' | 'additionalActivities'>) => {
-    if (!employee) return
-    setSaving(true)
-    try {
-      const saved = await api.updateEmployee(employee.id, { ...toEmployeeInput(employee), ...skills })
-      setEmployee(saved)
-      setSkillsVersion((version) => version + 1)
-      notifications.show({ message: 'Tätigkeiten gespeichert.', color: 'green' })
-    } catch (e) {
-      setError(messageOf(e))
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div className="page">
@@ -80,9 +59,15 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
             )}
           </span>
         )}
-        <Anchor href="#/mitarbeiter" size="sm" className="site-page-head-actions">
-          Alle Mitarbeiter
-        </Anchor>
+        {/* Activities, role, login and vacation are kept in the administration. */}
+        <Group gap="md" className="site-page-head-actions">
+          <Anchor href="#/verwaltung" size="sm">
+            In der Verwaltung bearbeiten
+          </Anchor>
+          <Anchor href="#/mitarbeiter" size="sm">
+            Alle Mitarbeiter
+          </Anchor>
+        </Group>
       </div>
 
       {error && (
@@ -91,23 +76,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
         </Alert>
       )}
 
-      {employee && (
-        <Paper withBorder p="md" mb="lg">
-          <ActivitiesEditor
-            employeeId={employee.id}
-            year={year}
-            value={employee}
-            disabled={saving}
-            wide
-            onChange={(skills) => saveSkills(skills)}
-          />
-          <Text size="xs" c="dimmed" mt="xs">
-            Name, Zugang und Urlaubstage stehen in der Verwaltung.
-          </Text>
-        </Paper>
-      )}
-
-      <EmployeeMiniPlan key={`${employeeId}-${skillsVersion}`} employeeId={employeeId} canEdit />
+      <EmployeeMiniPlan key={employeeId} employeeId={employeeId} canEdit />
 
       <Title order={3} mb="sm">
         Auswertung {year}

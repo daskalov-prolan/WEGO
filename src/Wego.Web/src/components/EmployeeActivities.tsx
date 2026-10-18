@@ -1,4 +1,4 @@
-import { Badge, Button, ColorSwatch, Group, MultiSelect, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Badge, Button, ColorSwatch, Group, MultiSelect, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import type { Activity } from '../api/types'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
@@ -52,7 +52,6 @@ export function ActivitiesEditor({
   value,
   onChange,
   disabled = false,
-  wide = false,
 }: {
   /** Known employees get a suggestion from their entries of the year. */
   employeeId: number | null
@@ -60,8 +59,6 @@ export function ActivitiesEditor({
   value: Skills
   onChange: (value: Skills) => void
   disabled?: boolean
-  /** On a page: main and additional activities side by side. */
-  wide?: boolean
 }) {
   return (
     <Stack gap="xs">
@@ -91,25 +88,23 @@ export function ActivitiesEditor({
         Neue Einsätze bekommen die Haupttätigkeit; ändern lässt sie sich nur auf eine der weiteren. Ohne Angabe sind
         alle Tätigkeiten möglich.
       </Text>
-      <SimpleGrid cols={wide ? { base: 1, sm: 2 } : 1} spacing="xs">
-        <ActivitySelect
-          label="Haupttätigkeit"
-          value={value.mainActivity}
-          onChange={(mainActivity) =>
-            onChange({ mainActivity, additionalActivities: value.additionalActivities.filter((a) => a !== mainActivity) })
-          }
-        />
-        <MultiSelect
-          label="Weitere Tätigkeiten"
-          placeholder={value.additionalActivities.length ? undefined : 'keine'}
-          value={value.additionalActivities}
-          onChange={(values) => onChange({ ...value, additionalActivities: values as Activity[] })}
-          data={ACTIVITIES.filter((a) => a.value !== value.mainActivity).map((a) => ({ value: a.value, label: a.label }))}
-          clearable
-          disabled={disabled}
-          comboboxProps={{ withinPortal: true }}
-        />
-      </SimpleGrid>
+      <ActivitySelect
+        label="Haupttätigkeit"
+        value={value.mainActivity}
+        onChange={(mainActivity) =>
+          onChange({ mainActivity, additionalActivities: value.additionalActivities.filter((a) => a !== mainActivity) })
+        }
+      />
+      <MultiSelect
+        label="Weitere Tätigkeiten"
+        placeholder={value.additionalActivities.length ? undefined : 'keine'}
+        value={value.additionalActivities}
+        onChange={(values) => onChange({ ...value, additionalActivities: values as Activity[] })}
+        data={ACTIVITIES.filter((a) => a.value !== value.mainActivity).map((a) => ({ value: a.value, label: a.label }))}
+        clearable
+        disabled={disabled}
+        comboboxProps={{ withinPortal: true }}
+      />
     </Stack>
   )
 }
