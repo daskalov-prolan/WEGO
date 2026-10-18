@@ -31,7 +31,8 @@ interface Props {
   onClose: () => void
   /** Saves the day; a rejected promise keeps the editor open and shows the message. */
   onSave: (entries: DayEntryInput[]) => Promise<void>
-  onCopy: (entries: DayEntryInput[]) => void
+  /** Puts the day on the clipboard of the plan; without it there is no copy button. */
+  onCopy?: (entries: DayEntryInput[]) => void
 }
 
 interface Row {
@@ -241,9 +242,11 @@ export function DayEditor(props: Props) {
             <Button size="xs" variant="subtle" color="gray" onClick={() => setRows([])}>
               Tag leeren
             </Button>
-            <Button size="xs" variant="subtle" color="gray" onClick={() => onCopy(toInputs(rows))}>
-              Kopieren
-            </Button>
+            {onCopy && (
+              <Button size="xs" variant="subtle" color="gray" onClick={() => onCopy(toInputs(rows))}>
+                Kopieren
+              </Button>
+            )}
           </Group>
 
           {error && (

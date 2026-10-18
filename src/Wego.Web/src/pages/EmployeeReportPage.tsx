@@ -2,6 +2,7 @@ import { Alert, Anchor, Select, SimpleGrid, Table, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { EmployeeReport, NamedItem, Vacation } from '../api/types'
+import { EmployeeMiniPlan } from '../components/EmployeeMiniPlan'
 import { Stat } from '../components/Stat'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
 
@@ -10,7 +11,7 @@ interface Props {
   employeeId: number | null
 }
 
-/** Planner-only: where one employee worked during the year, with vacation and sick days. */
+/** Planner-only: the planning of one employee, and where they worked during the year, with vacation and sick days. */
 export function EmployeeReportPage({ year, employeeId }: Props) {
   const [employees, setEmployees] = useState<NamedItem[]>([])
   const [report, setReport] = useState<EmployeeReport | null>(null)
@@ -55,6 +56,8 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
           {error}
         </Alert>
       )}
+
+      {selectedId !== null && <EmployeeMiniPlan key={selectedId} employeeId={selectedId} canEdit />}
 
       {current && (
         <>

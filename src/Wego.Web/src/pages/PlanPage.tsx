@@ -23,7 +23,7 @@ import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
-import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
@@ -40,6 +40,7 @@ import {
   todayIso,
   weekOf,
 } from '../lib/dates'
+import { openTasksBySite as openTasks, tasksForEmployee } from '../lib/tasks'
 import { cellKey, holidaysByDate, toInput } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
@@ -181,30 +182,7 @@ export function PlanPage({ year, canEdit }: Props) {
   // activities still to plan; in the order the work starts there. Site and activity filters narrow the rows.
   // The activities each open site still needs in its status: not marked as not needed and not planned yet
   // (counted over all entries, whoever is shown).
-  const openTasksBySite = useMemo(() => {
-    const result = new Map<number, OpenTask[]>()
-    if (!plan) return result
-    const planned = new Map<string, number>()
-    for (const entry of plan.entries) {
-      if (entry.siteId === null || !entry.activity) continue
-      const key = `${entry.siteId}|${entry.activity}`
-      planned.set(key, (planned.get(key) ?? 0) + 1)
-    }
-    for (const site of plan.sites) {
-      if (!isOpen(site.status)) continue
-      const ofStatus = activitiesOfStatus(site.status)
-      const tasks = site.tasks
-        .filter((task) => ofStatus.includes(task.activity) && !task.notNeeded)
-        .map((task) => ({
-          activity: task.activity,
-          planned: planned.get(`${site.id}|${task.activity}`) ?? 0,
-          estimated: task.estimatedDays,
-        }))
-        .filter((task) => task.planned < task.estimated)
-      if (tasks.length > 0) result.set(site.id, tasks)
-    }
-    return result
-  }, [plan])
+  const openTasksBySite = useMemo(() => (plan ? openTasks(plan.sites, plan.entries) : new Map<number, OpenTask[]>()), [plan])
 
   const siteRows = useMemo<SiteRow[]>(() => {
     if (!plan) return []
@@ -245,30 +223,16 @@ export function PlanPage({ year, canEdit }: Props) {
   // the additional activities (in the order of the job); within each activity the earliest planned start first.
   const employeeTasks = useCallback(
     (employee: PlanEmployee) => {
-      if (!plan) return []
-      const own = [employee.mainActivity, ...ACTIVITIES.map((a) => a.value).filter((a) => employee.additionalActivities.includes(a))]
-      const activities = own.filter((activity): activity is Activity => activity !== null && (activityFilter.size === 0 || activityFilter.has(activity)))
       const needle = filter.trim().toLowerCase()
-      const result: { site: Site; task: OpenTask }[] = []
-      for (const activity of [...new Set(activities)]) {
-        const ofActivity: { site: Site; task: OpenTask }[] = []
-        for (const [siteId, tasks] of openTasksBySite) {
-          const site = siteById.get(siteId)
-          const task = tasks.find((candidate) => candidate.activity === activity)
-          if (!site || !task || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
-          ofActivity.push({ site, task })
-        }
-        // Sites without a planned start come last.
-        ofActivity.sort(
-          (a, b) =>
-            (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') ||
-            a.site.name.localeCompare(b.site.name, 'de'),
-        )
-        result.push(...ofActivity)
-      }
-      return result
+      return tasksForEmployee(
+        employee,
+        openTasksBySite,
+        siteById,
+        (activity) => activityFilter.size === 0 || activityFilter.has(activity),
+        (site) => !needle || `${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle),
+      )
     },
-    [plan, activityFilter, filter, openTasksBySite, siteById],
+    [activityFilter, filter, openTasksBySite, siteById],
   )
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
