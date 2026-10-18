@@ -8,19 +8,35 @@ const byValue = new Map(ACTIVITIES.map((activity) => [activity.value, activity])
 export function ActivitySelect({
   value,
   onChange,
+  allowed,
+  main = null,
+  label = 'Tätigkeit',
 }: {
   value: Activity | null
   onChange: (value: Activity | null) => void
+  /** Only these are offered (an employee's main and additional activities); default: all. */
+  allowed?: Activity[]
+  main?: Activity | null
+  label?: string
 }) {
   const selected = value ? byValue.get(value) : undefined
+  const offered = allowed ?? ACTIVITIES.map((activity) => activity.value)
+  // An entry from before the employee's activities were set keeps its activity visible.
+  const values = value && !offered.includes(value) ? [...offered, value] : offered
   return (
     <Select
-      label="Tätigkeit"
+      label={label}
       placeholder="nicht festgelegt"
       clearable
       value={value}
       onChange={(next) => onChange(next as Activity | null)}
-      data={ACTIVITIES.map((activity) => ({ value: activity.value, label: activity.label }))}
+      data={values.map((activity) => ({
+        value: activity,
+        label:
+          byValue.get(activity)!.label +
+          (activity === main ? ' (Haupttätigkeit)' : '') +
+          (offered.includes(activity) ? '' : ' (nicht zugeordnet)'),
+      }))}
       leftSection={selected ? <ColorSwatch color={selected.background} size={14} /> : undefined}
       renderOption={({ option }) => (
         <Group gap="xs" wrap="nowrap">

@@ -8,8 +8,8 @@ import { PlanPage } from './PlanPage'
 const plan: Plan = {
   year: 2026,
   employees: [
-    { id: 1, name: 'Anna' },
-    { id: 2, name: 'Bernd' },
+    { id: 1, name: 'Anna', mainActivity: null, additionalActivities: [] },
+    { id: 2, name: 'Bernd', mainActivity: 'Sanitaer', additionalActivities: ['Abriss'] },
   ],
   customers: [
     { id: 10, name: 'Familie Schulze', location: null, description: null },
@@ -130,7 +130,7 @@ describe('PlanPage', () => {
     expect(await screen.findByRole('button', { name: 'Speichern' })).toBeInTheDocument()
   })
 
-  it('saves the activity chosen for a site', async () => {
+  it('starts a site entry with the main activity and offers only the activities of the employee', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
     await user.click(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
@@ -138,14 +138,20 @@ describe('PlanPage', () => {
     const input = (label: RegExp) => screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT')!
     await screen.findAllByLabelText(/^Kunde/)
     await user.type(input(/^Kunde/), 'Familie Schulze')
+    expect(input(/^Tätigkeit/)).toHaveValue('Sanitär (Haupttätigkeit)')
     await user.click(input(/^Tätigkeit/))
-    await user.click(await screen.findByRole('option', { name: 'Fliesenarbeiten', hidden: true }))
+    // The customer suggestions of the field above are options too.
+    const options = (await screen.findAllByRole('option', { hidden: true }))
+      .map((option) => option.textContent)
+      .filter((text) => !text?.startsWith('Familie'))
+    expect(options).toEqual(['Sanitär (Haupttätigkeit)', 'Abriss / Baubeginn'])
+    await user.click(await screen.findByRole('option', { name: 'Abriss / Baubeginn', hidden: true }))
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
     expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
-      expect.objectContaining({ type: 'Baustelle', customerName: 'Familie Schulze', activity: 'Fliesen' }),
+      expect.objectContaining({ type: 'Baustelle', customerName: 'Familie Schulze', activity: 'Abriss' }),
     ])
   })
   it('lets planners select several cells and fill them in one go', async () => {

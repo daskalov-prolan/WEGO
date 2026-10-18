@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Wego.Api.Data;
 
@@ -16,6 +17,17 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.UserName).HasMaxLength(100);
             e.Property(x => x.Role).HasMaxLength(50);
+            e.Property(x => x.MainActivity).HasConversion<string>().HasMaxLength(30);
+            // Stored as a comma separated list of names, e.g. "Abriss,RenoDeco".
+            e.Property(x => x.AdditionalActivities)
+                .HasConversion(
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Enum.Parse<Activity>).ToList(),
+                    new ValueComparer<List<Activity>>(
+                        (a, b) => a!.SequenceEqual(b!),
+                        v => v.Aggregate(0, (hash, activity) => HashCode.Combine(hash, activity)),
+                        v => v.ToList()))
+                .HasMaxLength(200);
             e.HasIndex(x => x.UserName).IsUnique();
         });
 

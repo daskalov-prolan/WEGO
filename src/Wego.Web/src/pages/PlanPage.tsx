@@ -15,9 +15,10 @@ import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Customer, DayEntryInput, Entry, NamedItem, Plan } from '../api/types'
+import type { Customer, DayEntryInput, Entry, Plan, PlanEmployee } from '../api/types'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
+import { allowedActivities } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { DayMatrix } from '../components/PlanMatrix'
@@ -75,7 +76,7 @@ export function PlanPage({ year, canEdit }: Props) {
   const [anchor, setAnchor] = useState(today >= first && today <= last ? today : first)
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
-  const [open, setOpen] = useState<{ employee: NamedItem; date: string } | null>(null)
+  const [open, setOpen] = useState<{ employee: PlanEmployee; date: string } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assigning, setAssigning] = useState(false)
   const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[] } | null>(null)
@@ -267,7 +268,7 @@ export function PlanPage({ year, canEdit }: Props) {
     today,
     isDimmed,
     linkNames: canEdit,
-    onOpen: (employee: NamedItem, date: string) => setOpen({ employee, date }),
+    onOpen: (employee: PlanEmployee, date: string) => setOpen({ employee, date }),
     selectable: canEdit,
     selected,
     onSelectedChange: setSelected,
@@ -497,15 +498,26 @@ export function PlanPage({ year, canEdit }: Props) {
       {assigning && (
         <AssignSite
           cellCount={selected.size}
+          employees={plan.employees.filter((employee) =>
+            [...selected].some((key) => parseKey(key).employeeId === employee.id),
+          )}
           customerNames={customerNames}
           recentSites={recentSites}
           onClose={() => setAssigning(false)}
-          onApply={async (entry, add) => {
-            const changes = [...selected].map(parseKey).map(({ employeeId, date }) => ({
-              employeeId,
-              date,
-              entries: add ? [...entriesOf(employeeId, date).map(toInput), entry] : [entry],
-            }))
+          onApply={async (template, add, choice) => {
+            const changes = [...selected].map(parseKey).map(({ employeeId, date }) => {
+              // Everybody gets their main activity, or the chosen one if they can do it.
+              const employee = plan.employees.find((e) => e.id === employeeId)!
+              const activity =
+                choice !== 'main' && allowedActivities(employee).includes(choice) ? choice : employee.mainActivity
+              const entry = { ...template, activity }
+              return {
+                employeeId,
+                date,
+                entries: add ? [...entriesOf(employeeId, date).map(toInput), entry] : [entry],
+              }
+            })
+            const entry = template
             await save(changes, `${entry.customerName} in ${changes.length} Felder eingetragen.`)
             setAssigning(false)
             setSelected(new Set())

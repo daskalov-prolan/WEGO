@@ -57,9 +57,15 @@ export interface Entry {
   note: string | null
 }
 
+/** An employee column of the plan, with what the employee can do. */
+export interface PlanEmployee extends NamedItem {
+  mainActivity: Activity | null
+  additionalActivities: Activity[]
+}
+
 export interface Plan {
   year: number
-  employees: NamedItem[]
+  employees: PlanEmployee[]
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
   customers: Customer[]
@@ -121,6 +127,8 @@ export interface Employee {
   userName: string | null
   role: Role
   hasPassword: boolean
+  mainActivity: Activity | null
+  additionalActivities: Activity[]
 }
 
 export interface EmployeeInput {
@@ -132,4 +140,6 @@ export interface EmployeeInput {
   userName: string | null
   role: Role
   password: string | null
+  mainActivity: Activity | null
+  additionalActivities: Activity[]
 }

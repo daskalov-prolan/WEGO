@@ -1,14 +1,14 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import type { Entry, NamedItem, SchoolHoliday } from '../api/types'
+import type { Entry, NamedItem, PlanEmployee, SchoolHoliday } from '../api/types'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { entryStyle, entryTitle } from '../lib/activities'
+import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { Chip } from './Chip'
 
 export interface MatrixProps {
   days: Day[]
-  employees: NamedItem[]
+  employees: PlanEmployee[]
   entriesOf: (employeeId: number, date: string) => Entry[]
   holidayByDate: Map<string, SchoolHoliday>
   today: string
@@ -16,7 +16,7 @@ export interface MatrixProps {
   isDimmed: (entry: Entry) => boolean
   /** Planners get links from the names into the employee report. */
   linkNames: boolean
-  onOpen: (employee: NamedItem, date: string) => void
+  onOpen: (employee: PlanEmployee, date: string) => void
   /** Planners can select several cells: drag with the mouse, Ctrl+click, or long press on touch screens. */
   selectable: boolean
   selected: Set<string>
@@ -165,11 +165,18 @@ export function DayMatrix(props: MatrixProps) {
       <thead>
         <tr>
           <th className="corner">Tag</th>
-          {employees.map((employee) => (
-            <th key={employee.id} title={employee.name}>
-              <EmployeeName employee={employee} link={linkNames} />
-            </th>
-          ))}
+          {employees.map((employee) => {
+            const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
+            return (
+              <th
+                key={employee.id}
+                title={main ? `${employee.name} – ${activityLabel(employee.mainActivity)}` : employee.name}
+                style={main ? { boxShadow: `inset 0 -5px 0 ${main.background}` } : undefined}
+              >
+                <EmployeeName employee={employee} link={linkNames} />
+              </th>
+            )
+          })}
         </tr>
       </thead>
       <tbody>

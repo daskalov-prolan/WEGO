@@ -1,23 +1,30 @@
-import { Alert, Autocomplete, Button, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Autocomplete, Button, Checkbox, ColorSwatch, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, NamedItem } from '../api/types'
-import { ActivitySelect } from './ActivityPicker'
+import type { Activity, DayEntryInput, NamedItem, PlanEmployee } from '../api/types'
+import { ACTIVITIES, activityLabel, allowedActivities } from '../lib/activities'
 import { Sheet } from './Sheet'
+
+/** 'main': every employee gets their own main activity. */
+export type ActivityChoice = Activity | 'main'
 
 interface Props {
   cellCount: number
+  /** The employees of the selected cells. */
+  employees: PlanEmployee[]
   customerNames: string[]
   recentSites: NamedItem[]
   onClose: () => void
   /** add: keep what is already planned on those days and add the site as a further entry. */
-  onApply: (entry: DayEntryInput, add: boolean) => Promise<void>
+  onApply: (entry: DayEntryInput, add: boolean, activity: ActivityChoice) => Promise<void>
 }
 
 /** Puts one construction site on all selected cells at once. */
-export function AssignSite({ cellCount, customerNames, recentSites, onClose, onApply }: Props) {
+export function AssignSite({ cellCount, employees, customerNames, recentSites, onClose, onApply }: Props) {
   const [name, setName] = useState('')
-  const [activity, setActivity] = useState<Activity | null>(null)
+  const [activity, setActivity] = useState<ActivityChoice>('main')
+  // Who cannot do the chosen activity keeps their main activity.
+  const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e).includes(activity))
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [note, setNote] = useState('')
@@ -33,12 +40,13 @@ export function AssignSite({ cellCount, customerNames, recentSites, onClose, onA
         {
           type: 'Baustelle',
           customerName: customerName.trim(),
-          activity,
+          activity: null,
           startTime: start ? `${start}:00` : null,
           endTime: end ? `${end}:00` : null,
           note: note.trim() || null,
         },
         add,
+        activity,
       )
     } catch (e) {
       setError(messageOf(e))
@@ -55,7 +63,28 @@ export function AssignSite({ cellCount, customerNames, recentSites, onClose, onA
     <Sheet onClose={onClose} title={<Text fw={700}>Baustelle für {cellCount} Felder</Text>} size="md">
       <form onSubmit={submit}>
         <Stack gap="sm">
-          <ActivitySelect value={activity} onChange={setActivity} />
+          <Select
+            label="Tätigkeit"
+            value={activity}
+            onChange={(value) => setActivity((value ?? 'main') as ActivityChoice)}
+            allowDeselect={false}
+            data={[
+              { value: 'main', label: 'Haupttätigkeit des jeweiligen Mitarbeiters' },
+              ...ACTIVITIES.map((a) => ({ value: a.value, label: a.label })),
+            ]}
+            leftSection={
+              activity === 'main' ? undefined : (
+                <ColorSwatch color={ACTIVITIES.find((a) => a.value === activity)!.background} size={14} />
+              )
+            }
+          />
+          {unable.length > 0 && (
+            <Alert color="yellow" variant="light">
+              {unable.map((e) => e.name).join(', ')} {unable.length === 1 ? 'führt' : 'führen'} keine{' '}
+              {activityLabel(activity as Activity)} aus und {unable.length === 1 ? 'bekommt' : 'bekommen'} die eigene
+              Haupttätigkeit.
+            </Alert>
+          )}
           {recentSites.length > 0 && (
             <div>
               <Text size="xs" c="dimmed" mb={4}>

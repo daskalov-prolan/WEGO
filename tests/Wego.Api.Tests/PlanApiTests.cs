@@ -105,6 +105,27 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(2, ofA);
     }
     [Fact]
+    public async Task Employees_have_a_main_activity_and_additional_ones()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var created = await planer.PostAsJsonAsync("/api/employees", new
+        {
+            name = "Fliesenleger", sortOrder = 0, isActive = true, showInPlan = true, vacationDaysPerYear = 30,
+            userName = (string?)null, role = "Mitarbeiter", password = (string?)null,
+            mainActivity = "Fliesen", additionalActivities = new[] { "Trockenbau", "Fliesen", "Abriss" },
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        var plan = await planer.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        var column = plan.GetProperty("employees").EnumerateArray().Single(e => e.GetProperty("id").GetInt32() == id);
+        Assert.Equal("Fliesen", column.GetProperty("mainActivity").GetString());
+        // Without the main activity and in the order of the job.
+        Assert.Equal(["Abriss", "Trockenbau"],
+            column.GetProperty("additionalActivities").EnumerateArray().Select(a => a.GetString()));
+    }
+
+    [Fact]
     public async Task Overlapping_time_windows_are_rejected()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

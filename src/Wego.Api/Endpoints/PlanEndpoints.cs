@@ -7,7 +7,7 @@ public static class PlanEndpoints
 {
     public const int MaxEntriesPerDay = 10;
 
-    public record PlanEmployeeDto(int Id, string Name);
+    public record PlanEmployeeDto(int Id, string Name, Activity? MainActivity, IReadOnlyList<Activity> AdditionalActivities);
     public record CustomerDto(int Id, string Name, string? Location, string? Description);
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
@@ -40,7 +40,7 @@ public static class PlanEndpoints
                     .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
                     .ToListAsync())
                 .Where(e => e.IsActive || withEntries.Contains(e.Id))
-                .Select(e => new PlanEmployeeDto(e.Id, e.Name))
+                .Select(e => new PlanEmployeeDto(e.Id, e.Name, e.MainActivity, e.AdditionalActivities))
                 .ToList();
 
             var holidays = await db.SchoolHolidays

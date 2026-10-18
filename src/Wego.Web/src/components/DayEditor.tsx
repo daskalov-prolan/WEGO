@@ -12,13 +12,14 @@ import {
 } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, EntryType, NamedItem } from '../api/types'
+import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee } from '../api/types'
+import { allowedActivities } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
 
 interface Props {
-  employee: NamedItem
+  employee: PlanEmployee
   date: string
   entries: Entry[]
   customerNames: string[]
@@ -39,10 +40,10 @@ interface Row {
   note: string
 }
 
-const emptyRow = (type: EntryType, customerName = ''): Row => ({
+const emptyRow = (type: EntryType, customerName = '', activity: Activity | null = null): Row => ({
   type,
   customerName,
-  activity: null,
+  activity: type === 'Baustelle' ? activity : null,
   start: '',
   end: '',
   note: '',
@@ -61,9 +62,12 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor({ employee, date, entries, customerNames, recentSites, onClose, onSave, onCopy }: Props) {
+  // A new site row starts with what the employee typically does.
+  const main = employee.mainActivity
+  const allowed = allowedActivities(employee)
   const [rows, setRows] = useState<Row[]>(() =>
     entries.length === 0
-      ? [emptyRow('Baustelle')]
+      ? [emptyRow('Baustelle', '', main)]
       : entries.map((e) => ({
           type: e.type,
           customerName: e.customerName ?? '',
@@ -84,7 +88,7 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
     setRows((current) => {
       const index = current.findIndex((row) => row.type === 'Baustelle' && row.customerName.trim() === '')
       if (index >= 0) return current.map((row, i) => (i === index ? { ...row, customerName: name } : row))
-      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', name)]
+      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', name, main)]
     })
 
   const submit = async (event: FormEvent) => {
@@ -143,7 +147,12 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                   <SegmentedControl
                     size="xs"
                     value={row.type}
-                    onChange={(value) => update(index, { type: value as EntryType })}
+                    onChange={(value) =>
+                      update(index, {
+                        type: value as EntryType,
+                        activity: value === 'Baustelle' ? (row.activity ?? main) : null,
+                      })
+                    }
                     data={['Baustelle', 'Urlaub', 'Krank']}
                   />
                   <CloseButton
@@ -164,7 +173,12 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                   />
                 )}
                 {row.type === 'Baustelle' && (
-                  <ActivitySelect value={row.activity} onChange={(activity) => update(index, { activity })} />
+                  <ActivitySelect
+                    value={row.activity}
+                    onChange={(activity) => update(index, { activity })}
+                    allowed={allowed}
+                    main={main}
+                  />
                 )}
                 <Group grow gap="xs">
                   <TextInput
@@ -192,7 +206,7 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
           ))}
 
           <Group gap="xs">
-            <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle')])}>
+            <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', '', main)])}>
               + Baustelle
             </Button>
             <Button size="xs" variant="light" color="green" onClick={() => setRows([emptyRow('Urlaub')])}>

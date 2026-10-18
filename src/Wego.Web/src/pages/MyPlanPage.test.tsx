@@ -17,9 +17,9 @@ function entry(id: number, employeeId: number, employeeName: string, date: strin
 const plan: Plan = {
   year: 2026,
   employees: [
-    { id: 1, name: 'Anna' },
-    { id: 2, name: 'Bernd' },
-    { id: 3, name: 'Carla' },
+    { id: 1, name: 'Anna', mainActivity: null, additionalActivities: [] },
+    { id: 2, name: 'Bernd', mainActivity: null, additionalActivities: [] },
+    { id: 3, name: 'Carla', mainActivity: null, additionalActivities: [] },
   ],
   customers: [{ id: 10, name: 'Familie Schulze', location: 'Musterweg 3, 13125 Berlin', description: 'Komplettbad' }],
   schoolHolidays: [],

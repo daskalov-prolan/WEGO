@@ -60,3 +60,12 @@ export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'customerNam
   const activity = activityLabel(entry.activity)
   return activity ? `${entry.customerName} – ${activity}` : (entry.customerName ?? '')
 }
+
+/**
+ * The activities the plan offers for an employee: the main activity first, then the additional ones.
+ * Somebody without any configured activity can be planned for everything.
+ */
+export function allowedActivities(employee: { mainActivity: Activity | null; additionalActivities: Activity[] }): Activity[] {
+  const own = [employee.mainActivity, ...employee.additionalActivities].filter((a): a is Activity => a !== null)
+  return own.length > 0 ? [...new Set(own)] : ACTIVITIES.map((activity) => activity.value)
+}

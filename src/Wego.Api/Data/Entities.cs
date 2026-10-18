@@ -40,6 +40,12 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
+    /// <summary>What this employee typically does on a site.</summary>
+    public Activity? MainActivity { get; set; }
+
+    /// <summary>What this employee can do as well. Main and additional activities are what the plan offers for them.</summary>
+    public List<Activity> AdditionalActivities { get; set; } = [];
+
     // Login. Employees without a user name cannot sign in.
     public string? UserName { get; set; }
     public string? PasswordHash { get; set; }

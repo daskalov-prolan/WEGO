@@ -9,14 +9,16 @@ public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
-        int VacationDaysPerYear, string? UserName, string Role, bool HasPassword);
+        int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, Activity? MainActivity,
+        IReadOnlyList<Activity> AdditionalActivities);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
     public record AccessDto(int EmployeeId, string Name, string UserName, string InitialPassword);
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
-        string? UserName, string Role, string? Password);
+        string? UserName, string Role, string? Password, Activity? MainActivity = null,
+        Activity[]? AdditionalActivities = null);
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -112,6 +114,9 @@ public static class EmployeeEndpoints
             return "Bitte einen Namen mit höchstens 200 Zeichen angeben.";
         if (input.Role is not (Roles.Planer or Roles.Mitarbeiter)) return "Unbekannte Rolle.";
         if (input.VacationDaysPerYear is < 0 or > 366) return "Bitte gültige Urlaubstage pro Jahr angeben.";
+        var additional = input.AdditionalActivities ?? [];
+        if (input.MainActivity is { } main && !Enum.IsDefined(main) || additional.Any(a => !Enum.IsDefined(a)))
+            return "Unbekannte Tätigkeit.";
 
         var userName = AuthEndpoints.NormalizeUserName(input.UserName);
         if (userName?.Length > 100) return "Der Benutzername darf höchstens 100 Zeichen lang sein.";
@@ -139,9 +144,12 @@ public static class EmployeeEndpoints
         employee.VacationDaysPerYear = input.VacationDaysPerYear;
         employee.UserName = userName;
         employee.Role = input.Role;
+        employee.MainActivity = input.MainActivity;
+        // The main activity is not repeated among the additional ones; the order is that of the job.
+        employee.AdditionalActivities = additional.Distinct().Where(a => a != input.MainActivity).Order().ToList();
         return null;
     }
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
-        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null);
+        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities);
 }
