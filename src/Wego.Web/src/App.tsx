@@ -3,6 +3,7 @@ import { api, UNAUTHORIZED_EVENT } from './api/client'
 import type { User } from './api/types'
 import { AppShell } from './components/AppShell'
 import { AdminPage } from './pages/AdminPage'
+import { EmployeesPage } from './pages/EmployeesPage'
 import { EmployeeReportPage } from './pages/EmployeeReportPage'
 import { LoginPage, NewPasswordPage } from './pages/LoginPage'
 import { MyPlanPage } from './pages/MyPlanPage'
@@ -73,7 +74,8 @@ export default function App() {
   // Reports and administration are for planners only.
   else if (page === 'baustellen' && isPlaner)
     content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} /> : <SitesPage />
-  else if (page === 'mitarbeiter' && isPlaner) content = <EmployeeReportPage year={year} employeeId={selectedId} />
+  else if (page === 'mitarbeiter' && isPlaner)
+    content = selectedId ? <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} /> : <EmployeesPage />
   else if (page === 'verwaltung' && isPlaner) content = <AdminPage year={year} />
   else content = <PlanPage key={year} year={year} canEdit={isPlaner} />
 

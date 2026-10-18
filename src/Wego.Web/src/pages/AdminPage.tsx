@@ -4,10 +4,8 @@ import {
   Button,
   Checkbox,
   Code,
-  ColorSwatch,
   CopyButton,
   Group,
-  MultiSelect,
   NumberInput,
   Paper,
   PasswordInput,
@@ -24,9 +22,9 @@ import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Access, Activity, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
-import { ActivitySelect } from '../components/ActivityPicker'
-import { ACTIVITIES, activityLabel } from '../lib/activities'
+import type { Access, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
+import { ActivitiesEditor, ActivityBadges } from '../components/EmployeeActivities'
+import { toEmployeeInput } from '../lib/employees'
 import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
 
@@ -64,25 +62,6 @@ const newEmployee: EmployeeInput = {
   password: null,
   mainActivity: null,
   additionalActivities: [],
-}
-
-const colourOf = (activity: Activity) => ACTIVITIES.find((a) => a.value === activity)!.background
-
-/**
- * Suggests the activities of an employee from what they did in the plan: the most frequent one as main
- * activity, others done on at least three days as additional ones.
- */
-async function suggestActivities(employeeId: number, year: number) {
-  const plan = await api.plan(year)
-  const counts = new Map<Activity, number>()
-  for (const entry of plan.entries) {
-    if (entry.employeeId === employeeId && entry.activity) counts.set(entry.activity, (counts.get(entry.activity) ?? 0) + 1)
-  }
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1])
-  return {
-    mainActivity: ranked[0]?.[0] ?? null,
-    additionalActivities: ranked.slice(1).filter(([, days]) => days >= 3).map(([activity]) => activity),
-  }
 }
 
 function EmployeesSection({ year }: { year: number }) {
@@ -229,21 +208,7 @@ function EmployeesSection({ year }: { year: number }) {
                   </Badge>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap={4}>
-                    {employee.mainActivity && (
-                      <Badge
-                        variant="filled"
-                        styles={{ root: { background: colourOf(employee.mainActivity), color: '#1b1b1b' } }}
-                      >
-                        {activityLabel(employee.mainActivity)}
-                      </Badge>
-                    )}
-                    {employee.additionalActivities.map((activity) => (
-                      <Badge key={activity} variant="outline" color="gray" leftSection={<ColorSwatch color={colourOf(activity)} size={8} />}>
-                        {activityLabel(activity)}
-                      </Badge>
-                    ))}
-                  </Group>
+                  <ActivityBadges mainActivity={employee.mainActivity} additionalActivities={employee.additionalActivities} />
                 </Table.Td>
                 <Table.Td ta="right">{employee.vacationDaysPerYear}</Table.Td>
                 <Table.Td ta="right">{employee.sortOrder}</Table.Td>
@@ -263,21 +228,7 @@ function EmployeesSection({ year }: { year: number }) {
                       size="compact-sm"
                       variant="default"
                       onClick={() =>
-                        setEditing({
-                          id: employee.id,
-                          input: {
-                            name: employee.name,
-                            sortOrder: employee.sortOrder,
-                            isActive: employee.isActive,
-                            showInPlan: employee.showInPlan,
-                            vacationDaysPerYear: employee.vacationDaysPerYear,
-                            userName: employee.userName,
-                            role: employee.role,
-                            password: null,
-                            mainActivity: employee.mainActivity,
-                            additionalActivities: employee.additionalActivities,
-                          },
-                        })
+                        setEditing({ id: employee.id, input: toEmployeeInput(employee) })
                       }
                     >
                       Bearbeiten
@@ -356,55 +307,12 @@ function EmployeesSection({ year }: { year: number }) {
                 />
               </SimpleGrid>
               <Paper withBorder p="sm">
-                <Stack gap="xs">
-                  <Group justify="space-between" align="center">
-                    <Text fw={600} size="sm">
-                      Tätigkeiten
-                    </Text>
-                    {editing.id !== 0 && (
-                      <Button
-                        size="compact-xs"
-                        variant="subtle"
-                        onClick={async () => {
-                          const suggestion = await suggestActivities(editing.id, year)
-                          if (!suggestion.mainActivity) {
-                            notifications.show({ message: `Keine Einsätze mit Tätigkeit in ${year}.` })
-                            return
-                          }
-                          change(suggestion)
-                        }}
-                      >
-                        Aus Einsätzen {year} vorschlagen
-                      </Button>
-                    )}
-                  </Group>
-                  <Text size="xs" c="dimmed">
-                    Neue Einsätze bekommen die Haupttätigkeit; ändern lässt sie sich nur auf eine der weiteren.
-                    Ohne Angabe sind alle Tätigkeiten möglich.
-                  </Text>
-                  <ActivitySelect
-                    label="Haupttätigkeit"
-                    value={editing.input.mainActivity}
-                    onChange={(mainActivity) =>
-                      change({
-                        mainActivity,
-                        additionalActivities: editing.input.additionalActivities.filter((a) => a !== mainActivity),
-                      })
-                    }
-                  />
-                  <MultiSelect
-                    label="Weitere Tätigkeiten"
-                    placeholder={editing.input.additionalActivities.length ? undefined : 'keine'}
-                    value={editing.input.additionalActivities}
-                    onChange={(values) => change({ additionalActivities: values as Activity[] })}
-                    data={ACTIVITIES.filter((a) => a.value !== editing.input.mainActivity).map((a) => ({
-                      value: a.value,
-                      label: a.label,
-                    }))}
-                    clearable
-                    comboboxProps={{ withinPortal: true }}
-                  />
-                </Stack>
+                <ActivitiesEditor
+                  employeeId={editing.id === 0 ? null : editing.id}
+                  year={year}
+                  value={editing.input}
+                  onChange={(skills) => change(skills)}
+                />
               </Paper>
               <Checkbox
                 label="Zeile in der Planung (wird auf Baustellen eingeplant)"
