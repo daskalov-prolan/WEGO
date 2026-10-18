@@ -104,6 +104,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<bool>("NoteImportant")
+                        .HasColumnType("boolean");
+
                     b.Property<int?>("SiteId")
                         .HasColumnType("integer");
 

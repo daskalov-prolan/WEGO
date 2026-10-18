@@ -533,7 +533,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Urlaub', siteId: null, activity: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Urlaub', siteId: null, activity: null, startTime: null, endTime: null, note: null, noteImportant: false }],
                     `${selected.size} Tage als Urlaub eingetragen.`,
                   )
                 }
@@ -546,7 +546,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Krank', siteId: null, activity: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Krank', siteId: null, activity: null, startTime: null, endTime: null, note: null, noteImportant: false }],
                     `${selected.size} Tage als krank eingetragen.`,
                   )
                 }

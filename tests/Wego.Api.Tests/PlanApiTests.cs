@@ -78,7 +78,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var b = await CreateEmployeeAsync(planer, "Batch B", null, null);
 
         var siteId = await CreateSiteAsync(planer, "Familie Batch");
-        var site = new object[] { new { type = "Baustelle", siteId, activity = "Fliesen" } };
+        var site = new object[] { new { type = "Baustelle", siteId, activity = "Fliesen", note = "Schlüssel beim Hausmeister", noteImportant = true } };
         var saved = await planer.PutAsJsonAsync("/api/plan/batch", new object[]
         {
             new { employeeId = a, date = $"{Year}-07-06", entries = site },
@@ -89,7 +89,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var savedEntries = await saved.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(3, savedEntries.GetArrayLength());
         Assert.All(savedEntries.EnumerateArray().Where(e => e.GetProperty("employeeId").GetInt32() == a),
-            e => Assert.Equal("Fliesen", e.GetProperty("activity").GetString()));
+            e =>
+            {
+                Assert.Equal("Fliesen", e.GetProperty("activity").GetString());
+                Assert.True(e.GetProperty("noteImportant").GetBoolean());
+            });
         // A vacation day has no activity.
         Assert.Equal(JsonValueKind.Null, savedEntries.EnumerateArray()
             .Single(e => e.GetProperty("type").GetString() == "Urlaub").GetProperty("activity").ValueKind);

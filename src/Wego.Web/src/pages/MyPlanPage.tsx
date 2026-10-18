@@ -156,7 +156,12 @@ export function MyPlanPage({ year, user }: Props) {
                       {entry.activity && <span className="what">{activityLabel(entry.activity)}</span>}
                       {address && <SiteLocation location={address} />}
                       {site?.description && <span className="detail">{site.description}</span>}
-                      {entry.note && <span className="detail">{entry.note}</span>}
+                      {entry.note && (
+                        <span className={entry.noteImportant ? 'detail important' : 'detail'}>
+                          {entry.noteImportant && <strong className="important-mark">! </strong>}
+                          {entry.note}
+                        </span>
+                      )}
                       <span className="detail">
                         {colleagues.length > 0 ? `mit ${colleagues.join(', ')}` : 'allein'}
                       </span>

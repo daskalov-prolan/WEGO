@@ -10,7 +10,7 @@ const user: User = { id: 1, name: 'Anna', userName: 'anna', role: 'Mitarbeiter',
 function entry(id: number, employeeId: number, employeeName: string, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
     id, employeeId, employeeName, date, type: 'Baustelle', siteId, siteName, activity: null,
-    startTime: start, endTime: end, note: null,
+    startTime: start, endTime: end, note: null, noteImportant: false,
   }
 }
 

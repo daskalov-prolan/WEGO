@@ -26,13 +26,14 @@ const plan: Plan = {
     entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
     entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
     { ...entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null), note: 'mit 2 Helfern' },
+    { ...entry(5, 2, '2026-03-13', 11, 'Familie Meier', null, null), note: 'Wasser abstellen!', noteImportant: true },
   ],
 }
 
 function entry(id: number, employeeId: number, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
     id, employeeId, employeeName: '', date, type: 'Baustelle', siteId, siteName, activity: null,
-    startTime: start, endTime: end, note: null,
+    startTime: start, endTime: end, note: null, noteImportant: false,
   }
 }
 
@@ -136,9 +137,15 @@ describe('PlanPage', () => {
     await screen.findByText(/KW 10/)
 
     const withNote = cell(/Bernd, Donnerstag, 12.03.2026/)
-    expect(within(withNote).getByRole('img', { name: 'mit Notiz' })).toBeInTheDocument()
+    // The sign sits inside the coloured entry.
+    const sign = within(withNote).getAllByRole('img', { name: 'mit Notiz' })[0]
+    expect(sign.closest('.chip, .cell-compact')).not.toBeNull()
     expect(withNote).toHaveAttribute('title', expect.stringContaining('Notiz: mit 2 Helfern'))
     expect(within(cell(/Anna, Montag, 02.03.2026/)).queryByRole('img', { name: 'mit Notiz' })).not.toBeInTheDocument()
+
+    const important = cell(/Bernd, Freitag, 13.03.2026/)
+    expect(within(important).getAllByRole('img', { name: 'wichtige Notiz' })[0]).toHaveTextContent('!')
+    expect(important).toHaveAttribute('title', expect.stringContaining('WICHTIG: Wasser abstellen!'))
   })
 
   it('dims everything but the filtered site', async () => {

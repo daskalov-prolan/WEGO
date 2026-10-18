@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Checkbox,
   CloseButton,
   Group,
   Paper,
@@ -39,6 +40,7 @@ interface Row {
   start: string
   end: string
   note: string
+  important: boolean
 }
 
 const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activity | null = null): Row => ({
@@ -48,6 +50,7 @@ const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activ
   start: '',
   end: '',
   note: '',
+  important: false,
 })
 
 function toInputs(rows: Row[]): DayEntryInput[] {
@@ -58,6 +61,7 @@ function toInputs(rows: Row[]): DayEntryInput[] {
     startTime: row.start ? `${row.start}:00` : null,
     endTime: row.end ? `${row.end}:00` : null,
     note: row.note.trim() || null,
+    noteImportant: row.important && row.note.trim() !== '',
   }))
 }
 
@@ -76,6 +80,7 @@ export function DayEditor({ employee, date, entries, sites, onCreateSite, recent
           start: e.startTime?.slice(0, 5) ?? '',
           end: e.endTime?.slice(0, 5) ?? '',
           note: e.note ?? '',
+          important: e.noteImportant,
         })),
   )
   const [error, setError] = useState('')
@@ -192,13 +197,24 @@ export function DayEditor({ employee, date, entries, sites, onCreateSite, recent
                     onChange={(e) => update(index, { end: e.currentTarget.value })}
                   />
                 </Group>
-                <TextInput
-                  label="Notiz"
-                  placeholder="z. B. mit 2 Helfern"
-                  value={row.note}
-                  onChange={(e) => update(index, { note: e.currentTarget.value })}
-                  maxLength={500}
-                />
+                <Group gap="sm" align="flex-end" wrap="nowrap">
+                  <TextInput
+                    label="Notiz"
+                    placeholder="z. B. mit 2 Helfern"
+                    value={row.note}
+                    onChange={(e) => update(index, { note: e.currentTarget.value })}
+                    maxLength={500}
+                    style={{ flex: 1 }}
+                  />
+                  <Checkbox
+                    label="Sehr wichtig"
+                    color="red"
+                    mb={8}
+                    disabled={row.note.trim() === ''}
+                    checked={row.important && row.note.trim() !== ''}
+                    onChange={(e) => update(index, { important: e.currentTarget.checked })}
+                  />
+                </Group>
               </Stack>
             </Paper>
           ))}

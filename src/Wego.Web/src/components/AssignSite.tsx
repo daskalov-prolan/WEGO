@@ -30,6 +30,7 @@ export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSi
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [note, setNote] = useState('')
+  const [important, setImportant] = useState(false)
   const [add, setAdd] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -47,6 +48,7 @@ export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSi
           startTime: start ? `${start}:00` : null,
           endTime: end ? `${end}:00` : null,
           note: note.trim() || null,
+          noteImportant: important && note.trim() !== '',
         },
         add,
         activity,
@@ -113,7 +115,23 @@ export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSi
             <TextInput label="von" type="time" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
             <TextInput label="bis" type="time" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
           </Group>
-          <TextInput label="Notiz" value={note} onChange={(e) => setNote(e.currentTarget.value)} maxLength={500} />
+          <Group gap="sm" align="flex-end" wrap="nowrap">
+            <TextInput
+              label="Notiz"
+              value={note}
+              onChange={(e) => setNote(e.currentTarget.value)}
+              maxLength={500}
+              style={{ flex: 1 }}
+            />
+            <Checkbox
+              label="Sehr wichtig"
+              color="red"
+              mb={8}
+              disabled={note.trim() === ''}
+              checked={important && note.trim() !== ''}
+              onChange={(e) => setImportant(e.currentTarget.checked)}
+            />
+          </Group>
           <Checkbox
             label="Zu vorhandenen Einträgen hinzufügen (sonst ersetzen)"
             checked={add}

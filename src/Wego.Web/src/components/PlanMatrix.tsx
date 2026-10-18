@@ -4,7 +4,7 @@ import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
 import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
 import { cellKey } from '../lib/ui'
-import { Chip } from './Chip'
+import { Chip, NoteMark } from './Chip'
 
 export interface MatrixProps {
   days: Day[]
@@ -146,16 +146,6 @@ function EmployeeName({ employee, link }: { employee: NamedItem; link: boolean }
   return link ? <a href={`#/mitarbeiter/${employee.id}`}>{employee.name}</a> : <>{employee.name}</>
 }
 
-/** Small sign in the top right corner of a cell whose entries carry a note. */
-function NoteIcon() {
-  return (
-    <svg className="note-icon" viewBox="0 0 16 16" aria-label="mit Notiz" role="img">
-      <path d="M3 1.5h7l3 3v10H3z" fill="#fff" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M5.5 7.5h5M5.5 10h5M5.5 12.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function dayClass(day: Day, holiday: SchoolHoliday | undefined, today: string) {
   return [
     day.isWeekend ? 'weekend' : '',
@@ -252,12 +242,13 @@ export function TimelineMatrix(props: MatrixProps) {
                   <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
                     <button
                       type="button"
-                      className={['cell', isSelected ? 'selected' : '', notes ? 'has-note' : ''].filter(Boolean).join(' ')}
+                      className={isSelected ? 'cell selected' : 'cell'}
                       aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
                       aria-pressed={isSelected || undefined}
                       title={
                         entries.length
-                          ? entries.map(entryTitle).join(' / ') + (notes ? `\nNotiz: ${notes}` : '')
+                          ? entries.map(entryTitle).join(' / ') +
+                            (notes ? `\n${entries.some((entry) => entry.noteImportant) ? 'WICHTIG: ' : 'Notiz: '}${notes}` : '')
                           : undefined
                       }
                       {...handlers(employeeIndex, dayIndex)}
@@ -283,9 +274,9 @@ export function TimelineMatrix(props: MatrixProps) {
                             {first.type === 'Baustelle' ? first.siteName : first.type}
                           </span>
                           {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
+                          {notes && <NoteMark important={entries.some((entry) => entry.noteImportant)} />}
                         </span>
                       )}
-                      {notes && <NoteIcon />}
                     </button>
                   </td>
                 )

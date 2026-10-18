@@ -113,6 +113,9 @@ public class PlanEntry
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
     public string? Note { get; set; }
+
+    /// <summary>The note is very important: the plan shows a red exclamation mark.</summary>
+    public bool NoteImportant { get; set; }
 }
 
 public enum HolidayKind

@@ -71,6 +71,8 @@ export interface Entry {
   startTime: string | null
   endTime: string | null
   note: string | null
+  /** The note is very important: shown with a red exclamation mark. */
+  noteImportant: boolean
 }
 
 /** An employee column of the plan, with what the employee can do. */
@@ -94,6 +96,7 @@ export interface DayEntryInput {
   startTime: string | null
   endTime: string | null
   note: string | null
+  noteImportant: boolean
 }
 
 export interface ReportRow {

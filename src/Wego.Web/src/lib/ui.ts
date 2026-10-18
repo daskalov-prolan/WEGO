@@ -14,6 +14,7 @@ export function toInput(entry: Entry): DayEntryInput {
     startTime: entry.startTime,
     endTime: entry.endTime,
     note: entry.note,
+    noteImportant: entry.noteImportant,
   }
 }
 

@@ -11,13 +11,13 @@ public static class PlanEndpoints
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? SiteId, string? SiteName, Activity? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
-        string? Note);
+        string? Note, bool NoteImportant);
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites);
 
     /// <summary>A site entry names its construction site by <paramref name="SiteId"/>.</summary>
     public record DayEntryInput(EntryType Type, int? SiteId, TimeOnly? StartTime, TimeOnly? EndTime,
-        string? Note, Activity? Activity = null);
+        string? Note, Activity? Activity = null, bool NoteImportant = false);
     public record DayInput(int EmployeeId, DateOnly Date, DayEntryInput[] Entries);
 
     public const int MaxDaysPerBatch = 400;
@@ -116,6 +116,8 @@ public static class PlanEndpoints
                     StartTime = input.StartTime,
                     EndTime = input.EndTime,
                     Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
+                    // Only a note can be important.
+                    NoteImportant = input.NoteImportant && !string.IsNullOrWhiteSpace(input.Note),
                 });
             }
         }
@@ -141,7 +143,7 @@ public static class PlanEndpoints
         db.PlanEntries.AsNoTracking().Include(e => e.Site).Include(e => e.Employee);
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
-        e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note);
+        e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant);
 
     public static List<EntryDto> Sort(IEnumerable<EntryDto> entries) => entries
         .OrderBy(e => e.Date)
