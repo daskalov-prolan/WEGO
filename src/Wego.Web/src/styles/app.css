@@ -1383,3 +1383,22 @@ a:hover {
   outline-offset: -2px;
   background: rgba(57, 187, 207, 0.22) !important;
 }
+
+/* Day editor: each entry tinted in the colour of its activity, so the sites of a day stand apart. */
+.day-row.mantine-Paper-root {
+  border-left: 5px solid var(--entry-strong);
+  background: color-mix(in srgb, var(--entry-bg) 45%, white);
+}
+
+/* Every second entry a bit stronger: two entries of the same activity still stand apart. */
+.day-row.second.mantine-Paper-root {
+  background: var(--entry-bg);
+}
+
+.day-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

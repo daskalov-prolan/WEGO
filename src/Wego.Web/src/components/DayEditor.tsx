@@ -13,7 +13,7 @@ import {
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
-import { allowedActivities, defaultActivity } from '../lib/activities'
+import { allowedActivities, defaultActivity, entryStyle, isOpen } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
@@ -72,7 +72,13 @@ export function DayEditor(props: Props) {
   const { employee, date, entries, sites, onCreateSite, onUpdateSite, recentSites, onClose, onSave, onCopy } = props
   // A new site row starts with what the employee typically does.
   const main = employee.mainActivity
-  const statusOf = (siteId: number | null) => sites.find((site) => site.id === siteId)?.status
+  // The activities offered follow the status of an open site. On a done or cancelled site (entries from
+  // before it was closed) the employee's own activities are offered, whatever the status was then.
+  const statusOf = (siteId: number | null) => {
+    const status = sites.find((site) => site.id === siteId)?.status
+    return status && isOpen(status) ? status : undefined
+  }
+  const siteName = (siteId: number | null) => sites.find((site) => site.id === siteId)?.name
   const [rows, setRows] = useState<Row[]>(() =>
     entries.length === 0
       ? [emptyRow('Baustelle', null, main)]
@@ -151,9 +157,20 @@ export function DayEditor(props: Props) {
           )}
 
           {rows.map((row, index) => (
-            <Paper withBorder p="sm" key={index}>
+            // Each entry in the colour of its activity (or of Urlaub / Krank), every second one a bit stronger,
+            // and titled with its site, so the entries of a day stand apart.
+            <Paper
+              withBorder
+              p="sm"
+              key={index}
+              className={index % 2 === 1 ? 'day-row second' : 'day-row'}
+              style={entryStyle(row)}
+            >
               <Stack gap="xs">
                 <Group justify="space-between" wrap="nowrap">
+                  <Text fw={700} size="sm" className="day-row-title">
+                    {index + 1} · {row.type === 'Baustelle' ? (siteName(row.siteId) ?? 'neue Baustelle') : row.type}
+                  </Text>
                   <SegmentedControl
                     size="xs"
                     value={row.type}
