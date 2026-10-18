@@ -6,23 +6,35 @@ import { suggestActivities } from '../lib/employees'
 import { ActivitySelect } from './ActivityPicker'
 
 const colourOf = (activity: Activity) => ACTIVITIES.find((a) => a.value === activity)!.background
+const tintOf = (activity: Activity) => ACTIVITIES.find((a) => a.value === activity)!.tint
 
 interface Skills {
   mainActivity: Activity | null
   additionalActivities: Activity[]
 }
 
-/** The main activity in its colour, the additional ones outlined. */
+/** The main activity first, in its full colour and stressed; the additional ones light in their colour. */
 export function ActivityBadges({ mainActivity, additionalActivities }: Skills) {
   return (
     <Group gap={4}>
       {mainActivity && (
-        <Badge variant="filled" styles={{ root: { background: colourOf(mainActivity), color: '#1b1b1b' } }}>
-          {activityLabel(mainActivity)}
+        <Badge
+          variant="filled"
+          title="Haupttätigkeit"
+          className="skill-main"
+          styles={{ root: { background: colourOf(mainActivity), color: '#1b1b1b', boxShadow: `0 0 0 2px #fff, 0 0 0 3.5px ${colourOf(mainActivity)}` } }}
+        >
+          ★ {activityLabel(mainActivity)}
         </Badge>
       )}
       {additionalActivities.map((activity) => (
-        <Badge key={activity} variant="outline" color="gray" leftSection={<ColorSwatch color={colourOf(activity)} size={8} />}>
+        <Badge
+          key={activity}
+          variant="light"
+          title="Weitere Tätigkeit"
+          styles={{ root: { background: tintOf(activity), color: '#14232a', border: `1px solid ${colourOf(activity)}` } }}
+          leftSection={<ColorSwatch color={colourOf(activity)} size={8} withShadow={false} />}
+        >
           {activityLabel(activity)}
         </Badge>
       ))}

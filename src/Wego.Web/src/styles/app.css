@@ -1402,3 +1402,15 @@ a:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* List of employees: what is planned for them, stretch by stretch in the colour of the activity. */
+.employee-runs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.employee-runs .chip {
+  font-size: 0.72rem;
+}
