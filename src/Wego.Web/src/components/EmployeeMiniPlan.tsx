@@ -18,10 +18,13 @@ import { TaskBox } from './TaskBox'
 interface Props {
   employeeId: number
   canEdit: boolean
+  /** Only these activities: other entries fade, sites and open tasks without them drop out. Empty: all. */
+  activityFilter?: Set<Activity>
 }
 
 /** How many sites get a lane before "+ N weitere Baustellen". */
 const FIRST_LANES = 12
+const NO_FILTER = new Set<Activity>()
 
 /**
  * Planning on the page of an employee: one lane per site, the days as columns that scroll sideways. First
@@ -30,7 +33,8 @@ const FIRST_LANES = 12
  * the site's name; planners drag them onto a day of that lane, or an entry onto another day or site.
  * Colleagues on the same site and day are shown faintly. Vacation and sick days get a lane of their own.
  */
-export function EmployeeMiniPlan({ employeeId, canEdit }: Props) {
+export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILTER }: Props) {
+  const fits = (activity: Activity | null) => activityFilter.size === 0 || (activity !== null && activityFilter.has(activity))
   const today = todayIso()
   const strip = useDayStrip(weekOf(today)[0].iso)
   const { visible, years, days, plans, entries, publicHolidays, error, reload } = strip
@@ -44,20 +48,18 @@ export function EmployeeMiniPlan({ employeeId, canEdit }: Props) {
   const own = entries.filter((entry) => entry.employeeId === employeeId)
   const entriesOn = (date: string) => own.filter((entry) => entry.date === date)
   const busy = new Set(own.map((entry) => entry.date))
-  const first = days[0]?.iso ?? visible
-  const last = days[days.length - 1]?.iso ?? visible
-  const absences = own.filter((entry) => entry.siteId === null && entry.date >= first && entry.date <= last)
+  const absences = own.filter((entry) => entry.siteId === null && entry.date >= visible && entry.date <= addDays(visible, 13))
 
   // The lanes: sites worked on in the two weeks from the one in view, in the order of the work; then those
   // with open tasks. Scrolling to other weeks brings their sites up.
   const lanes: { site: Site; tasks: OpenTask[] }[] = []
   const inView = { from: visible, to: addDays(visible, 13) }
   for (const entry of [...own].sort((a, b) => a.date.localeCompare(b.date))) {
-    if (entry.siteId === null || entry.date < inView.from || entry.date > inView.to) continue
+    if (entry.siteId === null || entry.date < inView.from || entry.date > inView.to || !fits(entry.activity)) continue
     const site = siteById.get(entry.siteId)
     if (site && !lanes.some((lane) => lane.site.id === site.id)) lanes.push({ site, tasks: [] })
   }
-  const tasks = employee ? tasksForEmployee(employee, openTasksBySite(sites, entries), siteById) : []
+  const tasks = employee ? tasksForEmployee(employee, openTasksBySite(sites, entries), siteById, fits) : []
   for (const { site, task } of tasks) {
     const lane = lanes.find((candidate) => candidate.site.id === site.id)
     if (lane) lane.tasks.push(task)
@@ -273,12 +275,17 @@ export function EmployeeMiniPlan({ employeeId, canEdit }: Props) {
                   {(atSite.get(`${site.id}|${day.iso}`) ?? []).map((entry) =>
                     entry.employeeId === employeeId ? (
                       <span key={entry.id} className="mini-here">
-                        <Chip entry={entry} label={(entry.activity && activityLabel(entry.activity)) || undefined} draggable={canEdit} />
+                        <Chip
+                          entry={entry}
+                          label={(entry.activity && activityLabel(entry.activity)) || undefined}
+                          draggable={canEdit}
+                          dimmed={!fits(entry.activity)}
+                        />
                       </span>
                     ) : (
                       // Colleagues on the same site that day: with whom.
                       <span key={entry.id} className="mini-elsewhere">
-                        <Chip entry={entry} label={entry.employeeName} />
+                        <Chip entry={entry} label={entry.employeeName} dimmed={!fits(entry.activity)} />
                       </span>
                     ),
                   )}

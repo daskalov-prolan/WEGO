@@ -1414,3 +1414,21 @@ a:hover {
 .employee-runs .chip {
   font-size: 0.72rem;
 }
+
+/* Activities in the head of an employee's page, used as filters of the planning. */
+.skill-badge.filter {
+  cursor: pointer;
+}
+
+.skill-badge.filter[aria-pressed='true'] {
+  outline: 2px solid var(--wego-teal-dark);
+  outline-offset: 2px;
+}
+
+.skill-badge.filter.off {
+  opacity: 0.4;
+}
+
+.skill-badge .activity-icon {
+  display: block;
+}

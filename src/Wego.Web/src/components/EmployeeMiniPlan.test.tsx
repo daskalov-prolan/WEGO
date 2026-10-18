@@ -113,4 +113,11 @@ describe('EmployeeMiniPlan', () => {
       { employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11, activity: 'Fliesen' })] },
     ])
   })
+
+  it('follows the activity filter: only sites and open tasks with those activities', async () => {
+    renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit activityFilter={new Set(['Abriss'])} />)
+    await screen.findByText('KW 10 · ab 02.03.')
+    // Meier only has Fliesen, the Fliesen tasks drop out.
+    expect(laneNames()).toEqual(['Abriss früh'])
+  })
 })

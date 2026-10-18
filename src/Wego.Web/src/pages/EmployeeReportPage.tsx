@@ -1,7 +1,7 @@
 import { Alert, Anchor, Badge, Group, SimpleGrid, Table, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Employee, EmployeeReport, Vacation } from '../api/types'
+import type { Activity, Employee, EmployeeReport, Vacation } from '../api/types'
 import { ActivityBadges } from '../components/EmployeeActivities'
 import { EmployeeMiniPlan } from '../components/EmployeeMiniPlan'
 import { Stat } from '../components/Stat'
@@ -21,6 +21,8 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
   const [report, setReport] = useState<EmployeeReport | null>(null)
   const [overview, setOverview] = useState<Vacation[]>([])
   const [error, setError] = useState('')
+  // Activities chosen in the head; empty: the planning shows everything.
+  const [filter, setFilter] = useState<Set<Activity>>(new Set())
 
   useEffect(() => {
     api.employees().then(
@@ -50,7 +52,25 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
         </Title>
         {employee && (
           <span className="site-page-head-facts">
-            <ActivityBadges mainActivity={employee.mainActivity} additionalActivities={employee.additionalActivities} />
+            {/* The activities filter the planning below: several at a time, a second click lifts one. */}
+            <ActivityBadges
+              mainActivity={employee.mainActivity}
+              additionalActivities={employee.additionalActivities}
+              selected={filter}
+              onToggle={(activity) =>
+                setFilter((current) => {
+                  const next = new Set(current)
+                  if (next.has(activity)) next.delete(activity)
+                  else next.add(activity)
+                  return next
+                })
+              }
+            />
+            {filter.size > 0 && (
+              <Anchor size="xs" component="button" type="button" onClick={() => setFilter(new Set())}>
+                Filter aufheben
+              </Anchor>
+            )}
             {!employee.isActive && <Badge color="gray">inaktiv</Badge>}
             {!employee.showInPlan && (
               <Badge color="gray" variant="outline">
@@ -76,7 +96,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
         </Alert>
       )}
 
-      <EmployeeMiniPlan key={employeeId} employeeId={employeeId} canEdit />
+      <EmployeeMiniPlan key={employeeId} employeeId={employeeId} canEdit activityFilter={filter} />
 
       <Title order={3} mb="sm">
         Auswertung {year}
