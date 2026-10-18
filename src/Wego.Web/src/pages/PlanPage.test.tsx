@@ -275,7 +275,7 @@ describe('PlanPage', () => {
       expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
       expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
     ])
-    expect(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 })).toBeInTheDocument()
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
   })
 })

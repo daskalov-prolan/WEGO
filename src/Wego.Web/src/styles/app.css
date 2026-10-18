@@ -336,8 +336,84 @@ a:hover {
   border-left: 4px solid var(--wego-teal);
 }
 
+/* Legend: the course of a job as a process diagram, absences and holidays as dots beside it. */
 .activity-legend {
-  row-gap: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.flow-stage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 3px;
+  border: 1.5px solid var(--stage);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--stage) 7%, white);
+}
+
+.flow-stage-name {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--stage);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.flow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 3px;
+}
+
+.flow-step {
+  padding: 1px 6px;
+  border-left: 4px solid var(--entry-strong);
+  border-radius: 3px;
+  background: var(--entry-bg);
+  color: #14232a;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flow-arrow {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.flow-arrow.big {
+  font-size: 0.95rem;
+}
+
+.flow-end {
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--stage);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.flow-cancel {
+  padding: 2px 8px;
+  border: 1.5px dashed var(--stage);
+  border-radius: 8px;
+  color: var(--stage);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 /* ---------- cells shared by all plan views ---------- */
 

@@ -34,11 +34,12 @@ export const ACTIVITIES: ActivityInfo[] = [
   { value: 'Endmontage', label: 'Endmontage', phase: 'Bauphase', background: '#3f51b5', tint: '#d6dbf3', edge: '#3f51b5' },
 ]
 
-export const SITE_STATUSES: { value: SiteStatus; label: string; color: string }[] = [
-  { value: 'Angebot', label: 'Angebot', color: 'cyan' },
-  { value: 'Bauphase', label: 'Bauphase', color: 'orange' },
-  { value: 'Abgeschlossen', label: 'Abgeschlossen', color: 'green' },
-  { value: 'Storniert', label: 'Storniert', color: 'red' },
+/** color: Mantine colour of the badges; hex: the same colour for the process diagram of the legend. */
+export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; hex: string }[] = [
+  { value: 'Angebot', label: 'Angebot', color: 'cyan', hex: '#1098ad' },
+  { value: 'Bauphase', label: 'Bauphase', color: 'orange', hex: '#e8590c' },
+  { value: 'Abgeschlossen', label: 'Abgeschlossen', color: 'green', hex: '#2f9e44' },
+  { value: 'Storniert', label: 'Storniert', color: 'red', hex: '#e03131' },
 ]
 
 /** Done or cancelled: nothing is planned there any more. */
