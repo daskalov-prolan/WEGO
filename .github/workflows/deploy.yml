@@ -1,0 +1,136 @@
+# Deploys the selected branch to the Hetzner server. Started by hand under Actions > Deploy > Run workflow.
+# Setup of server and secrets: deploy/README.md
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/daskalov-prolan/wego
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wego
+          POSTGRES_PASSWORD: wego_dev
+          POSTGRES_DB: wego
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wego -d wego"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: API tests
+        run: dotnet test
+        env:
+          WEGO_TEST_CONNECTION: Host=localhost;Port=5432;Database=wego_test;Username=wego;Password=wego_dev
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/Wego.Web/package-lock.json
+
+      - name: Web lint, tests and build
+        working-directory: src/Wego.Web
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    # Secrets live in this environment; add yourself as required reviewer to approve every deploy.
+    environment:
+      name: production
+      url: https://${{ vars.WEGO_DOMAIN }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: SSH key
+        run: |
+          install -d -m 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Copy compose file and Caddyfile
+        run: scp deploy/compose.yaml deploy/Caddyfile "deploy@${{ secrets.DEPLOY_HOST }}:/opt/wego/"
+
+      - name: Start the new version
+        env:
+          TAG: ${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh "deploy@${{ secrets.DEPLOY_HOST }}" TAG="$TAG" GHCR_USER="$GHCR_USER" GHCR_TOKEN="$GHCR_TOKEN" sh -s <<'SCRIPT'
+          set -eu
+          cd /opt/wego
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          sed -i '/^WEGO_TAG=/d' .env
+          echo "WEGO_TAG=$TAG" >> .env
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker logout ghcr.io
+          docker image prune -f
+          SCRIPT
+
+      - name: Health check
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS "https://${{ vars.WEGO_DOMAIN }}/api/health"; then exit 0; fi
+            sleep 5
+          done
+          echo "The application does not answer on https://${{ vars.WEGO_DOMAIN }}/api/health"
+          exit 1

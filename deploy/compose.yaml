@@ -1,0 +1,86 @@
+# Production on the Hetzner server, in /opt/wego next to the .env file (see deploy/README.md).
+# The GitHub workflow "Deploy" copies this file and the Caddyfile and sets WEGO_TAG in .env.
+
+services:
+  app:
+    image: ghcr.io/daskalov-prolan/wego:${WEGO_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Wego: Host=db;Port=5432;Database=wego;Username=wego;Password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env};Gss Encryption Mode=Disable
+      Database__MigrateOnStartup: "true"
+      # Every SQL statement at Information level is too much for the server log.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
+      # Caddy terminates HTTPS: trust its X-Forwarded-For / X-Forwarded-Proto headers.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # Only used while no account exists yet, see deploy/README.md.
+      Seed__PlanerName: ${SEED_PLANER_NAME:-Planer}
+      Seed__PlanerUserName: ${SEED_PLANER_USERNAME:-}
+      Seed__PlanerPassword: ${SEED_PLANER_PASSWORD:-}
+    volumes:
+      - keys:/var/lib/wego/keys
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wego
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: wego
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wego -d wego"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      WEGO_DOMAIN: ${WEGO_DOMAIN:?set WEGO_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  # A dump of the database every night into /opt/wego/backups, kept for 14 days.
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: wego
+      PGDATABASE: wego
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          sleep 3600
+          if [ "$$(date +%H)" = "02" ]; then
+            pg_dump -Fc -f /backups/wego-$$(date +%F).dump && echo "backup $$(date +%F) written"
+            find /backups -name 'wego-*.dump' -mtime +14 -delete
+          fi
+        done
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  keys:
+  caddy-data:
+  caddy-config:

@@ -58,7 +58,12 @@ dotnet ef migrations add <Name> --project src/Wego.Api
   Hours are calculated only from entries that have a time window.
 - School holidays are entered under **Verwaltung**, by hand or fetched from openholidaysapi.org (Berlin, `DE-BE`).
 
+## Production
+
+One Docker image (`Dockerfile`) on a Hetzner server with PostgreSQL and Caddy for HTTPS, deployed by hand with the
+GitHub workflow **Deploy**. Setup and operation: [deploy/README.md](deploy/README.md).
+
 ## Not included yet
 
-Production hosting and HTTPS setup, single sign-on with Microsoft 365, public holidays, half vacation days,
+Single sign-on with Microsoft 365, public holidays, half vacation days,
 vacation carried over from the previous year.
