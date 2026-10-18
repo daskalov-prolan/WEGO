@@ -125,9 +125,14 @@ describe('SiteMiniPlan', () => {
     // KW 11: Bernd and Carla have an entry, Dora is free but cannot lay tiles. KW 12: Carla is free.
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
-    // The lanes stay with the main activity: Bernd only.
+    // Lanes: Bernd (main activity) first, then Carla (additional activity); not Dora.
     expect(screen.getByRole('button', { name: 'Bernd, 2026-03-16' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Carla, 2026-03-16' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Carla, 2026-03-16' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dora, 2026-03-16' })).not.toBeInTheDocument()
+    expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual([
+      'BerndFliesenarbeiten',
+      'Carlaauch Fliesenarbeiten',
+    ])
   })
 
   it('shows a lane per employee with an open main activity, the weekly load and the open activities', async () => {

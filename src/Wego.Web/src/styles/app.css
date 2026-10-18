@@ -1144,6 +1144,15 @@ a:hover {
   font-weight: 500;
 }
 
+/* Can do an open activity besides the main one. */
+.mini-lane-name.besides {
+  font-weight: 600;
+}
+
+.mini-lane-name.besides .main {
+  font-style: italic;
+}
+
 .mini-no-lanes {
   grid-column: 1 / -1;
   position: sticky;

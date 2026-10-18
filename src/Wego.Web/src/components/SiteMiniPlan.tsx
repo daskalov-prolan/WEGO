@@ -52,7 +52,7 @@ function firstWeek(all: Entry[], siteId: number, fallback: string): string {
 
 /**
  * Planning on the page of a site: the activities still to plan as boxes in a row, below them one lane per
- * employee whose main activity is still to plan here, with the days as columns that scroll sideways (about a
+ * employee who can do an activity still to plan here (main activity first, then additional), with the days as columns that scroll sideways (about a
  * week in view, one and a half when there is room; weekends narrow). The work at this site stands out.
  */
 export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
@@ -146,7 +146,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
 
   // Who counts for how full a week is: everybody whose main activity is still to plan at this site.
   const openActivities = new Set(openTasks.map((task) => task.activity))
-  // They are also the lanes of the calendar.
   const relevant = employees.filter((employee) => employee.mainActivity && openActivities.has(employee.mainActivity))
   const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
 
@@ -170,6 +169,10 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
   const capable = employees.filter((employee) =>
     [employee.mainActivity, ...employee.additionalActivities].some((activity) => activity !== null && openActivities.has(activity)),
   )
+  // The lanes of the calendar: first those with an open main activity, then those who can do one besides.
+  const lanes = [...relevant, ...capable.filter((employee) => !relevant.includes(employee))]
+  const besides = (employee: PlanEmployee) =>
+    employee.additionalActivities.filter((activity) => openActivities.has(activity)).map(activityLabel)
 
   /** Of these, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
   const freeIn = (monday: string): PlanEmployee[] => {
@@ -440,19 +443,26 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
         >
           <div className="mini-corner">Mitarbeiter</div>
           {days.map(dayHead)}
-          {plans.length > 0 && relevant.length === 0 && (
+          {plans.length > 0 && lanes.length === 0 && (
             <Text size="sm" c="dimmed" className="mini-no-lanes">
               {openTasks.length === 0
                 ? 'Alles eingeplant: keine offene Tätigkeit, für die Mitarbeiter gezeigt werden.'
-                : 'Niemand hat eine der offenen Tätigkeiten als Haupttätigkeit.'}
+                : 'Niemand kann eine der offenen Tätigkeiten.'}
             </Text>
           )}
-          {relevant.map((employee) => (
+          {lanes.map((employee) => (
             <Fragment key={employee.id}>
-              <div className="mini-lane-name">
-                <span className="name">{employee.name}</span>
-                {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
-              </div>
+              {relevant.includes(employee) ? (
+                <div className="mini-lane-name">
+                  <span className="name">{employee.name}</span>
+                  {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
+                </div>
+              ) : (
+                <div className="mini-lane-name besides" title="Kann eine offene Tätigkeit als Zusatztätigkeit">
+                  <span className="name">{employee.name}</span>
+                  <span className="main">auch {besides(employee).join(', ')}</span>
+                </div>
+              )}
               {days.map((day) => {
                 const list = byLaneDay.get(`${employee.id}|${day.iso}`) ?? []
                 return (
