@@ -309,12 +309,21 @@ a:hover {
   box-shadow: inset 0 0 0 2px var(--wego-aqua);
 }
 
-/* ---------- matrix: employees in rows, days in columns ---------- */
+/* ---------- plan matrix: days from top to bottom, one column per employee ---------- */
 
 .matrix {
+  --day-col: 96px;
+  --employee-min: 112px;
   width: 100%;
+  /* The columns share the width, but never get narrower than --employee-min: then the table scrolls sideways. */
+  min-width: calc(var(--day-col) + var(--columns) * var(--employee-min));
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.matrix .col-day {
+  width: var(--day-col);
 }
 
 .matrix th,
@@ -330,74 +339,89 @@ a:hover {
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 7px 8px;
-  background: var(--wego-teal);
-  color: #fff;
-  font-weight: 400;
-}
-
-.matrix thead th .wd {
-  font-weight: 700;
-}
-
-.matrix thead th.weekend {
-  background: #3a8f97;
-}
-
-.matrix thead th.holiday {
-  box-shadow: inset 0 -4px 0 #f2d35b;
-}
-
-.matrix thead th.today {
-  background: var(--wego-aqua);
-}
-
-.matrix .holiday-name {
-  display: block;
-  font-size: 0.72rem;
-  opacity: 0.9;
-}
-
-.matrix th.name {
-  position: sticky;
-  left: 0;
-  z-index: 2;
   padding: 8px;
   overflow: hidden;
-  background: var(--surface);
-  color: var(--wego-teal-dark);
-  font-weight: 700;
+  background: var(--wego-teal);
+  color: #fff;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.matrix thead th.name {
-  z-index: 4;
-  background: var(--wego-teal);
+.matrix thead th a {
+  color: inherit;
 }
 
-.matrix td.weekend {
+.matrix thead th.corner {
+  left: 0;
+  z-index: 4;
+}
+
+.matrix th.day {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  padding: 6px 8px;
+  background: var(--surface);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.matrix th.day .wd {
+  font-weight: 700;
+}
+
+.matrix th.day .holiday-name {
+  display: block;
+  overflow: hidden;
+  color: #8a6d00;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+}
+
+.matrix tr.weekend th.day,
+.matrix tr.weekend td {
   background: var(--surface-weekend);
 }
 
-.matrix td.today {
+.matrix tr.holiday th.day {
+  box-shadow: inset 4px 0 0 #f2d35b;
+}
+
+.matrix tr.today th.day {
+  background: var(--wego-aqua);
+  color: #fff;
+}
+
+.matrix tr.today th.day .holiday-name {
+  color: #fff;
+}
+
+.matrix tr.today td {
   background: rgba(57, 187, 207, 0.1);
 }
 
-.week-matrix {
-  table-layout: fixed;
+/* An empty weekend in the week view: only a thin line. */
+.matrix tr.folded th.day {
+  padding: 1px 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
 }
 
-.week-matrix .col-name {
-  width: 124px;
+.matrix tr.month-row th {
+  position: sticky;
+  left: 0;
+  padding: 6px 8px;
+  background: var(--wego-teal-dark);
+  color: #fff;
+  scroll-margin-top: 40px;
 }
 
-.week-matrix .col-folded {
-  width: 30px;
+.matrix tr {
+  scroll-margin-top: 40px;
 }
 
-.week-matrix .cell {
-  min-height: 58px;
+.matrix .cell {
+  min-height: 44px;
   padding: 4px;
 }
 
@@ -445,188 +469,44 @@ a:hover {
   background: #fbdcde;
 }
 
-.month-matrix th.name {
-  min-width: 112px;
-}
-
-.month-matrix thead th {
-  min-width: 30px;
-  padding: 4px 0;
-  text-align: center;
-}
-
-.month-matrix thead th .wd {
-  display: block;
-  font-size: 0.68rem;
-  font-weight: 400;
-}
-
-.month-matrix thead th .num {
-  font-weight: 700;
-}
-
-.month-matrix .cell {
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0;
-  font-size: 0.72rem;
-}
-
-.month-matrix .cell-code {
-  --site-h: 186;
-  background: hsl(var(--site-h) 60% 88%);
-}
-
-.month-matrix .code-urlaub {
-  background: #bfe6cf;
-}
-
-.month-matrix .code-krank {
-  background: #f6c3c6;
-}
-
-.month-matrix sup {
-  margin-left: 1px;
-  color: var(--wego-teal-dark);
-  font-size: 0.6rem;
-}
-
-/* Little room for the plan (phone, or half a browser window): short cells, narrow name column. */
+/* Little room for the plan (phone, or half a browser window): short cells, narrow columns. */
 @container plan (max-width: 760px) {
-  .matrix th.name {
-    padding: 6px 4px;
-    font-size: 0.82rem;
+  .matrix {
+    --day-col: 58px;
+    --employee-min: 66px;
   }
 
   .matrix thead th {
-    padding: 6px 2px;
-    font-size: 0.8rem;
+    padding: 6px 3px;
+    font-size: 0.78rem;
     text-align: center;
   }
 
-  .week-matrix .col-name {
-    width: 66px;
+  .matrix th.day {
+    padding: 4px 5px;
+    font-size: 0.78rem;
   }
 
-  .week-matrix .col-folded {
-    width: 20px;
-  }
-
-  .week-matrix thead .num {
+  .matrix th.day .num {
     display: block;
     font-size: 0.72rem;
   }
 
-  .week-matrix .holiday-name,
-  .week-matrix .cell-full {
+  .matrix th.day .holiday-name,
+  .matrix .cell-full {
     display: none;
   }
 
-  .week-matrix .cell-compact {
+  .matrix .cell-compact {
     display: flex;
   }
 
-  .week-matrix .cell {
+  .matrix .cell {
     justify-content: center;
-    min-height: 48px;
+    min-height: 40px;
     padding: 3px 2px;
   }
-
-  .month-matrix th.name {
-    min-width: 66px;
-  }
 }
-
-/* ---------- year grid: days in rows, employees in columns (as in the Excel sheet) ---------- */
-
-.plan-table {
-  min-width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.plan-table th,
-.plan-table td {
-  padding: 0;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.plan-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  min-width: 150px;
-  padding: 8px;
-  background: var(--wego-teal);
-  color: #fff;
-  white-space: nowrap;
-}
-
-.plan-table .col-date {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  width: 86px;
-  min-width: 86px;
-  padding: 5px 8px;
-  background: var(--surface);
-  font-weight: 400;
-  white-space: nowrap;
-}
-
-.plan-table thead .col-date {
-  z-index: 4;
-  background: var(--wego-teal);
-}
-
-.plan-table .col-holiday {
-  width: 120px;
-  min-width: 120px;
-  padding: 5px 8px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 400;
-}
-
-.plan-table thead .col-holiday {
-  color: #fff;
-  font-weight: 700;
-}
-
-.plan-table tr.month th {
-  position: sticky;
-  left: 0;
-  padding: 5px 8px;
-  background: var(--wego-teal-dark);
-  color: #fff;
-  scroll-margin-top: 40px;
-}
-
-.plan-table tr.day {
-  scroll-margin-top: 40px;
-}
-
-.plan-table tr.weekend td,
-.plan-table tr.weekend .col-date {
-  background: var(--surface-weekend);
-}
-
-.plan-table tr.holiday .col-holiday {
-  background: var(--surface-holiday);
-  color: var(--text);
-}
-
-.plan-table tr.today .col-date {
-  background: var(--wego-aqua);
-  color: #fff;
-  font-weight: 700;
-}
-
 /* ---------- "Mein Plan" and day details ---------- */
 
 .my-plan {

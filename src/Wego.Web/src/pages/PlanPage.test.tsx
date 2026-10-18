@@ -57,7 +57,7 @@ afterEach(() => {
 const cell = (label: RegExp) => screen.getByRole('button', { name: label })
 
 describe('PlanPage', () => {
-  it('starts with the current week: employees in rows, a split day with its time windows', async () => {
+  it('starts with the current week: days in rows, employees in columns, a split day with its time windows', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
 
     expect(await screen.findByText('KW 10 · 02.03.–08.03.2026')).toBeInTheDocument()
@@ -66,6 +66,11 @@ describe('PlanPage', () => {
     expect(within(monday).getByText('11–13 Uhr')).toBeInTheDocument()
     // The short form for narrow screens names the first site and counts the rest.
     expect(within(monday).getByText('+1')).toBeInTheDocument()
+
+    const header = screen.getAllByRole('columnheader').map((th) => th.textContent)
+    expect(header).toEqual(['Tag', 'Anna', 'Bernd'])
+    const firstRow = screen.getAllByRole('row')[1]
+    expect(within(firstRow).getByRole('rowheader')).toHaveTextContent('Mo 02.03.')
   })
 
   it('moves by week and by month', async () => {
@@ -78,7 +83,7 @@ describe('PlanPage', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: 'Monat' }))
     expect(screen.getByText('März 2026')).toBeInTheDocument()
-    expect(cell(/Anna, Montag, 02.03.2026: Familie Schulze \/ Familie Meier/)).toHaveTextContent('Fam2')
+    expect(within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')).not.toHaveLength(0)
 
     await userEvent.click(screen.getByRole('button', { name: 'Zurück' }))
     expect(screen.getByText('Februar 2026')).toBeInTheDocument()
@@ -103,8 +108,8 @@ describe('PlanPage', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: 'Jahr' }))
 
-    const row = screen.getByText('Mo 02.03.').closest('tr')!
-    expect(within(row).getByText('Familie Schulze')).toBeInTheDocument()
+    const row = document.getElementById('d-2026-03-02')!
+    expect(within(row).getAllByText('Familie Schulze')).not.toHaveLength(0)
     expect(screen.getAllByText('Winterferien')).toHaveLength(6)
   })
 

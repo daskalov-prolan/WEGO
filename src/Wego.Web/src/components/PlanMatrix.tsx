@@ -1,7 +1,7 @@
-import { useEffect, useRef, type MouseEvent, type PointerEvent } from 'react'
+import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import type { Entry, NamedItem } from '../api/types'
 import type { Day } from '../lib/dates'
-import { formatDateLong } from '../lib/dates'
+import { formatDateLong, MONTHS } from '../lib/dates'
 import { cellKey, siteStyle } from '../lib/ui'
 import { Chip } from './Chip'
 
@@ -20,6 +20,10 @@ export interface MatrixProps {
   selectable: boolean
   selected: Set<string>
   onSelectedChange: (selected: Set<string>) => void
+  /** Week view: an empty Saturday or Sunday shrinks to a thin row. */
+  foldEmptyWeekends?: boolean
+  /** Year view: a heading row at the start of every month. */
+  monthHeadings?: boolean
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -134,168 +138,109 @@ function EmployeeName({ employee, link }: { employee: NamedItem; link: boolean }
   return link ? <a href={`#/mitarbeiter/${employee.id}`}>{employee.name}</a> : <>{employee.name}</>
 }
 
-function dayClass(day: Day, props: Pick<MatrixProps, 'holidayByDate' | 'today'>) {
-  return [
-    day.isWeekend ? 'weekend' : '',
-    props.holidayByDate.has(day.iso) ? 'holiday' : '',
-    day.iso === props.today ? 'today' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-}
-
 /**
- * One week: employees in rows, weekdays in columns. The columns share the available width, an empty
- * weekend is folded to a narrow strip. In a narrow container every cell shrinks to its first entry
- * plus a counter; the full day opens on tap.
+ * The plan as in the Excel sheet: days from top to bottom, one column per employee. The same table
+ * serves week, month and year. The columns share the available width; with little room (phone, half a
+ * browser window) the cells shrink to the first site plus a counter and the table scrolls sideways
+ * while the day column stays in place.
  */
-export function WeekMatrix(props: MatrixProps) {
-  const { days, employees, entriesOf, holidayByDate, isDimmed, linkNames, selected } = props
-  const isUsed = (day: Day) => employees.some((employee) => entriesOf(employee.id, day.iso).length > 0)
-  const folded = new Set(days.filter((day) => day.isWeekend && !isUsed(day)).map((day) => day.iso))
+export function DayMatrix(props: MatrixProps) {
+  const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected } = props
+  const isUsed = (iso: string) => employees.some((employee) => entriesOf(employee.id, iso).length > 0)
+  const folded = new Set(
+    props.foldEmptyWeekends ? days.filter((day) => day.isWeekend && !isUsed(day.iso)).map((day) => day.iso) : [],
+  )
   const open = days.filter((day) => !folded.has(day.iso))
   const handlers = useCellSelection(props, open)
 
   return (
-    <table className="matrix week-matrix">
+    <table className="matrix" style={{ '--columns': employees.length } as CSSProperties}>
       <colgroup>
-        <col className="col-name" />
-        {days.map((day) => (
-          <col key={day.iso} className={folded.has(day.iso) ? 'col-folded' : undefined} />
+        <col className="col-day" />
+        {employees.map((employee) => (
+          <col key={employee.id} />
         ))}
       </colgroup>
       <thead>
         <tr>
-          <th className="name" />
-          {days.map((day) => (
-            <th key={day.iso} className={dayClass(day, props)} title={holidayByDate.get(day.iso)}>
-              <span className="wd">{day.weekday}</span>{' '}
-              {!folded.has(day.iso) && (
+          <th className="corner">Tag</th>
+          {employees.map((employee) => (
+            <th key={employee.id} title={employee.name}>
+              <EmployeeName employee={employee} link={linkNames} />
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {days.map((day, index) => {
+          const holiday = holidayByDate.get(day.iso)
+          const isFolded = folded.has(day.iso)
+          const rowClass = [
+            day.isWeekend ? 'weekend' : '',
+            holiday ? 'holiday' : '',
+            day.iso === today ? 'today' : '',
+            isFolded ? 'folded' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          return [
+            props.monthHeadings && (index === 0 || days[index - 1].month !== day.month) && (
+              <tr className="month-row" key={`m-${day.month}`} id={`m-${day.month}`}>
+                <th colSpan={employees.length + 1}>
+                  {MONTHS[day.month]} {day.iso.slice(0, 4)}
+                </th>
+              </tr>
+            ),
+            <tr className={rowClass} key={day.iso} id={`d-${day.iso}`}>
+              <th className="day" scope="row" title={holiday}>
+                <span className="wd">{day.weekday}</span>{' '}
                 <span className="num">
                   {pad(day.dayOfMonth)}.{pad(day.month + 1)}.
                 </span>
-              )}
-              {!folded.has(day.iso) && holidayByDate.has(day.iso) && (
-                <span className="holiday-name">{holidayByDate.get(day.iso)}</span>
-              )}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {employees.map((employee, employeeIndex) => (
-          <tr key={employee.id}>
-            <th className="name" scope="row">
-              <EmployeeName employee={employee} link={linkNames} />
-            </th>
-            {days.map((day) => {
-              if (folded.has(day.iso)) return <td key={day.iso} className={dayClass(day, props)} />
-              const entries = entriesOf(employee.id, day.iso)
-              const first = entries[0]
-              const isSelected = selected.has(cellKey(employee.id, day.iso))
-              return (
-                <td key={day.iso} className={dayClass(day, props)}>
-                  <button
-                    type="button"
-                    className={isSelected ? 'cell selected' : 'cell'}
-                    aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
-                    aria-pressed={isSelected || undefined}
-                    {...handlers(employeeIndex, open.indexOf(day))}
-                  >
-                    <span className="cell-full">
-                      {entries.map((entry) => (
-                        <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} />
-                      ))}
-                    </span>
-                    {first && (
-                      <span
-                        className={[
-                          'cell-compact',
-                          `compact-${first.type.toLowerCase()}`,
-                          entries.every(isDimmed) ? 'dimmed' : '',
-                        ].join(' ')}
-                        style={first.type === 'Baustelle' ? siteStyle(first.customerId) : undefined}
-                      >
-                        <span className="compact-name">
-                          {first.type === 'Baustelle' ? first.customerName : first.type}
-                        </span>
-                        {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
+                {holiday && !isFolded && <span className="holiday-name">{holiday}</span>}
+              </th>
+              {employees.map((employee, employeeIndex) => {
+                if (isFolded) return <td key={employee.id} />
+                const entries = entriesOf(employee.id, day.iso)
+                const first = entries[0]
+                const isSelected = selected.has(cellKey(employee.id, day.iso))
+                return (
+                  <td key={employee.id}>
+                    <button
+                      type="button"
+                      className={isSelected ? 'cell selected' : 'cell'}
+                      aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
+                      aria-pressed={isSelected || undefined}
+                      {...handlers(employeeIndex, open.indexOf(day))}
+                    >
+                      <span className="cell-full">
+                        {entries.map((entry) => (
+                          <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} />
+                        ))}
                       </span>
-                    )}
-                  </button>
-                </td>
-              )
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function code(entries: Entry[]): string {
-  const first = entries[0]
-  if (first.type !== 'Baustelle') return first.type[0]
-  return (first.customerName ?? '').slice(0, 3)
-}
-
-/**
- * One month as an overview: employees in rows, one narrow column per day. A cell carries the colour
- * and the first letters of the site; the full day is in the tooltip and opens on tap.
- */
-export function MonthMatrix(props: MatrixProps) {
-  const { days, employees, entriesOf, holidayByDate, isDimmed, linkNames, selected } = props
-  const handlers = useCellSelection(props, days)
-
-  return (
-    <table className="matrix month-matrix">
-      <thead>
-        <tr>
-          <th className="name" />
-          {days.map((day) => (
-            <th key={day.iso} className={dayClass(day, props)} title={holidayByDate.get(day.iso)}>
-              <span className="wd">{day.weekday}</span>
-              <span className="num">{day.dayOfMonth}</span>
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {employees.map((employee, employeeIndex) => (
-          <tr key={employee.id}>
-            <th className="name" scope="row">
-              <EmployeeName employee={employee} link={linkNames} />
-            </th>
-            {days.map((day, dayIndex) => {
-              const entries = entriesOf(employee.id, day.iso)
-              const summary = entries
-                .map((entry) => (entry.type === 'Baustelle' ? entry.customerName : entry.type))
-                .join(' / ')
-              const isSelected = selected.has(cellKey(employee.id, day.iso))
-              return (
-                <td key={day.iso} className={dayClass(day, props)}>
-                  <button
-                    type="button"
-                    className={[
-                      'cell',
-                      entries.length > 0 ? `cell-code code-${entries[0].type.toLowerCase()}` : '',
-                      entries.length > 0 && entries.every(isDimmed) ? 'dimmed' : '',
-                      isSelected ? 'selected' : '',
-                    ].join(' ')}
-                    style={entries[0]?.type === 'Baustelle' ? siteStyle(entries[0].customerId) : undefined}
-                    title={summary || undefined}
-                    aria-label={`${employee.name}, ${formatDateLong(day.iso)}${summary ? `: ${summary}` : ''}`}
-                    aria-pressed={isSelected || undefined}
-                    {...handlers(employeeIndex, dayIndex)}
-                  >
-                    {entries.length > 0 && code(entries)}
-                    {entries.length > 1 && <sup>{entries.length}</sup>}
-                  </button>
-                </td>
-              )
-            })}
-          </tr>
-        ))}
+                      {first && (
+                        <span
+                          className={[
+                            'cell-compact',
+                            `compact-${first.type.toLowerCase()}`,
+                            entries.every(isDimmed) ? 'dimmed' : '',
+                          ].join(' ')}
+                          style={first.type === 'Baustelle' ? siteStyle(first.customerId) : undefined}
+                        >
+                          <span className="compact-name">
+                            {first.type === 'Baustelle' ? first.customerName : first.type}
+                          </span>
+                          {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
+                        </span>
+                      )}
+                    </button>
+                  </td>
+                )
+              })}
+            </tr>,
+          ]
+        })}
       </tbody>
     </table>
   )

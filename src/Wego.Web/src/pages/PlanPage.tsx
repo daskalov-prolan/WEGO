@@ -19,8 +19,7 @@ import type { Customer, DayEntryInput, Entry, NamedItem, Plan } from '../api/typ
 import { AssignSite } from '../components/AssignSite'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { MonthMatrix, WeekMatrix } from '../components/PlanMatrix'
-import { YearGrid } from '../components/YearGrid'
+import { DayMatrix } from '../components/PlanMatrix'
 import {
   addDays,
   addMonths,
@@ -32,7 +31,7 @@ import {
   todayIso,
   weekOf,
 } from '../lib/dates'
-import { cellKey, toInput, useSwipe } from '../lib/ui'
+import { cellKey, toInput } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -138,15 +137,11 @@ export function PlanPage({ year, canEdit }: Props) {
     return new Set(plan.entries.filter(matches).map((entry) => entry.date))
   }, [plan, needle, matches])
 
-  const view: View = isPhone && chosenView === 'year' ? 'week' : chosenView
+  const view = chosenView
   const inYear = (iso: string) => iso >= first && iso <= last
   const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
   const step = (direction: 1 | -1) =>
     go(view === 'month' ? addMonths(anchor, direction) : addDays(anchor, 7 * direction))
-  const swipe = useSwipe(
-    () => step(1),
-    () => step(-1),
-  )
 
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
@@ -295,7 +290,7 @@ export function PlanPage({ year, canEdit }: Props) {
             data={[
               { value: 'week', label: 'Woche' },
               { value: 'month', label: 'Monat' },
-              ...(isPhone ? [] : [{ value: 'year', label: 'Jahr' }]),
+              { value: 'year', label: 'Jahr' },
             ]}
           />
           {view !== 'year' && (
@@ -385,7 +380,7 @@ export function PlanPage({ year, canEdit }: Props) {
             </Text>
           )}
         </Group>
-        {canEdit && view !== 'year' && selected.size === 0 && !isPhone && (
+        {canEdit && selected.size === 0 && !isPhone && (
           <Text size="xs" c="dimmed">
             Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage
             auf einmal zu belegen.
@@ -393,12 +388,12 @@ export function PlanPage({ year, canEdit }: Props) {
         )}
         {canEdit && isPhone && selected.size === 0 && (
           <Text size="xs" c="dimmed">
-            Tipp: Feld lange drücken, um mehrere Tage auszuwählen. Wischen wechselt die Woche.
+            Tipp: Feld lange drücken, um mehrere Tage auszuwählen.
           </Text>
         )}
       </div>
 
-      <div className="plan-scroll" {...(view === 'week' ? swipe : {})}>
+      <div className="plan-scroll">
         {plan.employees.length === 0 ? (
           <p className="page">
             Noch keine Mitarbeiter angelegt.
@@ -410,14 +405,14 @@ export function PlanPage({ year, canEdit }: Props) {
             )}
           </p>
         ) : view === 'week' ? (
-          <WeekMatrix days={week} {...shared} />
+          <DayMatrix days={week} foldEmptyWeekends {...shared} />
         ) : view === 'month' ? (
-          <MonthMatrix days={monthOf(anchor)} {...shared} />
+          <DayMatrix days={monthOf(anchor)} {...shared} />
         ) : (
-          // In the long year grid a filter is only useful if it removes the days without a match.
-          <YearGrid
-            year={year}
+          // In the whole year a filter is only useful if it removes the days without a match.
+          <DayMatrix
             days={matchingDates ? yearDays.filter((day) => matchingDates.has(day.iso)) : yearDays}
+            monthHeadings
             {...shared}
           />
         )}
