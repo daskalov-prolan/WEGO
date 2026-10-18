@@ -54,20 +54,32 @@ afterEach(() => {
 })
 
 describe('SiteMiniPlan', () => {
-  it('opens at the first planned work that fits the activity filter, else at the planned start', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    // Without a filter: the first entry at this site (Abriss on 5 March), not the planned start in April.
+  it('opens at the first planned work, without any at the planned start', async () => {
+    // The first entry at this site (Abriss on 5 March), not the planned start in April.
+    const { unmount } = renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    unmount()
 
-    const legend = within(screen.getByRole('group', { name: /Ablauf/ }))
-    // No Fliesen at this site yet: back to the planned start.
-    await user.click(legend.getByRole('button', { name: 'Fliesenarbeiten' }))
-    expect(screen.getByText('KW 14 · ab 30.03.')).toBeInTheDocument()
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...plan, entries: [] }), { status: 200 }))
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 14 · ab 30.03.')).toBeInTheDocument()
+  })
 
-    // Abriss as well: its first entry decides.
-    await user.click(legend.getByRole('button', { name: 'Abriss / Baubeginn' }))
-    expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+  it('shows the course of the site: open activities of its status to drag, planned ones greyed', async () => {
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    const flow = screen.getByRole('group', { name: 'Ablauf der Baustelle' })
+
+    // Only the current status is opened up: the activities of the Bauphase, none of the Angebot.
+    expect(within(flow).queryByText('Besichtigung')).not.toBeInTheDocument()
+    // Fliesen is still open: a box that can be dragged. Abriss is planned: greyed, nothing to drag.
+    const fliesen = within(flow).getByRole('button', { name: 'Fliesenarbeiten' })
+    expect(fliesen).toHaveAttribute('draggable', 'true')
+    const abriss = within(flow).getByText(/Abriss \/ Baubeginn/).closest('.flow-step')!
+    expect(abriss).toHaveClass('planned')
+    expect(abriss).not.toHaveAttribute('draggable')
+    // No filter any more: nothing in the flow switches the calendar.
+    expect(within(flow).queryAllByRole('button', { pressed: true })).toHaveLength(0)
   })
 
   it('moves by week and jumps to the next week in which someone who can do open work is free', async () => {
@@ -219,15 +231,15 @@ describe('SiteMiniPlan', () => {
     const taskBoxes = () => screen.queryAllByRole('button').filter((button) => button.classList.contains('task-box'))
     await user.click(taskBoxes()[0])
     await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
-    const cancelled = await screen.findByRole('group', { name: 'Stornierte Tätigkeiten' })
-    expect(within(cancelled).getByText('Fliesenarbeiten')).toBeInTheDocument()
-    expect(taskBoxes()).toHaveLength(0)
+    await waitFor(() => expect(taskBoxes()).toHaveLength(0))
+    const cancelled = screen.getByText('Fliesenarbeiten').closest('.flow-step')! as HTMLElement
+    expect(cancelled).toHaveClass('cancelled')
     const put = fetchMock.mock.calls.find(([url]) => url === '/api/sites/10/tasks/Fliesen')!
     expect(JSON.parse(String(put[1].body))).toEqual({ estimatedDays: 1, notNeeded: true })
 
     await user.click(within(cancelled).getByRole('button', { name: 'Wiederherstellen' }))
     await waitFor(() => expect(taskBoxes().map((button) => button.textContent)).toEqual(['Fliesenarbeiten']))
-    expect(screen.queryByRole('group', { name: 'Stornierte Tätigkeiten' })).not.toBeInTheDocument()
+    expect(document.querySelector('.flow-step.cancelled')).toBeNull()
   })
 
   it('stays in the week in view after planning', async () => {

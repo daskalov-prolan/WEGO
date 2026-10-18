@@ -1,14 +1,14 @@
 import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Plan, PlanEmployee, Site } from '../api/types'
-import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { addDays, daysBetween, formatDate, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
 import { dropTarget, moveChanges, staysPut, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
 import { ActivityIcon } from './ActivityIcon'
-import { ActivityLegend } from './ActivityPicker'
+import { SiteFlow } from './ActivityPicker'
 import { Chip } from './Chip'
 import type { OpenTask } from './PlanMatrix'
 import { SiteDayDialog } from './SiteDayDialog'
@@ -42,14 +42,10 @@ function LaneCell({ className, label, onOpen, canEdit, accepts, onDropItem, chil
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/**
- * Where to look first: the week of the earliest entry at the site with one of the chosen activities
- * (any activity without a filter); only without such an entry the given fallback (the planned start).
- */
-function firstWeek(all: Entry[], activities: Set<Activity>, siteId: number, fallback: string): string {
+/** Where to look first: the week of the earliest entry at the site; without one the given fallback (the planned start). */
+function firstWeek(all: Entry[], siteId: number, fallback: string): string {
   const first = all
     .filter((entry) => entry.siteId === siteId && entry.type === 'Baustelle')
-    .filter((entry) => activities.size === 0 || (entry.activity !== null && activities.has(entry.activity)))
     .reduce<string | null>((earliest, entry) => (earliest === null || entry.date < earliest ? entry.date : earliest), null)
   return first ? weekOf(first)[0].iso : fallback
 }
@@ -84,11 +80,9 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
 
   const [plans, setPlans] = useState<Plan[]>([])
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState<Set<Activity>>(new Set())
   const [openDay, setOpenDay] = useState<string | null>(null)
   // The first load decides where the days start; later loads (after planning, scrolling) keep the position.
   const positioned = useRef(false)
-  const startFor = (all: Entry[], activities: Set<Activity>) => firstWeek(all, activities, site.id, buildStart)
 
   const reload = useCallback(() => {
     Promise.all(yearsKey.split(',').map((year) => api.plan(Number(year)))).then(
@@ -96,8 +90,7 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
         setPlans(loaded)
         if (!positioned.current) {
           positioned.current = true
-          // No filter is chosen yet on the first load; later the filter jumps by itself when it changes.
-          const first = firstWeek(loaded.flatMap((plan) => plan.entries), new Set(), site.id, buildStart)
+          const first = firstWeek(loaded.flatMap((plan) => plan.entries), site.id, buildStart)
           setVisible(first)
           scrollTarget.current = first
           setRange({ from: addDays(first, -14), to: addDays(first, 41) })
@@ -145,10 +138,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
       .filter((task) => task.planned < task.estimated)
   })()
 
-  // Activities of the status that are not relevant for this site: only listed here, with a way back.
-  const cancelledTasks = isOpen(site.status)
-    ? site.tasks.filter((task) => task.notNeeded && activitiesOfStatus(site.status).includes(task.activity))
-    : []
   const setCancelled = async (activity: Activity, cancelled: boolean) => {
     const estimated = site.tasks.find((task) => task.activity === activity)?.estimatedDays ?? 1
     onSiteChange?.(await api.updateSiteTask(site.id, activity, estimated, cancelled))
@@ -328,7 +317,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
     if (monday !== visible) setVisible(monday)
   }
 
-  const isDimmed = (entry: Entry) => filter.size > 0 && !(entry.activity && filter.has(entry.activity))
 
   const dayHead = (day: Day) => (
     <div
@@ -349,6 +337,46 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
       )}
     </div>
   )
+
+  /** An activity of the site's status in the flow: open, planned already, or cancelled for this site. */
+  const step = (activity: Activity) => {
+    const open = openTasks.find((task) => task.activity === activity)
+    if (open)
+      return (
+        <TaskBox
+          task={open}
+          employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(activity))}
+          defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
+          minDate={`${years[0]}-01-01`}
+          maxDate={`${years[years.length - 1]}-12-31`}
+          onPlan={canEdit ? (employeeIds, date) => plan(activity, employeeIds, date) : undefined}
+          siteId={site.id}
+          onCancel={canEdit ? () => setCancelled(activity, true) : undefined}
+        />
+      )
+    const task = site.tasks.find((candidate) => candidate.activity === activity)
+    const info = ACTIVITIES.find((candidate) => candidate.value === activity)!
+    const colours = { '--entry-bg': info.tint, '--entry-strong': info.background } as CSSProperties
+    if (task?.notNeeded)
+      return (
+        <span className="flow-step cancelled" style={colours} title="Storniert: für diese Baustelle nicht relevant">
+          <ActivityIcon activity={activity} size={11} />
+          <span className="task-name">{info.label}</span>
+          {canEdit && (
+            <button type="button" className="flow-restore" onClick={() => setCancelled(activity, false)}>
+              Wiederherstellen
+            </button>
+          )}
+        </span>
+      )
+    return (
+      <span className="flow-step planned" style={colours} title={task ? 'Eingeplant' : 'Für diese Baustelle nicht vorgesehen'}>
+        <ActivityIcon activity={activity} size={11} />
+        {info.label}
+        {task && ' ✓'}
+      </span>
+    )
+  }
 
   return (
     <Paper withBorder p="md" mb="lg" className="mini-plan">
@@ -394,59 +422,13 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
           </Tooltip>
         </Group>
       </Group>
-      <ActivityLegend
-        selected={filter}
-        onChange={(next) => {
-          setFilter(next)
-          go(startFor(entries, next))
-        }}
-      />
+      {/* The course of the site: in its status the open activities stand out (planners drag them onto a day),
+          planned ones are greyed, cancelled ones struck through. */}
+      <SiteFlow current={site.status} renderStep={step} />
       {error && (
         <Alert color="red" variant="light" mt="xs">
           {error}
         </Alert>
-      )}
-
-      <div className="mini-tasks">
-        <Text size="xs" fw={700} c="dimmed">
-          Ungeplant:
-        </Text>
-        {openTasks.length === 0 && (
-          <Text size="xs" c="dimmed">
-            alles eingeplant
-          </Text>
-        )}
-        {openTasks.map((task) => (
-          <TaskBox
-            key={task.activity}
-            task={task}
-            employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(task.activity))}
-            defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
-            minDate={`${years[0]}-01-01`}
-            maxDate={`${years[years.length - 1]}-12-31`}
-            onPlan={canEdit ? (employeeIds, date) => plan(task.activity, employeeIds, date) : undefined}
-            siteId={site.id}
-            onCancel={canEdit ? () => setCancelled(task.activity, true) : undefined}
-          />
-        ))}
-      </div>
-      {cancelledTasks.length > 0 && (
-        <div className="mini-tasks cancelled" role="group" aria-label="Stornierte Tätigkeiten">
-          <Text size="xs" fw={700} c="dimmed">
-            Storniert:
-          </Text>
-          {cancelledTasks.map((task) => (
-            <span key={task.activity} className="task-cancelled" title="Für diese Baustelle nicht relevant">
-              <ActivityIcon activity={task.activity} />
-              <span className="task-name">{activityLabel(task.activity)}</span>
-              {canEdit && (
-                <Button size="compact-xs" variant="subtle" onClick={() => setCancelled(task.activity, false)}>
-                  Wiederherstellen
-                </Button>
-              )}
-            </span>
-          ))}
-        </div>
       )}
 
       <div className="mini-scroll" ref={scroller} onScroll={onScroll}>
@@ -489,13 +471,12 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
                           <Chip
                             entry={entry}
                             label={(entry.activity && activityLabel(entry.activity)) || undefined}
-                            dimmed={isDimmed(entry)}
                             draggable={canEdit}
                           />
                         </span>
                       ) : (
                         <span key={entry.id} className="mini-elsewhere">
-                          <Chip entry={entry} dimmed={isDimmed(entry)} draggable={canEdit} />
+                          <Chip entry={entry} draggable={canEdit} />
                         </span>
                       ),
                     )}

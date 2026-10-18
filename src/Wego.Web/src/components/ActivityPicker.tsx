@@ -1,5 +1,5 @@
 import { Button, ColorSwatch, Group, Select, Text } from '@mantine/core'
-import { Fragment, type CSSProperties } from 'react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import type { Activity, SiteStatus } from '../api/types'
 import { ActivityIcon } from './ActivityIcon'
 import { ABSENCE, ACTIVITIES, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY, SITE_STATUSES } from '../lib/activities'
@@ -163,6 +163,66 @@ export function ActivityLegend({ selected, onChange }: FilterProps) {
             Alle anzeigen ({selected.size} Filter aufheben)
           </Button>
         )}
+      </div>
+      <Group gap="sm" wrap="wrap">
+        <Dot color={ABSENCE.background} label="Urlaub / Krank" />
+        <Dot color={PUBLIC_HOLIDAY.background} label="Feiertag" />
+        <Dot color={SCHOOL_HOLIDAY.background} label="Schulferien" />
+      </Group>
+    </div>
+  )
+}
+/**
+ * The course of one site, in the look of the legend: the statuses one after the other, the current one
+ * opened up with its activities. How an activity looks (open, planned, cancelled) is up to the caller.
+ */
+export function SiteFlow({ current, renderStep }: { current: SiteStatus; renderStep: (activity: Activity) => ReactNode }) {
+  const stage = (value: 'Angebot' | 'Bauphase') => {
+    const info = status(value)
+    const steps = ACTIVITIES.filter((activity) => activity.phase === value)
+    return (
+      <div
+        className={value === current ? 'flow-stage current' : 'flow-stage other'}
+        style={{ '--stage': info.hex } as CSSProperties}
+        aria-current={value === current ? 'step' : undefined}
+      >
+        <span className="flow-stage-name">{info.label}</span>
+        {value === current && (
+          <span className="flow-steps">
+            {steps.map((activity, index) => (
+              <Fragment key={activity.value}>
+                {index > 0 && <Arrow />}
+                {renderStep(activity.value)}
+              </Fragment>
+            ))}
+          </span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="activity-legend">
+      <div className="flow site-flow" role="group" aria-label="Ablauf der Baustelle">
+        {stage('Angebot')}
+        <span className="flow-arrow big" aria-hidden>
+          ➜
+        </span>
+        {stage('Bauphase')}
+        <span className="flow-arrow big" aria-hidden>
+          ➜
+        </span>
+        <span
+          className={current === 'Abgeschlossen' ? 'flow-end current' : 'flow-end other'}
+          style={{ '--stage': status('Abgeschlossen').hex } as CSSProperties}
+        >
+          Abgeschlossen
+        </span>
+        <span
+          className={current === 'Storniert' ? 'flow-cancel current' : 'flow-cancel other'}
+          style={{ '--stage': status('Storniert').hex } as CSSProperties}
+        >
+          jederzeit ↘ Storniert
+        </span>
       </div>
       <Group gap="sm" wrap="wrap">
         <Dot color={ABSENCE.background} label="Urlaub / Krank" />

@@ -1017,37 +1017,63 @@ a:hover {
 
 /* ---------- site page: planning ---------- */
 
-.mini-tasks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
+.site-flow {
   margin: 10px 0 8px;
 }
 
-.mini-tasks .task-box {
+.site-flow .flow-stage-name,
+.site-flow .flow-step {
+  cursor: default;
+}
+
+/* The other statuses step back; the current one is opened up with its activities. */
+.site-flow .flow-stage.other,
+.site-flow .flow-end.other,
+.site-flow .flow-cancel.other {
+  opacity: 0.45;
+}
+
+.site-flow .flow-stage.current {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage) 25%, transparent);
+}
+
+/* Still to plan: full colour and strong, to be dragged onto a day. */
+.site-flow .task-box {
   width: auto;
   margin: 0;
+  font-weight: 700;
+  box-shadow: 0 0 0 1.5px var(--entry-strong), 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
-/* Activities not relevant for this site: struck through, with a way back. */
-.mini-tasks.cancelled {
-  margin-top: -2px;
+/* Planned already: greyed, nothing to drag. */
+.flow-step.planned {
+  opacity: 0.45;
+  filter: grayscale(0.5);
 }
 
-.task-cancelled {
+/* Not relevant for this site. */
+.flow-step.cancelled {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 2px 1px 6px;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
+  border-left-style: dashed;
+  background: transparent;
   color: #6b7280;
-  font-size: 0.74rem;
 }
 
-.task-cancelled .task-name {
+.flow-step.cancelled .task-name {
   text-decoration: line-through;
+}
+
+.flow-restore {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--wego-teal);
+  font: inherit;
+  font-size: 0.68rem;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* About one week in view, one and a half when there is room; Saturday and Sunday as narrow strips. */
