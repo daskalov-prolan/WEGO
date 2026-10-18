@@ -8,7 +8,8 @@ import { SiteMiniPlan } from './SiteMiniPlan'
 const site: Site = {
   id: 10, name: 'Familie Schulze', client: 'Familie Schulze', labelProjectNumber: null, street: null, houseNumber: null,
   addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber', description: null,
-  plannedStart: '2026-03-04', plannedEnd: null, status: 'Bauphase',
+  // Planned for April, but the first work is planned for early March already.
+  plannedStart: '2026-04-01', plannedEnd: null, status: 'Bauphase',
   tasks: [
     { activity: 'Abriss', estimatedDays: 1, notNeeded: false },
     { activity: 'Fliesen', estimatedDays: 1, notNeeded: false },
@@ -52,6 +53,22 @@ afterEach(() => {
 })
 
 describe('SiteMiniPlan', () => {
+  it('opens at the first planned work that fits the activity filter, else at the planned start', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    // Without a filter: the first entry at this site (Abriss on 5 March), not the planned start in April.
+    expect(await screen.findByText('KW 10–11')).toBeInTheDocument()
+
+    const legend = within(screen.getByRole('group', { name: /Ablauf/ }))
+    // No Fliesen at this site yet: back to the planned start.
+    await user.click(legend.getByRole('button', { name: 'Fliesenarbeiten' }))
+    expect(screen.getByText('KW 14–15')).toBeInTheDocument()
+
+    // Abriss as well: its first entry decides.
+    await user.click(legend.getByRole('button', { name: 'Abriss / Baubeginn' }))
+    expect(screen.getByText('KW 10–11')).toBeInTheDocument()
+  })
+
   it('moves by week and jumps to the next week planned to less than half', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
@@ -60,6 +77,8 @@ describe('SiteMiniPlan', () => {
     await user.click(screen.getByRole('button', { name: 'Woche vor' }))
     expect(screen.getByText('KW 11–12')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Baubeginn' }))
+    expect(screen.getByText('KW 14–15')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Heute' }))
     expect(screen.getByText('KW 10–11')).toBeInTheDocument()
 
     // KW 10 itself is at 20 %, but the jump looks for the next week after the first one shown.
@@ -71,7 +90,7 @@ describe('SiteMiniPlan', () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
 
-    // Planned start Wednesday 4 March: the weeks begin on Monday 2 March.
+    // The first entry is on Thursday 5 March: the weeks begin on Monday 2 March.
     // Bernd (main activity Fliesen, still open) works one of five days in KW 10, none in KW 11.
     expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
     expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()

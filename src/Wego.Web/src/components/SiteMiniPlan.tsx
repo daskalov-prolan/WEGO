@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Plan, PlanEmployee, Site } from '../api/types'
 import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
@@ -18,6 +18,18 @@ interface Props {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * Where to look first: the week of the earliest entry at the site with one of the chosen activities
+ * (any activity without a filter); only without such an entry the given fallback (the planned start).
+ */
+function firstWeek(all: Entry[], activities: Set<Activity>, siteId: number, fallback: string): string {
+  const first = all
+    .filter((entry) => entry.siteId === siteId && entry.type === 'Baustelle')
+    .filter((entry) => activities.size === 0 || (entry.activity !== null && activities.has(entry.activity)))
+    .reduce<string | null>((earliest, entry) => (earliest === null || entry.date < earliest ? entry.date : earliest), null)
+  return first ? weekOf(first)[0].iso : fallback
+}
 
 /**
  * Planning on the page of a site: the two calendar weeks from the planned start, one column per day.
@@ -40,12 +52,23 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<Set<Activity>>(new Set())
   const [openDay, setOpenDay] = useState<string | null>(null)
+  // The first load decides where the two weeks start; later loads (after planning) keep the position.
+  const positioned = useRef(false)
+  const startFor = (all: Entry[], activities: Set<Activity>) => firstWeek(all, activities, site.id, buildStart)
 
   const reload = useCallback(() => {
-    Promise.all(yearsKey.split(',').map((year) => api.plan(Number(year)))).then(setPlans, (e) =>
-      setError(messageOf(e)),
+    Promise.all(yearsKey.split(',').map((year) => api.plan(Number(year)))).then(
+      (loaded) => {
+        setPlans(loaded)
+        if (!positioned.current) {
+          positioned.current = true
+          // No filter is chosen yet on the first load; later the filter jumps by itself when it changes.
+          setStart(firstWeek(loaded.flatMap((plan) => plan.entries), new Set(), site.id, buildStart))
+        }
+      },
+      (e) => setError(messageOf(e)),
     )
-  }, [yearsKey])
+  }, [yearsKey, site.id, buildStart])
   useEffect(reload, [reload])
 
   const entries = useMemo(() => plans.flatMap((plan) => plan.entries), [plans])
@@ -203,7 +226,13 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
           </Tooltip>
         </Group>
       </Group>
-      <ActivityLegend selected={filter} onChange={setFilter} />
+      <ActivityLegend
+        selected={filter}
+        onChange={(next) => {
+          setFilter(next)
+          setStart(startFor(entries, next))
+        }}
+      />
       {error && (
         <Alert color="red" variant="light" mt="xs">
           {error}
