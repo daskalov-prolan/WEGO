@@ -17,6 +17,7 @@ import { api, messageOf } from '../api/client'
 import type { Site, SiteReport } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteLocation } from '../components/SiteLocation'
+import { SiteMiniPlan } from '../components/SiteMiniPlan'
 import { SiteStatusPanel } from '../components/SiteStatus'
 import { Stat } from '../components/Stat'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
@@ -194,6 +195,8 @@ export function SitePage({ year, siteId }: Props) {
           }}
         />
       )}
+
+      {site && <SiteMiniPlan site={site} canEdit />}
 
       <Title order={4} mb="xs">
         Einsätze {year}

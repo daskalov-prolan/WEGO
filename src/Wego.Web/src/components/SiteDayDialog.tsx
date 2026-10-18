@@ -16,7 +16,7 @@ interface Props {
   onClose: () => void
   onOpenSite: () => void
   /** Opens the whole day of one employee in the day editor. */
-  onEditDay: (employee: PlanEmployee) => void
+  onEditDay?: (employee: PlanEmployee) => void
   /** Puts these employees on the site, each with their own main activity. */
   onAdd: (employeeIds: number[]) => Promise<void>
   onRemove: (entry: Entry) => Promise<void>
@@ -73,7 +73,7 @@ export function SiteDayDialog(props: Props) {
               </div>
               {canEdit && (
                 <Group gap={4} wrap="nowrap">
-                  {employee && (
+                  {employee && onEditDay && (
                     <Button size="compact-sm" variant="default" onClick={() => onEditDay(employee)}>
                       Tag bearbeiten
                     </Button>

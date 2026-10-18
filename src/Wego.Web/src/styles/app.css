@@ -1014,3 +1014,122 @@ a:hover {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---------- site page: two weeks of planning ---------- */
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mini-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.mini-week {
+  display: grid;
+  grid-template-columns: 44px repeat(5, minmax(96px, 1fr)) repeat(2, minmax(60px, 0.6fr));
+  min-width: 660px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mini-week-label {
+  display: grid;
+  place-items: center;
+  background: var(--wego-teal-dark);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.mini-day {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+}
+
+.mini-day.weekend {
+  background: var(--surface-weekend);
+}
+
+.mini-day-head {
+  padding: 4px 6px;
+  background: var(--wego-teal);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mini-day-head.weekend {
+  background: #3a8f97;
+}
+
+.mini-day-head.today {
+  background: var(--wego-aqua);
+}
+
+.mini-day-head .wd {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.mini-day-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 70px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mini-day-body:hover {
+  background: rgba(57, 187, 207, 0.12);
+}
+
+.mini-day-body .chip {
+  font-size: 0.74rem;
+}
+
+.mini-day-body .chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Work elsewhere: smaller and quieter than the work at this site. */
+.mini-elsewhere {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding-top: 3px;
+  border-top: 1px dashed var(--border);
+}
+
+.mini-elsewhere .chip {
+  opacity: 0.6;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .mini-grid {
+    grid-template-columns: 1fr;
+  }
+}
