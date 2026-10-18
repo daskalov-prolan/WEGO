@@ -28,6 +28,8 @@ import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
+import { PlanTaskDialog } from '../components/PlanTaskDialog'
+import { dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import {
   addDays,
   addMonths,
@@ -47,7 +49,6 @@ interface Props {
 }
 
 type View = 'week' | 'month' | 'year'
-type DayChange = { employeeId: number; date: string; entries: DayEntryInput[] }
 
 const HIDDEN_KEY = 'wego.plan.hiddenEmployees'
 const WEEKENDS_KEY = 'wego.plan.showWeekends'
@@ -125,6 +126,8 @@ export function PlanPage({ year, canEdit }: Props) {
   // A site opened from a cell, and whether its form is open.
   const [shownSite, setShownSite] = useState<{ site: Site; editing: boolean } | null>(null)
   const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[] } | null>(null)
+  // An open activity dropped on a day of a site: who goes there is asked for.
+  const [droppedTask, setDroppedTask] = useState<{ site: Site; activity: Activity; date: string } | null>(null)
 
   useEffect(() => {
     api.plan(year).then(setPlan, (e) => setError(messageOf(e)))
@@ -492,6 +495,56 @@ export function PlanPage({ year, canEdit }: Props) {
     }))
     await save(changes, `${activityLabel(activity)} auf ${site.name} eingeplant.`)
   }
+  const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
+  const canDo = (employee: PlanEmployee, activity: Activity, status?: Site['status']) =>
+    allowedActivities(employee, status).includes(activity)
+
+  /** Plan by employee: an entry moves to this employee and day; an open activity is planned there. */
+  const dropOnEmployee = (employee: PlanEmployee, date: string) =>
+    dropTarget(
+      (item: DragItem) =>
+        item.kind === 'task'
+          ? canDo(employee, item.activity, siteById.get(item.siteId)?.status)
+          : !staysPut(item.entry, { employeeId: employee.id, date, siteId: item.entry.siteId }) &&
+            (item.entry.activity === null || canDo(employee, item.entry.activity)),
+      (item: DragItem) => {
+        if (item.kind === 'task') {
+          const site = siteById.get(item.siteId)
+          if (site) planTask(site, item.activity, [employee.id], date).catch(fail)
+          return
+        }
+        const { entry } = item
+        const changes = moveChanges(entry, { employeeId: employee.id, date, siteId: entry.siteId, activity: entry.activity }, entriesOf)
+        save(changes, `${entry.siteName ?? entry.type} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
+      },
+      canEdit,
+    )
+
+  /** Plan by site: an entry moves to this site and day; an open activity of this site asks who goes. */
+  const dropOnSite = (site: Site, date: string) =>
+    dropTarget(
+      (item: DragItem) =>
+        isOpen(site.status) &&
+        (item.kind === 'task'
+          ? item.siteId === site.id
+          : item.entry.type === 'Baustelle' && !staysPut(item.entry, { employeeId: item.entry.employeeId, date, siteId: site.id })),
+      (item: DragItem) => {
+        if (item.kind === 'task') {
+          setDroppedTask({ site, activity: item.activity, date })
+          return
+        }
+        const { entry } = item
+        const employee = plan.employees.find((candidate) => candidate.id === entry.employeeId)
+        if (!employee) return
+        // The activity stays if it belongs to the status of the new site, else the employee's own one there.
+        const activity =
+          entry.activity && canDo(employee, entry.activity, site.status) ? entry.activity : defaultActivity(employee, site.status)
+        const changes = moveChanges(entry, { employeeId: employee.id, date, siteId: site.id, activity }, entriesOf)
+        save(changes, `${employee.name} verschoben: ${site.name}, ${formatDate(date)}.`).catch(fail)
+      },
+      canEdit,
+    )
+
   const nameOf = (input: DayEntryInput) => (input.siteId === null ? input.type : (siteById.get(input.siteId)?.name ?? ''))
 
   const createSite = async (input: SiteInput) => {
@@ -681,10 +734,12 @@ export function PlanPage({ year, canEdit }: Props) {
           )}
         </Group>
         <ActivityLegend selected={activityFilter} onChange={setActivityFilter} />
-        {canEdit && selected.size === 0 && !isPhone && perspective === 'employees' && (
+        {canEdit && selected.size === 0 && !isPhone && (
           <Text size="xs" c="dimmed">
-            Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage
-            auf einmal zu belegen.
+            Tipp: Einträge und ungeplante Tätigkeiten mit der Maus auf einen anderen Tag ziehen, um sie zu verschieben
+            oder einzuplanen.
+            {perspective === 'employees' &&
+              ' Von einem leeren Feld aus über mehrere Felder ziehen oder Strg+Klick wählt viele Tage auf einmal aus.'}
           </Text>
         )}
         {canEdit && isPhone && selected.size === 0 && perspective === 'employees' && (
@@ -713,6 +768,7 @@ export function PlanPage({ year, canEdit }: Props) {
             employeeTasks={employeeTasks}
             firstVisible={anchor}
             onPlanTask={canEdit ? planTask : undefined}
+            dropOn={canEdit ? dropOnEmployee : undefined}
             {...shared}
           />
         ) : (
@@ -730,7 +786,7 @@ export function PlanPage({ year, canEdit }: Props) {
               }
               firstVisible={anchor}
               onPlanTask={canEdit ? planTask : undefined}
-
+              dropOn={canEdit ? dropOnSite : undefined}
               onTaskNotNeeded={
                 canEdit
                   ? async (site, activity) => {
@@ -918,6 +974,16 @@ export function PlanPage({ year, canEdit }: Props) {
             onClose={() => setShownSite(null)}
           />
         ))}
+      {droppedTask && (
+        <PlanTaskDialog
+          site={droppedTask.site}
+          activity={droppedTask.activity}
+          date={droppedTask.date}
+          employees={employees.filter((employee) => canDo(employee, droppedTask.activity, droppedTask.site.status))}
+          onClose={() => setDroppedTask(null)}
+          onPlan={(employeeIds) => planTask(droppedTask.site, droppedTask.activity, employeeIds, droppedTask.date)}
+        />
+      )}
       {siteDay && siteById.get(siteDay.siteId) && (
         <SiteDayDialog
           site={siteById.get(siteDay.siteId)!}

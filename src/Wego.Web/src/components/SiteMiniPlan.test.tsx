@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, Site } from '../api/types'
@@ -153,6 +153,44 @@ describe('SiteMiniPlan', () => {
         date: '2026-03-02',
         entries: expect.arrayContaining([expect.objectContaining({ siteId: 10, activity: 'Fliesen' })]),
       }),
+    ])
+  })
+
+  it('plans an open activity and moves entries by dragging them onto a day of a lane', async () => {
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    const batch = () => {
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
+      return call ? JSON.parse(String(call[1].body)) : null
+    }
+    const dropOn = (source: Element, target: Element) => {
+      fireEvent.dragStart(source)
+      const taken = !fireEvent.dragOver(target)
+      fireEvent.drop(target)
+      fireEvent.dragEnd(source)
+      return taken
+    }
+
+    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box'))!
+    expect(dropOn(box, screen.getByRole('button', { name: 'Bernd, 2026-03-04' }))).toBe(true)
+    await waitFor(() => expect(batch()).not.toBeNull())
+    expect(batch()).toEqual([
+      expect.objectContaining({
+        employeeId: 2,
+        date: '2026-03-04',
+        entries: [expect.objectContaining({ siteId: 10, activity: 'Fliesen' })],
+      }),
+    ])
+    fetchMock.mockClear()
+
+    // Bernd's day elsewhere moves to Friday; his own cell does not take it.
+    const chip = within(screen.getByRole('button', { name: 'Bernd, 2026-03-05' })).getAllByText('Familie Meier')[0].closest('.chip')!
+    expect(dropOn(chip, screen.getByRole('button', { name: 'Bernd, 2026-03-05' }))).toBe(false)
+    expect(dropOn(chip, screen.getByRole('button', { name: 'Bernd, 2026-03-06' }))).toBe(true)
+    await waitFor(() => expect(batch()).not.toBeNull())
+    expect(batch()).toEqual([
+      { employeeId: 2, date: '2026-03-05', entries: [] },
+      expect.objectContaining({ employeeId: 2, date: '2026-03-06', entries: [expect.objectContaining({ siteId: 11 })] }),
     ])
   })
 })

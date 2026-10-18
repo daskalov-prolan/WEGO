@@ -1,10 +1,11 @@
 import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Plan, PlanEmployee, Site } from '../api/types'
 import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
-import { addDays, daysBetween, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
+import { addDays, daysBetween, formatDate, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
+import { dropTarget, moveChanges, staysPut, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
 import { ActivityLegend } from './ActivityPicker'
 import { Chip } from './Chip'
@@ -15,6 +16,25 @@ import { TaskBox } from './TaskBox'
 interface Props {
   site: Site
   canEdit: boolean
+}
+
+interface LaneCellProps {
+  className: string
+  label: string
+  onOpen: () => void
+  canEdit: boolean
+  accepts: (item: DragItem) => boolean
+  onDropItem: (item: DragItem) => void
+  children: ReactNode
+}
+
+/** One day of an employee's lane; planners drop entries and open activities on it. */
+function LaneCell({ className, label, onOpen, canEdit, accepts, onDropItem, children }: LaneCellProps) {
+  return (
+    <button type="button" className={className} aria-label={label} onClick={onOpen} {...dropTarget(accepts, onDropItem, canEdit)}>
+      {children}
+    </button>
+  )
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -197,6 +217,26 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     await save(changes, `${what} am ${date.slice(8, 10)}.${date.slice(5, 7)}. eingeplant.`)
   }
 
+  const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
+
+  /** A lane's day takes entries the employee can do and the open activities of this site they can do. */
+  const accepts = (employee: PlanEmployee, date: string, item: DragItem) =>
+    item.kind === 'task'
+      ? item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
+      : !staysPut(item.entry, { employeeId: employee.id, date, siteId: item.entry.siteId }) &&
+        (item.entry.activity === null || allowedActivities(employee).includes(item.entry.activity))
+
+  /** Dropped there: an entry moves to this employee and day, an open activity is planned there. */
+  const dropItem = (employee: PlanEmployee, date: string, item: DragItem) => {
+    if (item.kind === 'task') {
+      plan(item.activity, [employee.id], date).catch(fail)
+      return
+    }
+    const { entry } = item
+    const changes = moveChanges(entry, { employeeId: employee.id, date, siteId: entry.siteId, activity: entry.activity }, entriesOf)
+    save(changes, `${entry.siteName ?? entry.type} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
+  }
+
   const go = (monday: string) => {
     setVisible(monday)
     scrollTarget.current = monday
@@ -339,6 +379,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
             minDate={`${years[0]}-01-01`}
             maxDate={`${years[years.length - 1]}-12-31`}
             onPlan={canEdit ? (employeeIds, date) => plan(task.activity, employeeIds, date) : undefined}
+            siteId={site.id}
             onNotNeeded={
               canEdit
                 ? async () => {
@@ -377,12 +418,14 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
               {days.map((day) => {
                 const list = byLaneDay.get(`${employee.id}|${day.iso}`) ?? []
                 return (
-                  <button
+                  <LaneCell
                     key={day.iso}
-                    type="button"
                     className={day.isWeekend ? 'mini-cell weekend' : 'mini-cell'}
-                    aria-label={`${employee.name}, ${day.iso}`}
-                    onClick={() => setOpenDay(day.iso)}
+                    label={`${employee.name}, ${day.iso}`}
+                    onOpen={() => setOpenDay(day.iso)}
+                    canEdit={canEdit}
+                    accepts={(item) => accepts(employee, day.iso, item)}
+                    onDropItem={(item) => dropItem(employee, day.iso, item)}
                   >
                     {list.map((entry) =>
                       entry.siteId === site.id ? (
@@ -391,15 +434,16 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
                             entry={entry}
                             label={(entry.activity && activityLabel(entry.activity)) || undefined}
                             dimmed={isDimmed(entry)}
+                            draggable={canEdit}
                           />
                         </span>
                       ) : (
                         <span key={entry.id} className="mini-elsewhere">
-                          <Chip entry={entry} dimmed={isDimmed(entry)} />
+                          <Chip entry={entry} dimmed={isDimmed(entry)} draggable={canEdit} />
                         </span>
                       ),
                     )}
-                  </button>
+                  </LaneCell>
                 )
               })}
             </Fragment>

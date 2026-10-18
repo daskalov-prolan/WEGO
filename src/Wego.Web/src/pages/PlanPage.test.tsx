@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan } from '../api/types'
@@ -361,5 +361,107 @@ describe('PlanPage', () => {
     // The notification offers to take it back (it closes itself after a few seconds, so only its appearance counts).
     await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 })
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
+  })
+
+  describe('drag and drop', () => {
+    const batch = () => {
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
+      return call ? JSON.parse(String(call[1].body)) : null
+    }
+    const dropOn = (source: Element, target: Element) => {
+      fireEvent.dragStart(source)
+      // A cell that takes the item cancels the dragover (that is how the browser knows it may drop).
+      const taken = !fireEvent.dragOver(target)
+      fireEvent.drop(target)
+      fireEvent.dragEnd(source)
+      return taken
+    }
+    const rowOf = (name: string) => screen.getAllByRole('row').find((row) => row.textContent?.startsWith(name))!
+
+    it('moves an entry to another day and plans an open activity on the cell it is dropped on', async () => {
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      const chip = within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      // Its own cell and anything outside the plan do not take it.
+      expect(dropOn(chip, cell(/Bernd, Dienstag, 03.03.2026/).closest('td')!)).toBe(false)
+      expect(dropOn(chip, screen.getByRole('searchbox', { name: 'Baustellen-Filter' }))).toBe(false)
+      expect(batch()).toBeNull()
+
+      expect(dropOn(chip, cell(/Bernd, Donnerstag, 05.03.2026/).closest('td')!)).toBe(true)
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        { employeeId: 2, date: '2026-03-03', entries: [] },
+        expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11 })] }),
+      ])
+    })
+
+    it('plans an open activity on the employee and day it is dropped on, if the employee can do it', async () => {
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      // Anna's open Abriss at Werner, dropped on Bernd (who does Abriss as well).
+      const box = within(rowOf('Anna').querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Familie Werner/ })
+      expect(dropOn(box, cell(/Bernd, Mittwoch, 04.03.2026/).closest('td')!)).toBe(true)
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        expect.objectContaining({
+          employeeId: 2,
+          date: '2026-03-04',
+          entries: [expect.objectContaining({ siteId: 12, activity: 'Abriss' })],
+        }),
+      ])
+    })
+
+    it('in the plan by site moves an employee to another site, and asks who goes for a dropped activity', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+      await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
+
+      // An open activity only goes onto a day of its own site; there the employees are asked for.
+      const box = within(rowOf('Familie Werner').querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Abriss/ })
+      const werner = screen.getByRole('button', { name: /Familie Werner, Donnerstag, 05.03.2026/ }).closest('td')!
+      const meier = screen.getByRole('button', { name: /Familie Meier, Donnerstag, 05.03.2026/ }).closest('td')!
+      expect(dropOn(box, meier)).toBe(false)
+      expect(dropOn(box, werner)).toBe(true)
+      expect(await screen.findByText('Abriss / Baubeginn einplanen')).toBeInTheDocument()
+      await user.click(screen.getAllByLabelText(/^Mitarbeiter/).find((element) => element.tagName === 'INPUT')!)
+      await user.click(await screen.findByRole('option', { name: 'Anna', hidden: true }))
+      await user.click(screen.getByRole('button', { name: 'Einplanen', hidden: true }))
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        expect.objectContaining({
+          employeeId: 1,
+          date: '2026-03-05',
+          entries: [expect.objectContaining({ siteId: 12, activity: 'Abriss' })],
+        }),
+      ])
+      fetchMock.mockClear()
+
+      // Bernd from Meier on Tuesday to Schulze on Wednesday, with his main activity there.
+      const chip = within(screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ }))
+        .getAllByText('Bernd')[0]
+        .closest('.chip')!
+      const schulze = screen.getByRole('button', { name: /Familie Schulze, Mittwoch, 04.03.2026/ }).closest('td')!
+      expect(dropOn(chip, schulze)).toBe(true)
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        { employeeId: 2, date: '2026-03-03', entries: [] },
+        expect.objectContaining({
+          employeeId: 2,
+          date: '2026-03-04',
+          entries: [expect.objectContaining({ siteId: 10, activity: 'Sanitaer' })],
+        }),
+      ])
+    })
+
+    it('gives employees nothing to drag', async () => {
+      renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+      await screen.findByText(/KW 10/)
+      const chip = within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      expect(chip).not.toHaveAttribute('draggable')
+      expect(dropOn(chip, cell(/Bernd, Donnerstag, 05.03.2026/).closest('td')!)).toBe(false)
+    })
   })
 })

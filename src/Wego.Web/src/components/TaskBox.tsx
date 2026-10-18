@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from 'react'
 import { messageOf } from '../api/client'
 import type { PlanEmployee } from '../api/types'
 import { ACTIVITIES } from '../lib/activities'
+import { dragSource } from '../lib/dragPlan'
 import { ActivityIcon } from './ActivityIcon'
 import type { OpenTask } from './PlanMatrix'
 
@@ -22,11 +23,13 @@ interface Props {
   /** Planners only: puts the activity on these employees on that day. */
   onPlan?: (employeeIds: number[], date: string) => Promise<void>
   onNotNeeded?: () => Promise<void>
+  /** The site of the activity: planners can drag the box onto a day of the plan. */
+  siteId?: number
 }
 
 /** An activity of a site that is not planned yet: a box in its colour; planners plan it from here. */
 export function TaskBox(props: Props) {
-  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onNotNeeded } = props
+  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onNotNeeded, siteId } = props
   const info = ACTIVITIES.find((activity) => activity.value === task.activity)!
   const [opened, setOpened] = useState(false)
   const [chosen, setChosen] = useState<string[]>(employee ? [String(employee.id)] : [])
@@ -51,7 +54,8 @@ export function TaskBox(props: Props) {
   const box = (
     <button
       type="button"
-      className="task-box"
+      className={onPlan && siteId !== undefined ? 'task-box drag-source' : 'task-box'}
+      {...dragSource({ kind: 'task', siteId: siteId ?? 0, activity: task.activity }, onPlan !== undefined && siteId !== undefined)}
       style={{ '--entry-bg': info.tint, '--entry-strong': info.background } as CSSProperties}
       title={`${label ? `${label} – ` : ''}${info.label}: noch nicht eingeplant`}
       onClick={() => {

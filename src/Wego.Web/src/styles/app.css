@@ -1212,3 +1212,20 @@ a:hover {
   padding: 0;
   box-shadow: none;
 }
+
+/* ---------- drag and drop in the plans ---------- */
+
+.drag-source {
+  cursor: grab;
+}
+
+.drag-source:active {
+  cursor: grabbing;
+}
+
+/* While something is dragged: the cell under it that takes it. */
+.drop-over {
+  outline: 2px dashed var(--wego-teal);
+  outline-offset: -2px;
+  background: rgba(57, 187, 207, 0.22) !important;
+}

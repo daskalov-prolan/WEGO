@@ -6,7 +6,11 @@ import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
 import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
 import { cellKey } from '../lib/ui'
+import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
+
+/** Handlers that make a cell a place to drop entries and open activities on (see dropTarget). */
+type DropHandlers = Record<string, unknown>
 
 export interface MatrixProps {
   days: Day[]
@@ -33,6 +37,8 @@ export interface MatrixProps {
   zoom: 'week' | 'month' | 'year'
   /** Saturdays and Sundays as narrow strips (about 0.5 cm). */
   foldWeekends?: boolean
+  /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
+  dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -126,6 +132,11 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
       },
       onPointerUp: cancelPress,
       onPointerCancel: cancelPress,
+      // An entry is dragged out of the cell: that is no selection.
+      onDragStart: () => {
+        drag.current = null
+        cancelPress()
+      },
       onContextMenu: (event: MouseEvent) => {
         if (selectable && pointerType.current !== 'mouse') event.preventDefault()
       },
@@ -244,12 +255,26 @@ function cellTitle(entries: Entry[], label: (entry: Entry) => string) {
 }
 
 /** Short form of a cell: the first entry, a counter for the others, and the note sign. */
-function Compact({ entries, text, dimmed, onTextClick }: { entries: Entry[]; text: string; dimmed: boolean; onTextClick?: (event: MouseEvent) => void }) {
+function Compact({
+  entries,
+  text,
+  dimmed,
+  onTextClick,
+  draggable = false,
+}: {
+  entries: Entry[]
+  text: string
+  dimmed: boolean
+  onTextClick?: (event: MouseEvent) => void
+  /** Dragging the short form moves its first entry. */
+  draggable?: boolean
+}) {
   const first = entries[0]
   return (
     <span
-      className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].join(' ')}
+      className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : '', draggable ? 'drag-source' : ''].join(' ')}
       style={entryStyle(first)}
+      {...dragSource({ kind: 'entry', entry: first }, draggable)}
     >
       <ActivityIcon activity={first.activity} type={first.type} />
       <span className="compact-name" onClick={onTextClick}>
@@ -267,7 +292,8 @@ function Compact({ entries, text, dimmed, onTextClick }: { entries: Entry[]; tex
  * fits: the whole entry (week), the site name (month) or just the colour of the activity (year).
  */
 export function TimelineMatrix(props: MatrixProps) {
-  const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends } = props
+  const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends, dropOn } = props
+  const draggable = dropOn !== undefined
   const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
   const openSite = (siteId: number, event: MouseEvent) => {
     if (siteClickBelongsToCell()) return
@@ -322,7 +348,7 @@ export function TimelineMatrix(props: MatrixProps) {
               const first = entries[0]
               const isSelected = selected.has(cellKey(employee.id, day.iso))
               return (
-                <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
+                <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} {...dropOn?.(employee, day.iso)}>
                   <button
                     type="button"
                     className={isSelected ? 'cell selected' : 'cell'}
@@ -333,7 +359,7 @@ export function TimelineMatrix(props: MatrixProps) {
                   >
                     <span className="cell-full">
                       {entries.map((entry) => (
-                        <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} />
+                        <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} draggable={draggable} />
                       ))}
                     </span>
                     {first && (
@@ -342,6 +368,7 @@ export function TimelineMatrix(props: MatrixProps) {
                         text={first.type === 'Baustelle' ? (first.siteName ?? '') : first.type}
                         dimmed={entries.every(isDimmed)}
                         onTextClick={(event) => first.siteId !== null && openSite(first.siteId, event)}
+                        draggable={draggable}
                       />
                     )}
                   </button>
@@ -384,6 +411,7 @@ function EmployeeTasks({
           minDate={days[0].iso}
           maxDate={days[days.length - 1].iso}
           onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
+          siteId={site.id}
         />
       ))}
       {tasks.length > 3 && (
@@ -427,6 +455,8 @@ interface SiteTimelineProps {
   /** Planners: plan an open task, or mark it as not needed. */
   onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
   onTaskNotNeeded?: (site: Site, activity: Activity) => Promise<void>
+  /** Planners: entries and open activities can be dragged onto a cell of a site and a day. */
+  dropOn?: (site: Site, date: string) => DropHandlers
 }
 
 /**
@@ -434,7 +464,8 @@ interface SiteTimelineProps {
  * employees working there, in the colour of their activity.
  */
 export function SiteTimeline(props: SiteTimelineProps) {
-  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskNotNeeded } = props
+  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskNotNeeded, dropOn } = props
+  const draggable = dropOn !== undefined
   return (
     <TimelineFrame
       days={days}
@@ -468,13 +499,14 @@ export function SiteTimeline(props: SiteTimelineProps) {
                 maxDate={days[days.length - 1].iso}
                 onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
                 onNotNeeded={onTaskNotNeeded && (() => onTaskNotNeeded(site, task.activity))}
+                siteId={site.id}
               />
             ))}
           </td>
           {days.map((day) => {
             const entries = byDate.get(day.iso) ?? []
             return (
-              <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
+              <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} {...dropOn?.(site, day.iso)}>
                 <button
                   type="button"
                   className="cell"
@@ -484,10 +516,12 @@ export function SiteTimeline(props: SiteTimelineProps) {
                 >
                   <span className="cell-full">
                     {entries.map((entry) => (
-                      <Chip key={entry.id} entry={entry} label={entry.employeeName} />
+                      <Chip key={entry.id} entry={entry} label={entry.employeeName} draggable={draggable} />
                     ))}
                   </span>
-                  {entries.length > 0 && <Compact entries={entries} text={entries[0].employeeName} dimmed={false} />}
+                  {entries.length > 0 && (
+                    <Compact entries={entries} text={entries[0].employeeName} dimmed={false} draggable={draggable} />
+                  )}
                 </button>
               </td>
             )

@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react'
 import type { Entry } from '../api/types'
 import { activityLabel, entryStyle, entryTitle } from '../lib/activities'
+import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange } from '../lib/dates'
 import { ActivityIcon } from './ActivityIcon'
 
@@ -12,6 +13,8 @@ interface Props {
   onSiteClick?: (siteId: number, event: MouseEvent) => void
   /** Shown instead of the site name, e.g. the employee in the plan by site. */
   label?: string
+  /** Planners can drag the entry onto another cell of the plan. */
+  draggable?: boolean
 }
 
 /** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note. */
@@ -29,12 +32,17 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label }: Props) {
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false }: Props) {
   const time = formatTimeRange(entry)
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
   return (
-    <span className={className} style={entryStyle(entry)} title={entryTitle(entry)}>
+    <span
+      className={draggable ? `${className} drag-source` : className}
+      style={entryStyle(entry)}
+      title={entryTitle(entry)}
+      {...dragSource({ kind: 'entry', entry }, draggable)}
+    >
       <span className="chip-line">
         <ActivityIcon activity={entry.activity} type={entry.type} />
         {time && <span className="time">{time}</span>}
