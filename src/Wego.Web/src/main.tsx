@@ -10,6 +10,7 @@ import { Notifications } from '@mantine/notifications'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { theme } from './theme'
 
 createRoot(document.getElementById('root')!).render(
@@ -17,7 +18,9 @@ createRoot(document.getElementById('root')!).render(
     <MantineProvider theme={theme} defaultColorScheme="light">
       <DatesProvider settings={{ locale: 'de', firstDayOfWeek: 1 }}>
         <Notifications position="bottom-center" />
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </DatesProvider>
     </MantineProvider>
   </StrictMode>,
