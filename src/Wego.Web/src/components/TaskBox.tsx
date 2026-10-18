@@ -26,11 +26,16 @@ interface Props {
   onCancel?: () => Promise<void>
   /** The site of the activity: planners can drag the box onto a day of the plan. */
   siteId?: number
+  /** Planned already: greyed, but it can be planned once more (another day or person). */
+  planned?: boolean
 }
 
-/** An activity of a site that is not planned yet: a box in its colour; planners plan it from here. */
+/**
+ * An activity of a site: a box in its colour; planners plan it from here or drag it onto a day. Not planned
+ * yet it stands out; planned already it is greyed and can still be planned once more.
+ */
 export function TaskBox(props: Props) {
-  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onCancel, siteId } = props
+  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onCancel, siteId, planned = false } = props
   const info = ACTIVITIES.find((activity) => activity.value === task.activity)!
   const [opened, setOpened] = useState(false)
   const [chosen, setChosen] = useState<string[]>(employee ? [String(employee.id)] : [])
@@ -55,10 +60,10 @@ export function TaskBox(props: Props) {
   const box = (
     <button
       type="button"
-      className={onPlan && siteId !== undefined ? 'task-box drag-source' : 'task-box'}
+      className={['task-box', planned ? 'planned' : '', onPlan && siteId !== undefined ? 'drag-source' : ''].filter(Boolean).join(' ')}
       {...dragSource({ kind: 'task', siteId: siteId ?? 0, activity: task.activity }, onPlan !== undefined && siteId !== undefined)}
       style={{ '--entry-bg': info.tint, '--entry-strong': info.background } as CSSProperties}
-      title={`${label ? `${label} – ` : ''}${info.label}: noch nicht eingeplant`}
+      title={`${label ? `${label} – ` : ''}${info.label}: ${planned ? 'eingeplant – noch einmal einplanen' : 'noch nicht eingeplant'}`}
       onClick={() => {
         if (!onPlan) return
         setDate(defaultDate)
@@ -79,7 +84,7 @@ export function TaskBox(props: Props) {
       <Popover.Dropdown>
         <Stack gap="xs" w={260}>
           <Text fw={700} size="sm">
-            {info.label} einplanen
+            {info.label} {planned ? 'noch einmal einplanen' : 'einplanen'}
           </Text>
           {(label || employee) && (
             <Text size="xs" c="dimmed" mt={-6}>

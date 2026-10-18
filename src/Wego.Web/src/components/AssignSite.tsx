@@ -26,10 +26,14 @@ interface Props {
 export function AssignSite(props: Props) {
   const { cellCount, employees, sites, onCreateSite, onUpdateSite, recentSites, onClose, onApply } = props
   const [siteId, setSiteId] = useState<number | null>(null)
-  const [activity, setActivity] = useState<ActivityChoice>('main')
-  // Who cannot do the chosen activity keeps their main activity.
+  const [chosenActivity, setActivity] = useState<ActivityChoice>('main')
   const status = sites.find((site) => site.id === siteId)?.status
-  const offered = status ? activitiesOfStatus(status) : ACTIVITIES.map((a) => a.value)
+  // Only what at least one of the selected employees can do (in the status of the chosen site).
+  const ofStatus = status ? activitiesOfStatus(status) : ACTIVITIES.map((a) => a.value)
+  const offered = ofStatus.filter((value) => employees.some((employee) => allowedActivities(employee, status).includes(value)))
+  // Another site may not offer the chosen activity: then everybody gets their main activity.
+  const activity: ActivityChoice = chosenActivity === 'main' || offered.includes(chosenActivity) ? chosenActivity : 'main'
+  // Who cannot do the chosen activity keeps their main activity.
   const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e, status).includes(activity))
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')

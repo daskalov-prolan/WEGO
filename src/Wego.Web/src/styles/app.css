@@ -1118,6 +1118,20 @@ a:hover {
   box-shadow: 0 0 0 1.5px var(--entry-strong);
 }
 
+/* An activity planned already: greyed, but it can be dragged and planned once more. */
+.task-box.planned {
+  border-style: solid;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
+
+.task-box.planned:hover {
+  opacity: 0.85;
+  filter: none;
+}
+
 /* Planned already: greyed, nothing to drag. */
 .flow-step.planned {
   opacity: 0.45;

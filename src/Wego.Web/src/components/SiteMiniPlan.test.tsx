@@ -65,19 +65,20 @@ describe('SiteMiniPlan', () => {
     expect(await screen.findByText('KW 14 · ab 30.03.')).toBeInTheDocument()
   })
 
-  it('shows the course of the site: open activities of its status to drag, planned ones greyed', async () => {
+  it('shows the course of the site: open activities stand out, planned ones are greyed, all can be dragged', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
     const flow = screen.getByRole('group', { name: 'Ablauf der Baustelle' })
 
     // Only the current status is opened up: the activities of the Bauphase, none of the Angebot.
     expect(within(flow).queryByText('Besichtigung')).not.toBeInTheDocument()
-    // Fliesen is still open: a box that can be dragged. Abriss is planned: greyed, nothing to drag.
+    // Fliesen is still open: a box that stands out and can be dragged.
     const fliesen = within(flow).getByRole('button', { name: 'Fliesenarbeiten' })
     expect(fliesen).toHaveAttribute('draggable', 'true')
-    const abriss = within(flow).getByText(/Abriss \/ Baubeginn/).closest('.flow-step')!
-    expect(abriss).toHaveClass('planned')
-    expect(abriss).not.toHaveAttribute('draggable')
+    // Abriss is planned: greyed, but it can still be dragged to plan it once more.
+    const abriss = within(flow).getByRole('button', { name: 'Abriss / Baubeginn' })
+    expect(abriss).toHaveClass('task-box', 'planned')
+    expect(abriss).toHaveAttribute('draggable', 'true')
     // No filter any more: nothing in the flow switches the calendar.
     expect(within(flow).queryAllByRole('button', { pressed: true })).toHaveLength(0)
   })
@@ -150,7 +151,7 @@ describe('SiteMiniPlan', () => {
     expect(within(thursday).getAllByText('Familie Meier').length).toBeGreaterThan(0)
 
     // Abriss is planned already, Fliesen is still open.
-    const open = screen.getAllByRole('button').filter((button) => button.classList.contains('task-box'))
+    const open = screen.getAllByRole('button').filter((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))
     expect(open.map((button) => button.textContent)).toEqual(['Fliesenarbeiten'])
 
     // Planning it: only who can do it is offered (Bernd lays tiles, Anna does not).
@@ -189,7 +190,7 @@ describe('SiteMiniPlan', () => {
       return taken
     }
 
-    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box'))!
+    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))!
     expect(dropOn(box, screen.getByRole('button', { name: 'Bernd, 2026-03-04' }))).toBe(true)
     await waitFor(() => expect(batch()).not.toBeNull())
     expect(batch()).toEqual([
@@ -233,7 +234,7 @@ describe('SiteMiniPlan', () => {
     renderWithProviders(<Page />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
-    const taskBoxes = () => screen.queryAllByRole('button').filter((button) => button.classList.contains('task-box'))
+    const taskBoxes = () => screen.queryAllByRole('button').filter((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))
     await user.click(taskBoxes()[0])
     await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
     await waitFor(() => expect(taskBoxes()).toHaveLength(0))
@@ -255,7 +256,7 @@ describe('SiteMiniPlan', () => {
     await user.click(screen.getByRole('button', { name: 'Woche vor' }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
 
-    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box'))!
+    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))!
     fireEvent.dragStart(box)
     fireEvent.dragOver(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))
     fireEvent.drop(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))

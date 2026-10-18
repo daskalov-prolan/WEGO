@@ -391,6 +391,26 @@ describe('PlanPage', () => {
       expect.objectContaining({ type: 'Baustelle', siteId: 10, activity: 'Abriss' }),
     ])
   })
+  it('offers only the activities of the selected employees when filling several cells with a site', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    await user.keyboard('{Control>}')
+    await user.click(cell(/Anna, Mittwoch, 04.03.2026/))
+    await user.click(cell(/Anna, Donnerstag, 05.03.2026/))
+    await user.keyboard('{/Control}')
+    await user.click(screen.getByRole('button', { name: 'Baustelle …' }))
+
+    // Anna does Abriss only.
+    await screen.findByText('Baustelle für 2 Felder')
+    const input = screen.getAllByLabelText('Tätigkeit').find((element) => element.tagName === 'INPUT')!
+    await user.click(input)
+    const list = await waitFor(() => document.getElementById(input.getAttribute('aria-controls')!)!)
+    const options = within(list).getAllByRole('option', { hidden: true }).map((option) => option.textContent)
+    expect(options).toEqual(['Passende Haupttätigkeit des jeweiligen Mitarbeiters', 'Abriss / Baubeginn'])
+  })
+
   it('lets planners select several cells and fill them in one go', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)

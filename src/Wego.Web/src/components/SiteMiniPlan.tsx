@@ -182,6 +182,24 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
     const task = site.tasks.find((candidate) => candidate.activity === activity)
     const info = ACTIVITIES.find((candidate) => candidate.value === activity)!
     const colours = { '--entry-bg': info.tint, '--entry-strong': info.background } as CSSProperties
+    // Planned already: greyed, and still to drag onto another day or person.
+    if (task && !task.notNeeded && isOpen(site.status))
+      return (
+        <TaskBox
+          planned
+          task={{
+            activity,
+            planned: entries.filter((entry) => entry.siteId === site.id && entry.activity === activity).length,
+            estimated: task.estimatedDays,
+          }}
+          employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(activity))}
+          defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
+          minDate={`${years[0]}-01-01`}
+          maxDate={`${years[years.length - 1]}-12-31`}
+          onPlan={canEdit ? (employeeIds, date) => plan(activity, employeeIds, date) : undefined}
+          siteId={site.id}
+        />
+      )
     if (task?.notNeeded)
       return (
         <span className="flow-step cancelled" style={colours} title="Storniert: für diese Baustelle nicht relevant">

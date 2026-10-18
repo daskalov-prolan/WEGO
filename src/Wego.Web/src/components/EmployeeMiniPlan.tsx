@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications'
 import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, NamedItem, Site } from '../api/types'
-import { activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { openTasksBySite, tasksForEmployee } from '../lib/tasks'
@@ -66,6 +66,25 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
     else lanes.push({ site, tasks: [task] })
   }
   const shownLanes = allLanes ? lanes : lanes.slice(0, FIRST_LANES)
+
+  /**
+   * The activities of a lane's site the employee can do, in the order of the job: open ones stand out,
+   * planned ones are greyed but can be planned once more. Cancelled ones and done sites have none.
+   */
+  const stepsOf = (site: Site, open: OpenTask[]): { task: OpenTask; planned: boolean }[] => {
+    if (!employee || !isOpen(site.status)) return []
+    return allowedActivities(employee, site.status)
+      .filter((activity) => fits(activity))
+      .sort((a, b) => ACTIVITIES.findIndex((x) => x.value === a) - ACTIVITIES.findIndex((x) => x.value === b))
+      .flatMap<{ task: OpenTask; planned: boolean }>((activity) => {
+        const openTask = open.find((task) => task.activity === activity)
+        if (openTask) return [{ task: openTask, planned: false }]
+        const task = site.tasks.find((candidate) => candidate.activity === activity)
+        if (!task || task.notNeeded) return []
+        const count = entries.filter((entry) => entry.siteId === site.id && entry.activity === activity).length
+        return [{ task: { activity, planned: count, estimated: task.estimatedDays }, planned: true }]
+      })
+  }
 
   // Everybody's entries per site and day: the employee's own first, then colleagues.
   const atSite = new Map<string, Entry[]>()
@@ -247,9 +266,10 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
                 <a className="name" href={`#/baustellen/${site.id}`} title={site.name}>
                   {site.name}
                 </a>
-                {open.map((task) => (
+                {stepsOf(site, open).map(({ task, planned }) => (
                   <TaskBox
                     key={task.activity}
+                    planned={planned}
                     task={task}
                     employees={[employee]}
                     employee={employee}
@@ -257,7 +277,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
                     minDate={`${years[0]}-01-01`}
                     maxDate={`${years[years.length - 1]}-12-31`}
                     onPlan={canEdit ? (_, date) => planTask(site, task.activity, date) : undefined}
-                    onCancel={canEdit ? () => cancelTask(site, task.activity) : undefined}
+                    onCancel={canEdit && !planned ? () => cancelTask(site, task.activity) : undefined}
                     siteId={site.id}
                   />
                 ))}
