@@ -30,6 +30,7 @@ import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../co
 import { SiteDayDialog } from '../components/SiteDayDialog'
 import { PlanTaskDialog } from '../components/PlanTaskDialog'
 import { CellMenu } from '../components/CellMenu'
+import { useStretch } from '../lib/stretch'
 import { dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import {
   addDays,
@@ -147,6 +148,9 @@ export function PlanPage({ year, canEdit }: Props) {
     entries: DayEntryInput[]
     cutFrom?: { employeeId: number; date: string; entryIds: number[] }
   } | null>(null)
+  // An entry marked by a click: with the days that follow on at the same site it is one stretch.
+  const [marked, setMarked] = useState<number | null>(null)
+  const startStretch = useStretch()
   // The menu of a right click on a cell.
   // `entryId`: the click was on one entry of the cell.
   const [cellMenu, setCellMenu] = useState<{ employee: PlanEmployee; date: string; x: number; y: number; entryId?: number } | null>(null)
@@ -169,7 +173,9 @@ export function PlanPage({ year, canEdit }: Props) {
   const closeCellMenu = useCallback(() => setCellMenu(null), [])
 
   useWindowEvent('keydown', (event) => {
-    if (event.key === 'Escape' && selected.size > 0) setSelected(new Set())
+    if (event.key !== 'Escape') return
+    if (selected.size > 0) setSelected(new Set())
+    setMarked(null)
   })
 
   const entriesByCell = useMemo(() => {
@@ -552,6 +558,77 @@ export function PlanPage({ year, canEdit }: Props) {
     })
   }
 
+  /** A working day: no weekend, no public holiday. */
+  const isWorkday = (iso: string) => {
+    const weekday = new Date(`${iso}T12:00:00`).getDay()
+    return weekday !== 0 && weekday !== 6 && holidayByDate.get(iso)?.kind !== 'Feiertag'
+  }
+
+  /**
+   * The stretch of an entry: the same employee at the same site with the same activity on the working days
+   * before and after it, one after the other (weekends and public holidays in between do not break it).
+   */
+  const stretchOf = (entry: Entry) => {
+    const same = (iso: string) =>
+      entriesOf(entry.employeeId, iso).find(
+        (other) => other.type === entry.type && other.siteId === entry.siteId && other.activity === entry.activity,
+      )
+    const step = (iso: string, direction: 1 | -1) => {
+      let next = addDays(iso, direction)
+      while (inYear(next) && !isWorkday(next) && !same(next)) next = addDays(next, direction)
+      return next
+    }
+    const ids = new Set([entry.id])
+    let from = entry.date
+    let to = entry.date
+    let first = entry
+    let last = entry
+    for (let before = same(step(from, -1)); before && inYear(before.date); before = same(step(from, -1))) {
+      ids.add(before.id)
+      from = before.date
+      first = before
+    }
+    for (let after = same(step(to, 1)); after && inYear(after.date); after = same(step(to, 1))) {
+      ids.add(after.id)
+      to = after.date
+      last = after
+    }
+    return { ids, from, to, first, last }
+  }
+
+  const markedEntry = marked === null ? undefined : plan.entries.find((entry) => entry.id === marked)
+  const markedStretch = markedEntry ? stretchOf(markedEntry) : undefined
+
+  /**
+   * A stretch dragged to new first and last days: working days that come in get the same site, activity and
+   * time (not the note); days that drop out lose the entry. A day at that site already stays as it is.
+   */
+  const restretch = async (entry: Entry, from: string, to: string) => {
+    const current = stretchOf(entry)
+    const changes: DayChange[] = []
+    for (let iso = from; iso <= to; iso = addDays(iso, 1)) {
+      if ((iso >= current.from && iso <= current.to) || !isWorkday(iso)) continue
+      const there = entriesOf(entry.employeeId, iso)
+      if (there.some((other) => other.type === entry.type && other.siteId === entry.siteId)) continue
+      changes.push({
+        employeeId: entry.employeeId,
+        date: iso,
+        entries: [...there.map(toInput), { ...toInput(entry), note: null, noteImportant: false }],
+      })
+    }
+    for (let iso = current.from; iso <= current.to; iso = addDays(iso, 1)) {
+      if (iso >= from && iso <= to) continue
+      const there = entriesOf(entry.employeeId, iso)
+      if (!there.some((other) => current.ids.has(other.id))) continue
+      changes.push({ employeeId: entry.employeeId, date: iso, entries: there.filter((other) => !current.ids.has(other.id)).map(toInput) })
+    }
+    if (changes.length === 0) return
+    // The marked entry may be one of those that drop out.
+    if (marked !== null && !(entry.date >= from && entry.date <= to)) setMarked(null)
+    const name = entry.siteName ?? entry.type
+    await save(changes, `${name}: ${formatDate(from)} bis ${formatDate(to)}.`)
+  }
+
   /** Copies (or cuts) the entries of one cell, or only one of them. */
   const copyCell = (employeeId: number, date: string, cut: boolean, entryId?: number) => {
     const entries = entriesOf(employeeId, date).filter((entry) => entryId === undefined || entry.id === entryId)
@@ -854,7 +931,7 @@ export function PlanPage({ year, canEdit }: Props) {
             Tipp: Einträge und ungeplante Tätigkeiten mit der Maus auf einen anderen Tag ziehen, um sie zu verschieben
             oder einzuplanen.
             {perspective === 'employees' &&
-              ' Von einem leeren Feld aus über mehrere Felder ziehen oder Strg+Klick wählt viele Tage auf einmal aus.'}
+              ' Klick markiert einen Einsatz (Ränder ziehen: länger oder kürzer, Strg+C/X/V), Doppelklick öffnet den Tag, rechte Maustaste: Kopieren, Ausschneiden, Einfügen. Von einem leeren Feld aus über mehrere Felder ziehen oder Strg+Klick wählt viele Tage auf einmal aus.'}
           </Text>
         )}
         {canEdit && isPhone && selected.size === 0 && perspective === 'employees' && (
@@ -864,7 +941,23 @@ export function PlanPage({ year, canEdit }: Props) {
         )}
       </div>
 
-      <div className="plan-scroll" ref={scroller} onScroll={onScroll}>
+      <div
+        className="plan-scroll"
+        ref={scroller}
+        onScroll={onScroll}
+        // Strg+C / Strg+X: the marked entry; Strg+V: into the selected cells.
+        onKeyDown={(event) => {
+          if (!canEdit || !(event.ctrlKey || event.metaKey)) return
+          const key = event.key.toLowerCase()
+          if ((key === 'c' || key === 'x') && markedEntry) {
+            event.preventDefault()
+            copyCell(markedEntry.employeeId, markedEntry.date, key === 'x', markedEntry.id)
+          } else if (key === 'v' && clipboard && selected.size > 0) {
+            event.preventDefault()
+            paste([...selected].map(parseKey)).catch(fail)
+          }
+        }}
+      >
         {plan.employees.length === 0 ? (
           <p className="page">
             Noch keine Mitarbeiter angelegt.
@@ -886,6 +979,25 @@ export function PlanPage({ year, canEdit }: Props) {
             onTaskCancel={canEdit ? cancelTask : undefined}
             dropOn={canEdit ? dropOnEmployee : undefined}
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
+            marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
+            onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
+            onStretchStart={
+              canEdit && markedStretch
+                ? (entry, side, event) =>
+                    startStretch(
+                      {
+                        row: `e${entry.employeeId}`,
+                        from: markedStretch.from,
+                        to: markedStretch.to,
+                        side,
+                        done: (from, to) => {
+                          restretch(entry, from, to).catch(fail)
+                        },
+                      },
+                      event,
+                    )
+                : undefined
+            }
             {...shared}
           />
         ) : (
@@ -1100,6 +1212,9 @@ export function PlanPage({ year, canEdit }: Props) {
                 // On one entry: that entry; elsewhere in the cell (or for a day of several): all of the day.
                 ...(one
                   ? [
+                      ...(one.siteId !== null
+                        ? [{ label: `Baustelle öffnen: ${one.siteName}`, onClick: () => shared.onOpenSite(one.siteId!) }]
+                        : []),
                       { label: `Kopieren: ${one.siteName ?? one.type}`, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, false, one.id) },
                       { label: `Ausschneiden: ${one.siteName ?? one.type}`, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, true, one.id) },
                     ]

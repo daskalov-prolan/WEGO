@@ -20,6 +20,11 @@ export function dragSource(item: DragItem, enabled: boolean) {
   return {
     draggable: true,
     onDragStart: (event: DragEvent) => {
+      // Dragging an end of an entry to make it longer or shorter: no drag of the entry itself.
+      if (document.body.classList.contains('stretching')) {
+        event.preventDefault()
+        return
+      }
       current = item
       document.body.classList.add('plan-dragging')
       event.dataTransfer?.setData('text/plain', item.kind === 'entry' ? (item.entry.siteName ?? item.entry.type) : item.activity)

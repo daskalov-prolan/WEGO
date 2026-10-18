@@ -133,7 +133,7 @@ describe('PlanPage', () => {
     expect(screen.getAllByRole('rowheader')).toHaveLength(2)
   })
 
-  it('opens the page of a site from its name in a cell, and comes back to the same week', async () => {
+  it('opens the page of a site from the right-click menu of an entry, and comes back to the same week', async () => {
     const user = userEvent.setup()
     window.location.hash = '#/plan'
     const { unmount } = renderWithProviders(<PlanPage year={2026} canEdit />)
@@ -142,7 +142,8 @@ describe('PlanPage', () => {
     await screen.findByText(/KW 11/)
 
     const monday = cell(/Anna, Montag, 02.03.2026/)
-    await user.click(within(monday).getAllByRole('link', { name: 'Familie Meier' })[0])
+    fireEvent.contextMenu(within(monday).getAllByText('Familie Meier')[0].closest('.chip')!)
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Baustelle öffnen: Familie Meier' }))
 
     // Straight to the page of the site: no record in between, and the day editor did not open.
     expect(window.location.hash).toBe('#/baustellen/11')
@@ -200,7 +201,7 @@ describe('PlanPage', () => {
   it('opens the record of the chosen site from the day editor and comes back to it', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
-    await user.click(await screen.findByRole('button', { name: /Bernd, Dienstag, 03.03.2026/ }))
+    await user.dblClick(await screen.findByRole('button', { name: /Bernd, Dienstag, 03.03.2026/ }))
 
     await user.click(await screen.findByText('Datensatz öffnen: Familie Meier'))
     expect(await screen.findByText('Auftraggeber')).toBeInTheDocument()
@@ -361,15 +362,18 @@ describe('PlanPage', () => {
     expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
     unmount()
 
+    // Planners: a click marks, a double click opens the day.
     renderWithProviders(<PlanPage year={2026} canEdit />)
     await userEvent.click(await screen.findByRole('button', { name: /Anna, Montag, 02.03.2026/ }))
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+    await userEvent.dblClick(screen.getByRole('button', { name: /Anna, Montag, 02.03.2026/ }))
     expect(await screen.findByRole('button', { name: 'Speichern' })).toBeInTheDocument()
   })
 
   it('starts a site entry with the main activity and offers only the activities of the employee', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
-    await user.click(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
+    await user.dblClick(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
 
     const input = (label: RegExp) => screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT')!
     await screen.findAllByLabelText(/^Baustelle/)
@@ -463,6 +467,59 @@ describe('PlanPage', () => {
     expect(await within(annaTasks()).findByRole('button', { name: /Familie Werner/ })).toBeInTheDocument()
   })
 
+  describe('marking an entry', () => {
+    const batch = () => {
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
+      return call ? JSON.parse(String(call[1].body)) : null
+    }
+
+    it('marks an entry with a click and makes it longer by dragging its right end', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      const chip = () => within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      await user.click(chip())
+      expect(chip()).toHaveClass('marked')
+      // No day editor on a single click.
+      expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+
+      // The right end dragged to Thursday: Wednesday and Thursday come in.
+      const thursday = cell(/Bernd, Donnerstag, 05.03.2026/).closest('td')!
+      document.elementFromPoint = () => thursday
+      fireEvent.pointerDown(chip().querySelector('.stretch-handle.right')!)
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 10 })
+      expect(thursday).toHaveClass('stretch-add')
+      fireEvent.pointerUp(window)
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        { employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11, note: null })] },
+        { employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11, note: null })] },
+      ])
+
+      // Escape lifts the mark.
+      await user.keyboard('{Escape}')
+      expect(chip()).not.toHaveClass('marked')
+    })
+
+    it('copies the marked entry with Ctrl+C and pastes it into selected cells with Ctrl+V', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      await user.click(within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!)
+      await user.keyboard('{Control>}c{/Control}')
+      await user.keyboard('{Control>}')
+      await user.click(cell(/Bernd, Mittwoch, 04.03.2026/))
+      await user.keyboard('{/Control}')
+      await user.keyboard('{Control>}v{/Control}')
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([{ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] }])
+    })
+  })
+
   describe('right click on a cell', () => {
     const batch = () => {
       const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
@@ -534,6 +591,7 @@ describe('PlanPage', () => {
       fireEvent.contextMenu(chip)
       let items = within(await screen.findByRole('menu'))
       expect(items.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Baustelle öffnen: Familie Meier',
         'Kopieren: Familie Meier',
         'Ausschneiden: Familie Meier',
         'Ganzen Tag kopieren',

@@ -74,7 +74,7 @@ describe('EmployeeMiniPlan', () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
     expect(screen.getByText('KW 10 · 20 %')).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: 'Meier, 2026-03-03' })).getAllByText('Fliesenarbeiten').length).toBeGreaterThan(0)
+    expect(within(screen.getByRole('button', { name: 'Meier, 2026-03-03' })).getAllByText('Bernd').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('EmployeeMiniPlan', () => {
   it('moves an entry to another day and site by dragging it', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     const tuesday = await screen.findByRole('button', { name: 'Meier, 2026-03-03' })
-    const chip = within(tuesday).getAllByText('Fliesenarbeiten')[0].closest('.chip')!
+    const chip = within(tuesday).getAllByText('Bernd')[0].closest('.chip')!
     fireEvent.dragStart(chip)
     expect(fireEvent.dragOver(tuesday)).toBe(true)
     const target = screen.getByRole('button', { name: 'Fliesen spät, 2026-03-05' })

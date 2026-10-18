@@ -1488,3 +1488,57 @@ a:hover {
   cursor: default;
   opacity: 0.5;
 }
+
+/* An entry marked by a click, and the handles at the ends of its stretch. */
+.chip {
+  position: relative;
+}
+
+.chip.marked {
+  outline: 2px solid var(--wego-teal-dark);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.stretch-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.stretch-handle.left {
+  left: -3px;
+}
+
+.stretch-handle.right {
+  right: -3px;
+}
+
+.stretch-handle::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--wego-teal-dark);
+}
+
+body.stretching,
+body.stretching * {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
+/* While dragging an end: days that come in, and days that drop out. */
+.stretch-add {
+  background: rgba(57, 187, 207, 0.28) !important;
+}
+
+.stretch-remove {
+  background: rgba(215, 31, 39, 0.14) !important;
+}

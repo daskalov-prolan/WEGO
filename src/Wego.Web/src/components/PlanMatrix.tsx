@@ -41,6 +41,12 @@ export interface MatrixProps {
   foldWeekends?: boolean
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
+  /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
+  marked?: { ids: Set<number>; first: number; last: number }
+  /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
+  onMark?: (entry: Entry | null) => void
+  /** Planners: an end of the marked stretch is dragged. */
+  onStretchStart?: (entry: Entry, side: 'left' | 'right', event: PointerEvent) => void
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (employee: PlanEmployee, date: string, at: { x: number; y: number; entryId?: number }) => void
 }
@@ -153,7 +159,7 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
         const entryId = chip ? Number(chip.dataset.entryId) : undefined
         props.onCellMenu(employee, day.iso, { x: event.clientX, y: event.clientY, entryId })
       },
-      onClick: () => {
+      onClick: (event: MouseEvent) => {
         if (swallowClick.current) {
           swallowClick.current = false
           return
@@ -164,7 +170,17 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
           return
         }
         if (selected.size > 0) onSelectedChange(new Set())
+        // With the mouse a click marks an entry (or lifts the mark); the day opens on a double click.
+        if (props.onMark && pointerType.current === 'mouse') {
+          const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+          const entry = chip && props.entriesOf(employee.id, day.iso).find((candidate) => candidate.id === Number(chip.dataset.entryId))
+          props.onMark(entry ?? null)
+          return
+        }
         onOpen(employee, day.iso)
+      },
+      onDoubleClick: () => {
+        if (props.onMark && pointerType.current === 'mouse') onOpen(employee, day.iso)
       },
     }
   }
@@ -362,7 +378,13 @@ export function TimelineMatrix(props: MatrixProps) {
               const first = entries[0]
               const isSelected = selected.has(cellKey(employee.id, day.iso))
               return (
-                <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} {...dropOn?.(employee, day.iso)}>
+                <td
+                  key={day.iso}
+                  className={dayClass(day, holidayByDate.get(day.iso), today)}
+                  data-stretch-row={`e${employee.id}`}
+                  data-stretch-date={day.iso}
+                  {...dropOn?.(employee, day.iso)}
+                >
                   <button
                     type="button"
                     className={isSelected ? 'cell selected' : 'cell'}
@@ -373,7 +395,24 @@ export function TimelineMatrix(props: MatrixProps) {
                   >
                     <span className="cell-full">
                       {entries.map((entry) => (
-                        <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} draggable={draggable} />
+                        <Chip
+                          key={entry.id}
+                          entry={entry}
+                          dimmed={isDimmed(entry)}
+                          // Marking takes the click; the site opens from the right-click menu then.
+                          onSiteClick={props.onMark ? undefined : openSite}
+                          draggable={draggable}
+                          marked={props.marked?.ids.has(entry.id)}
+                          stretch={
+                            props.onStretchStart && props.marked && (props.marked.first === entry.id || props.marked.last === entry.id)
+                              ? {
+                                  left: props.marked.first === entry.id,
+                                  right: props.marked.last === entry.id,
+                                  onStart: (side, event) => props.onStretchStart!(entry, side, event),
+                                }
+                              : undefined
+                          }
+                        />
                       ))}
                     </span>
                     {first && (
@@ -381,7 +420,7 @@ export function TimelineMatrix(props: MatrixProps) {
                         entries={entries}
                         text={first.type === 'Baustelle' ? (first.siteName ?? '') : first.type}
                         dimmed={entries.every(isDimmed)}
-                        onTextClick={(event) => first.siteId !== null && openSite(first.siteId, event)}
+                        onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
                         draggable={draggable}
                       />
                     )}

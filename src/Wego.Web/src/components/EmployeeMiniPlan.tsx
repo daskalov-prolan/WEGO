@@ -297,7 +297,8 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
                       <span key={entry.id} className="mini-here">
                         <Chip
                           entry={entry}
-                          label={(entry.activity && activityLabel(entry.activity)) || undefined}
+                          // The name, as for the colleagues; the colour tells the activity.
+                          label={entry.employeeName}
                           draggable={canEdit}
                           dimmed={!fits(entry.activity)}
                         />
