@@ -53,6 +53,16 @@ type View = 'week' | 'month' | 'year'
 const HIDDEN_KEY = 'wego.plan.hiddenEmployees'
 const WEEKENDS_KEY = 'wego.plan.showWeekends'
 const PERSPECTIVE_KEY = 'wego.plan.perspective'
+// The first day in view when a site was opened from the plan: going back returns there.
+const RETURN_KEY = 'wego.plan.returnTo'
+
+function loadReturnDate(): string | null {
+  try {
+    return sessionStorage.getItem(RETURN_KEY)
+  } catch {
+    return null
+  }
+}
 
 /** Rows of the plan: one per employee, or one per construction site. */
 type Perspective = 'employees' | 'sites'
@@ -103,8 +113,10 @@ export function PlanPage({ year, canEdit }: Props) {
   const [error, setError] = useState('')
   const [chosenView, setChosenView] = useState<View>('week')
   // The days that are currently in view; follows the scrolling.
-  // The plan always opens at today; one scrolls from there into the past or the future.
-  const start = today >= first && today <= last ? today : first
+  // The plan opens at today (or, back from a site, where it was); one scrolls from there into the past or the future.
+  const [returnDate] = useState(loadReturnDate)
+  const start =
+    returnDate && returnDate >= first && returnDate <= last ? returnDate : today >= first && today <= last ? today : first
   const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 13) })
   const anchor = visible.from
   const scroller = useRef<HTMLDivElement>(null)
@@ -132,6 +144,15 @@ export function PlanPage({ year, canEdit }: Props) {
   useEffect(() => {
     api.plan(year).then(setPlan, (e) => setError(messageOf(e)))
   }, [year])
+
+  // The way back is used once; opening the plan anew starts at today again.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(RETURN_KEY)
+    } catch {
+      // Without storage the plan simply starts at today.
+    }
+  }, [])
 
   useWindowEvent('keydown', (event) => {
     if (event.key === 'Escape' && selected.size > 0) setSelected(new Set())
@@ -609,6 +630,16 @@ export function PlanPage({ year, canEdit }: Props) {
     linkNames: canEdit,
     onOpen: (employee: PlanEmployee, date: string) => setOpen({ employee, date }),
     onOpenSite: (siteId: number) => {
+      // Planners go straight to the page of the site; employees (who have no such page) see its record here.
+      if (canEdit) {
+        try {
+          sessionStorage.setItem(RETURN_KEY, anchor)
+        } catch {
+          // Without storage the plan starts at today when coming back.
+        }
+        window.location.hash = `#/baustellen/${siteId}`
+        return
+      }
       const site = siteById.get(siteId)
       if (site) setShownSite({ site, editing: false })
     },

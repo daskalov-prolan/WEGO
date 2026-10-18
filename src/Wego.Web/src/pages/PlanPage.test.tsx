@@ -133,18 +133,39 @@ describe('PlanPage', () => {
     expect(screen.getAllByRole('rowheader')).toHaveLength(2)
   })
 
-  it('opens the record of a site from its name in a cell', async () => {
+  it('opens the page of a site from its name in a cell, and comes back to the same week', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<PlanPage year={2026} canEdit />)
+    window.location.hash = '#/plan'
+    const { unmount } = renderWithProviders(<PlanPage year={2026} canEdit />)
     await screen.findByText(/KW 10/)
+    await user.click(screen.getByRole('button', { name: 'Weiter' }))
+    await screen.findByText(/KW 11/)
 
     const monday = cell(/Anna, Montag, 02.03.2026/)
     await user.click(within(monday).getAllByRole('link', { name: 'Familie Meier' })[0])
 
-    expect(await screen.findByText('Auftraggeber')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Bearbeiten' })).toBeInTheDocument()
-    // The day editor did not open.
+    // Straight to the page of the site: no record in between, and the day editor did not open.
+    expect(window.location.hash).toBe('#/baustellen/11')
+    expect(screen.queryByText('Auftraggeber')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+
+    // Back in the plan: the week it was left at, once.
+    unmount()
+    const again = renderWithProviders(<PlanPage year={2026} canEdit />)
+    expect(await screen.findByText(/KW 11/)).toBeInTheDocument()
+    again.unmount()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    expect(await screen.findByText(/KW 10/)).toBeInTheDocument()
+  })
+
+  it('shows employees the record of a site, since they have no site pages', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+
+    const monday = cell(/Anna, Montag, 02.03.2026/)
+    await user.click(within(monday).getAllByRole('link', { name: 'Familie Meier' })[0])
+    expect(await screen.findByText('Auftraggeber')).toBeInTheDocument()
   })
 
   it('shows the sites in the rows and the employees in the cells', async () => {
