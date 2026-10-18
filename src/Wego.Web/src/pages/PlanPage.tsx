@@ -23,7 +23,7 @@ import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
-import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
@@ -241,24 +241,32 @@ export function PlanPage({ year, canEdit }: Props) {
     return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
   }, [plan, hidden, filter, siteById, year, openOnly, activityFilter, openTasksBySite])
 
-  // Plan by employee: the open tasks in the employee's main activity, sites starting soonest first.
+  // Plan by employee: every open task the employee can do. First those of the main activity, then those of
+  // the additional activities (in the order of the job); within each activity the earliest planned start first.
   const employeeTasks = useCallback(
     (employee: PlanEmployee) => {
-      const main = employee.mainActivity
-      if (!main || !plan || (activityFilter.size > 0 && !activityFilter.has(main))) return []
+      if (!plan) return []
+      const own = [employee.mainActivity, ...ACTIVITIES.map((a) => a.value).filter((a) => employee.additionalActivities.includes(a))]
+      const activities = own.filter((activity): activity is Activity => activity !== null && (activityFilter.size === 0 || activityFilter.has(activity)))
       const needle = filter.trim().toLowerCase()
       const result: { site: Site; task: OpenTask }[] = []
-      for (const [siteId, tasks] of openTasksBySite) {
-        const site = siteById.get(siteId)
-        const task = tasks.find((candidate) => candidate.activity === main)
-        if (!site || !task || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
-        result.push({ site, task })
+      for (const activity of [...new Set(activities)]) {
+        const ofActivity: { site: Site; task: OpenTask }[] = []
+        for (const [siteId, tasks] of openTasksBySite) {
+          const site = siteById.get(siteId)
+          const task = tasks.find((candidate) => candidate.activity === activity)
+          if (!site || !task || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
+          ofActivity.push({ site, task })
+        }
+        // Sites without a planned start come last.
+        ofActivity.sort(
+          (a, b) =>
+            (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') ||
+            a.site.name.localeCompare(b.site.name, 'de'),
+        )
+        result.push(...ofActivity)
       }
-      return result.sort(
-        (a, b) =>
-          (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') ||
-          a.site.name.localeCompare(b.site.name, 'de'),
-      )
+      return result
     },
     [plan, activityFilter, filter, openTasksBySite, siteById],
   )

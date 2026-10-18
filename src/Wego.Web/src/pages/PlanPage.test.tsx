@@ -283,6 +283,37 @@ describe('PlanPage', () => {
     ])
   })
 
+  it('lists the open tasks of the main activity first, then of the additional ones, each by planned start', async () => {
+    const site = (id: number, name: string, plannedStart: string | null, activity: 'Abriss' | 'Sanitaer') => ({
+      id, name, ...noAddress, plannedStart,
+      tasks: [{ activity, estimatedDays: 1, notNeeded: false }],
+    })
+    const sorted: Plan = {
+      ...plan,
+      sites: [
+        site(20, 'Abriss Mai', '2026-05-01', 'Abriss'),
+        site(21, 'Abriss April', '2026-04-01', 'Abriss'),
+        site(22, 'Sanitär Juni', '2026-06-01', 'Sanitaer'),
+        site(23, 'Sanitär ohne Datum', null, 'Sanitaer'),
+      ],
+      entries: [],
+    }
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(sorted), { status: 200 }))
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    // Bernd: Sanitär is his main activity, Abriss an additional one.
+    const tasks = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Bernd'))!.querySelector<HTMLElement>('.tasks')!
+    await user.click(within(tasks).getByRole('button', { name: /weitere/ }))
+    expect(within(tasks).getAllByRole('button').filter((button) => button.classList.contains('task-box')).map((button) => button.textContent)).toEqual([
+      'Sanitär Juni',
+      'Sanitär ohne Datum',
+      'Abriss April',
+      'Abriss Mai',
+    ])
+  })
+
   it('marks a cell with a note', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
