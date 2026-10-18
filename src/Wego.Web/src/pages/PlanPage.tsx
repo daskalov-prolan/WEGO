@@ -142,9 +142,14 @@ export function PlanPage({ year, canEdit }: Props) {
   // A site opened from a cell, and whether its form is open.
   const [shownSite, setShownSite] = useState<{ site: Site; editing: boolean } | null>(null)
   // Copied or cut entries of one cell; cut ones leave their cell when they are pasted.
-  const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[]; cutFrom?: { employeeId: number; date: string } } | null>(null)
+  const [clipboard, setClipboard] = useState<{
+    label: string
+    entries: DayEntryInput[]
+    cutFrom?: { employeeId: number; date: string; entryIds: number[] }
+  } | null>(null)
   // The menu of a right click on a cell.
-  const [cellMenu, setCellMenu] = useState<{ employee: PlanEmployee; date: string; x: number; y: number } | null>(null)
+  // `entryId`: the click was on one entry of the cell.
+  const [cellMenu, setCellMenu] = useState<{ employee: PlanEmployee; date: string; x: number; y: number; entryId?: number } | null>(null)
   // An open activity dropped on a day of a site: who goes there is asked for.
   const [droppedTask, setDroppedTask] = useState<{ site: Site; activity: Activity; date: string } | null>(null)
 
@@ -547,13 +552,13 @@ export function PlanPage({ year, canEdit }: Props) {
     })
   }
 
-  /** Copies (or cuts) the entries of one cell. */
-  const copyCell = (employeeId: number, date: string, cut: boolean) => {
-    const entries = entriesOf(employeeId, date)
+  /** Copies (or cuts) the entries of one cell, or only one of them. */
+  const copyCell = (employeeId: number, date: string, cut: boolean, entryId?: number) => {
+    const entries = entriesOf(employeeId, date).filter((entry) => entryId === undefined || entry.id === entryId)
     setClipboard({
       label: entries.map((entry) => entry.siteName ?? entry.type).join(' / '),
       entries: entries.map(toInput),
-      cutFrom: cut ? { employeeId, date } : undefined,
+      cutFrom: cut ? { employeeId, date, entryIds: entries.map((entry) => entry.id) } : undefined,
     })
     notifications.show({
       message: `${cut ? 'Ausgeschnitten' : 'Kopiert'}. Rechtsklick auf ein Feld (oder mehrere ausgewählte) und „Einfügen“.`,
@@ -568,9 +573,15 @@ export function PlanPage({ year, canEdit }: Props) {
    */
   const paste = async (targets: { employeeId: number; date: string }[]) => {
     if (!clipboard) return
+    const from = clipboard.cutFrom
+    // What stays in a cell: cut entries are taken out of their cell.
+    const remaining = (employeeId: number, date: string) =>
+      entriesOf(employeeId, date).filter(
+        (entry) => !(from && from.employeeId === employeeId && from.date === date && from.entryIds.includes(entry.id)),
+      )
     const changes: DayChange[] = targets.map(({ employeeId, date }) => {
       const employee = plan.employees.find((candidate) => candidate.id === employeeId)
-      const there = entriesOf(employeeId, date)
+      const there = remaining(employeeId, date)
       const added = clipboard.entries
         .filter((entry) => !there.some((other) => other.type === entry.type && other.siteId === entry.siteId))
         .map((entry) => {
@@ -582,9 +593,8 @@ export function PlanPage({ year, canEdit }: Props) {
         })
       return { employeeId, date, entries: [...there.map(toInput), ...added] }
     })
-    const from = clipboard.cutFrom
     if (from && !targets.some((target) => target.employeeId === from.employeeId && target.date === from.date))
-      changes.push({ employeeId: from.employeeId, date: from.date, entries: [] })
+      changes.push({ employeeId: from.employeeId, date: from.date, entries: remaining(from.employeeId, from.date).map(toInput) })
     await save(changes, `${clipboard.label || 'Leerer Tag'} in ${targets.length} ${targets.length === 1 ? 'Feld' : 'Felder'} eingefügt.`)
     if (from) setClipboard(null)
     setSelected(new Set())
@@ -875,7 +885,7 @@ export function PlanPage({ year, canEdit }: Props) {
             onPlanTask={canEdit ? planTask : undefined}
             onTaskCancel={canEdit ? cancelTask : undefined}
             dropOn={canEdit ? dropOnEmployee : undefined}
-            onCellMenu={canEdit ? (employee, date, { x, y }) => setCellMenu({ employee, date, x, y }) : undefined}
+            onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
             {...shared}
           />
         ) : (
@@ -1077,7 +1087,8 @@ export function PlanPage({ year, canEdit }: Props) {
       {cellMenu &&
         (() => {
           const key = cellKey(cellMenu.employee.id, cellMenu.date)
-          const empty = entriesOf(cellMenu.employee.id, cellMenu.date).length === 0
+          const all = entriesOf(cellMenu.employee.id, cellMenu.date)
+          const one = all.find((entry) => entry.id === cellMenu.entryId)
           // A cell of the selection pastes into all selected cells, any other cell only into itself.
           const targets = selected.has(key) ? [...selected].map(parseKey) : [{ employeeId: cellMenu.employee.id, date: cellMenu.date }]
           return (
@@ -1086,8 +1097,27 @@ export function PlanPage({ year, canEdit }: Props) {
               y={cellMenu.y}
               onClose={closeCellMenu}
               items={[
-                { label: 'Kopieren', disabled: empty, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, false) },
-                { label: 'Ausschneiden', disabled: empty, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, true) },
+                // On one entry: that entry; elsewhere in the cell (or for a day of several): all of the day.
+                ...(one
+                  ? [
+                      { label: `Kopieren: ${one.siteName ?? one.type}`, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, false, one.id) },
+                      { label: `Ausschneiden: ${one.siteName ?? one.type}`, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, true, one.id) },
+                    ]
+                  : []),
+                ...(!one || all.length > 1
+                  ? [
+                      {
+                        label: one ? 'Ganzen Tag kopieren' : 'Kopieren',
+                        disabled: all.length === 0,
+                        onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, false),
+                      },
+                      {
+                        label: one ? 'Ganzen Tag ausschneiden' : 'Ausschneiden',
+                        disabled: all.length === 0,
+                        onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, true),
+                      },
+                    ]
+                  : []),
                 {
                   label: targets.length > 1 ? `Einfügen in ${targets.length} Felder` : 'Einfügen',
                   disabled: !clipboard,

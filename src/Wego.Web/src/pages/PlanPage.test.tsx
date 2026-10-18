@@ -524,6 +524,34 @@ describe('PlanPage', () => {
       ])
     })
 
+    it('cuts a single entry of a day with several and pastes it elsewhere', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      // Right click on the Meier entry of Anna's split Monday.
+      const chip = within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      fireEvent.contextMenu(chip)
+      let items = within(await screen.findByRole('menu'))
+      expect(items.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Kopieren: Familie Meier',
+        'Ausschneiden: Familie Meier',
+        'Ganzen Tag kopieren',
+        'Ganzen Tag ausschneiden',
+        'Einfügen',
+      ])
+      await user.click(items.getByRole('menuitem', { name: 'Ausschneiden: Familie Meier' }))
+
+      items = await menu(/Bernd, Mittwoch, 04.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Einfügen' }))
+      await waitFor(() => expect(batch()).not.toBeNull())
+      // Bernd gets Meier; Anna keeps Schulze.
+      expect(batch()).toEqual([
+        { employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] },
+        { employeeId: 1, date: '2026-03-02', entries: [expect.objectContaining({ siteId: 10 })] },
+      ])
+    })
+
     it('cuts a cell and pastes it into all selected cells, emptying the source', async () => {
       const user = userEvent.setup()
       renderWithProviders(<PlanPage year={2026} canEdit />)

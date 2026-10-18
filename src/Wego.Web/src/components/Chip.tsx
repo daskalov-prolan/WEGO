@@ -41,6 +41,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
       className={draggable ? `${className} drag-source` : className}
       style={entryStyle(entry)}
       title={entryTitle(entry)}
+      data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable)}
     >
       <span className="chip-line">

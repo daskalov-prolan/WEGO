@@ -42,7 +42,7 @@ export interface MatrixProps {
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
-  onCellMenu?: (employee: PlanEmployee, date: string, position: { x: number; y: number }) => void
+  onCellMenu?: (employee: PlanEmployee, date: string, at: { x: number; y: number; entryId?: number }) => void
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -148,7 +148,10 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
         }
         if (!props.onCellMenu) return
         event.preventDefault()
-        props.onCellMenu(employee, day.iso, { x: event.clientX, y: event.clientY })
+        // A right click on one entry of the cell is about that entry.
+        const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+        const entryId = chip ? Number(chip.dataset.entryId) : undefined
+        props.onCellMenu(employee, day.iso, { x: event.clientX, y: event.clientY, entryId })
       },
       onClick: () => {
         if (swallowClick.current) {
