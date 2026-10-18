@@ -14,12 +14,14 @@ public enum EntryType
 }
 
 /// <summary>
-/// What an employee does on a construction site that day, in the order of the job:
-/// Besichtigung, Abriss/Baubeginn, Trockenbau, Sanitär, RenoDeco-Platten, Fliesenarbeiten, Endmontage.
+/// What an employee does on a construction site that day, in the order of the job. Each activity belongs
+/// to one status of the site: the offer (Angebot) or the construction (Bauphase), see <see cref="ActivityPhases"/>.
 /// </summary>
 public enum Activity
 {
     Besichtigung,
+    Angebotskalkulation,
+    Angebotsbesprechung,
     Abriss,
     Trockenbau,
     Sanitaer,
@@ -57,6 +59,53 @@ public class Employee
     public List<PlanEntry> Entries { get; set; } = [];
 }
 
+/// <summary>Where a construction site stands. Storniert can follow any status; otherwise in this order.</summary>
+public enum SiteStatus
+{
+    Angebot,
+    Bauphase,
+    Abgeschlossen,
+    Storniert,
+}
+
+public static class ActivityPhases
+{
+    /// <summary>The activities of a status: the offer has its own, the construction the rest.</summary>
+    public static readonly IReadOnlyDictionary<SiteStatus, Activity[]> ByStatus = new Dictionary<SiteStatus, Activity[]>
+    {
+        [SiteStatus.Angebot] = [Activity.Besichtigung, Activity.Angebotskalkulation, Activity.Angebotsbesprechung],
+        [SiteStatus.Bauphase] =
+        [
+            Activity.Abriss, Activity.Trockenbau, Activity.Sanitaer, Activity.RenoDeco, Activity.Fliesen,
+            Activity.Endmontage,
+        ],
+    };
+
+    /// <summary>The allowed status changes: forward one step, or cancelled from anywhere.</summary>
+    public static bool CanChange(SiteStatus from, SiteStatus to) =>
+        (from, to) switch
+        {
+            (SiteStatus.Storniert, _) => false,
+            (_, SiteStatus.Storniert) => true,
+            (SiteStatus.Angebot, SiteStatus.Bauphase) => true,
+            (SiteStatus.Bauphase, SiteStatus.Abgeschlossen) => true,
+            _ => false,
+        };
+}
+
+/// <summary>One change of the status of a site, kept as a log.</summary>
+public class SiteStatusChange
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public Site Site { get; set; } = null!;
+    /// <summary>Null for the first status when the site was created.</summary>
+    public SiteStatus? From { get; set; }
+    public SiteStatus To { get; set; }
+    public DateTime ChangedAt { get; set; }
+    public string? ChangedBy { get; set; }
+}
+
 /// <summary>Which field gives a construction site the name shown in the plan.</summary>
 public enum SiteNameSource
 {
@@ -82,6 +131,9 @@ public class Site
     public string? City { get; set; }
 
     public SiteNameSource NameSource { get; set; } = SiteNameSource.Auftraggeber;
+
+    public SiteStatus Status { get; set; } = SiteStatus.Angebot;
+    public List<SiteStatusChange> StatusChanges { get; set; } = [];
 
     public DateOnly? PlannedStart { get; set; }
     public DateOnly? PlannedEnd { get; set; }

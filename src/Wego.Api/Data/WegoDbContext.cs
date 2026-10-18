@@ -7,6 +7,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
 {
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Site> Sites => Set<Site>();
+    public DbSet<SiteStatusChange> SiteStatusChanges => Set<SiteStatusChange>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
 
@@ -41,9 +42,19 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.PostalCode).HasMaxLength(10);
             e.Property(x => x.City).HasMaxLength(100);
             e.Property(x => x.NameSource).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Description).HasMaxLength(1000);
             // Not unique: one property management can order jobs at several addresses.
             e.HasIndex(x => x.Name);
+        });
+
+        modelBuilder.Entity<SiteStatusChange>(e =>
+        {
+            e.Property(x => x.From).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.To).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ChangedBy).HasMaxLength(200);
+            e.HasOne(x => x.Site).WithMany(x => x.StatusChanges).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SiteId, x.ChangedAt });
         });
 
         modelBuilder.Entity<PlanEntry>(e =>

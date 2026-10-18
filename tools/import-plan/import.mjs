@@ -317,7 +317,8 @@ async function siteIds(call, days) {
   for (const day of days) {
     for (const entry of day.entries) {
       if (entry.type !== 'Baustelle' || ids.has(entry.siteName.toLowerCase())) continue
-      const site = await call('POST', '/api/sites', { client: entry.siteName, nameSource: 'Auftraggeber' })
+      // Sites from the planning sheet are jobs under way.
+      const site = await call('POST', '/api/sites', { client: entry.siteName, nameSource: 'Auftraggeber', status: 'Bauphase' })
       ids.set(entry.siteName.toLowerCase(), site.id)
       created++
     }

@@ -5,10 +5,10 @@ import type { Site } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { SitesPage } from './SitesPage'
 
-function site(id: number, name: string, plannedStart: string | null, plannedEnd: string | null): Site {
+function site(id: number, name: string, plannedStart: string | null, plannedEnd: string | null, status: Site['status'] = 'Bauphase'): Site {
   return {
     id, name, client: name, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null,
-    nameSource: 'Auftraggeber', description: null, plannedStart, plannedEnd,
+    nameSource: 'Auftraggeber', description: null, plannedStart, plannedEnd, status,
   }
 }
 
@@ -17,6 +17,7 @@ const sites = [
   site(2, 'Arndt', '2026-04-01', '2026-04-30'),
   site(3, 'Zesch', null, null),
   site(4, 'Chung', '2026-03-10', '2026-03-31'),
+  site(5, 'Abgesagt', '2026-03-20', '2026-03-25', 'Storniert'),
 ]
 
 let scrolledTo: string[] = []
@@ -46,7 +47,10 @@ describe('SitesPage', () => {
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
     // Chung has started already; Arndt is the first that starts after today.
     expect(scrolledTo.at(-1)).toBe('site-row-2')
-    expect(screen.getByText('läuft')).toBeInTheDocument()
+    // Done and cancelled sites only with "Alle".
+    expect(screen.queryByText('Abgesagt')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: 'Alle' }))
+    expect(screen.getAllByText('Abgesagt').length).toBeGreaterThan(0)
   })
 
   it('sorts by name and back by planned end', async () => {

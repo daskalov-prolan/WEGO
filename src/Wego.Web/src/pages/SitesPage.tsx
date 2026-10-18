@@ -1,9 +1,11 @@
-import { Alert, Badge, Button, Group, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Button, Group, SegmentedControl, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Site } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
+import { StatusBadge } from '../components/SiteStatus'
+import { isOpen } from '../lib/activities'
 import { formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
 
@@ -24,13 +26,6 @@ function compare(a: Site, b: Site, key: SortKey): number {
   return left.localeCompare(right, 'de') || a.name.localeCompare(b.name, 'de')
 }
 
-function status(site: Site, today: string): { label: string; color: string } | null {
-  if (site.plannedEnd && site.plannedEnd < today) return { label: 'abgeschlossen', color: 'gray' }
-  if (site.plannedStart && site.plannedStart <= today) return { label: 'läuft', color: 'green' }
-  if (site.plannedStart) return { label: 'geplant', color: 'wego' }
-  return null
-}
-
 /**
  * Planner-only: all construction sites, sorted by planned start by default. Sorted by a date, the list
  * opens where the sites begin that start after today.
@@ -41,6 +36,7 @@ export function SitesPage() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: 'plannedStart', descending: false })
   const [creating, setCreating] = useState(false)
+  const [show, setShow] = useState<'open' | 'all'>('open')
   const today = todayIso()
 
   useEffect(() => {
@@ -49,17 +45,18 @@ export function SitesPage() {
 
   const needle = search.trim().toLowerCase()
   const rows = useMemo(() => {
+    const shown = show === 'open' ? sites.filter((site) => isOpen(site.status)) : sites
     const found = needle
-      ? sites.filter((site) =>
+      ? shown.filter((site) =>
           [site.name, site.client, formatAddress(site)].join(' ').toLowerCase().includes(needle),
         )
-      : sites
+      : shown
     const sorted = [...found].sort((a, b) => compare(a, b, sort.key))
     if (!sort.descending) return sorted
     // Descending, but still with the empty values at the end.
     const withValue = sorted.filter((site) => site[sort.key])
     return [...withValue.reverse(), ...sorted.filter((site) => !site[sort.key])]
-  }, [sites, needle, sort])
+  }, [sites, needle, sort, show])
 
   // Sorted by a date: jump to the first site whose planned start lies after today.
   const firstUpcoming =
@@ -89,6 +86,14 @@ export function SitesPage() {
           onChange={(e) => setSearch(e.currentTarget.value)}
           w={320}
         />
+        <SegmentedControl
+          value={show}
+          onChange={(value) => setShow(value as 'open' | 'all')}
+          data={[
+            { value: 'open', label: 'Unerledigte' },
+            { value: 'all', label: 'Alle' },
+          ]}
+        />
         <Text size="sm" c="dimmed">
           {rows.length} von {sites.length} Baustellen
         </Text>
@@ -113,12 +118,11 @@ export function SitesPage() {
                 </Table.Th>
               ))}
               <Table.Th>Adresse</Table.Th>
-              <Table.Th>Stand</Table.Th>
+              <Table.Th>Status</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {rows.map((site) => {
-              const state = status(site, today)
               return (
                 <Table.Tr
                   key={site.id}
@@ -134,11 +138,7 @@ export function SitesPage() {
                   <Table.Td>{site.plannedEnd && formatDate(site.plannedEnd)}</Table.Td>
                   <Table.Td>{formatAddress(site)}</Table.Td>
                   <Table.Td>
-                    {state && (
-                      <Badge variant="light" color={state.color}>
-                        {state.label}
-                      </Badge>
-                    )}
+                    <StatusBadge status={site.status} />
                   </Table.Td>
                 </Table.Tr>
               )

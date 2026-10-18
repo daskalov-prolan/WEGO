@@ -11,6 +11,7 @@ export const emptySite: SiteInput = {
   description: null,
   plannedStart: null,
   plannedEnd: null,
+  status: 'Angebot',
 }
 
 export function toSiteInput(site: Site): SiteInput {

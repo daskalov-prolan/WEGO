@@ -13,7 +13,7 @@ import {
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
-import { allowedActivities } from '../lib/activities'
+import { allowedActivities, defaultActivity } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
@@ -71,7 +71,7 @@ export function DayEditor(props: Props) {
   const { employee, date, entries, sites, onCreateSite, onUpdateSite, recentSites, onClose, onSave, onCopy } = props
   // A new site row starts with what the employee typically does.
   const main = employee.mainActivity
-  const allowed = allowedActivities(employee)
+  const statusOf = (siteId: number | null) => sites.find((site) => site.id === siteId)?.status
   const [rows, setRows] = useState<Row[]>(() =>
     entries.length === 0
       ? [emptyRow('Baustelle', null, main)]
@@ -95,8 +95,9 @@ export function DayEditor(props: Props) {
   const pick = (siteId: number) =>
     setRows((current) => {
       const index = current.findIndex((row) => row.type === 'Baustelle' && row.siteId === null)
-      if (index >= 0) return current.map((row, i) => (i === index ? { ...row, siteId } : row))
-      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', siteId, main)]
+      const activity = defaultActivity(employee, statusOf(siteId))
+      if (index >= 0) return current.map((row, i) => (i === index ? { ...row, siteId, activity } : row))
+      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', siteId, activity)]
     })
 
   const submit = async (event: FormEvent) => {
@@ -172,7 +173,12 @@ export function DayEditor(props: Props) {
                   <SitePicker
                     sites={sites}
                     value={row.siteId}
-                    onChange={(siteId) => update(index, { siteId })}
+                    onChange={(siteId) => {
+                      // Another site may be in another status: keep the activity only if it fits there.
+                      const status = statusOf(siteId)
+                      const fits = row.activity !== null && allowedActivities(employee, status).includes(row.activity)
+                      update(index, { siteId, activity: fits ? row.activity : defaultActivity(employee, status) })
+                    }}
                     onCreate={onCreateSite}
                     onUpdate={onUpdateSite}
                     required
@@ -182,7 +188,7 @@ export function DayEditor(props: Props) {
                   <ActivitySelect
                     value={row.activity}
                     onChange={(activity) => update(index, { activity })}
-                    allowed={allowed}
+                    allowed={allowedActivities(employee, statusOf(row.siteId))}
                     main={main}
                   />
                 )}

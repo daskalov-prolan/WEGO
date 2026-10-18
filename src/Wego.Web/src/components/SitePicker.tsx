@@ -1,6 +1,7 @@
 import { ActionIcon, Anchor, Group, Select, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
+import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress, toSiteInput } from '../lib/sites'
 import { SiteForm } from './SiteForm'
 import { SiteSheet } from './SiteSheet'
@@ -39,10 +40,10 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
           style={{ flex: 1 }}
           value={value === null ? null : String(value)}
           onChange={(next) => onChange(next === null ? null : Number(next))}
-          data={sites.map((site) => ({
-            value: String(site.id),
-            label: site.name,
-          }))}
+          // Done and cancelled sites are not offered for new work; one chosen before stays visible.
+          data={sites
+            .filter((site) => isOpen(site.status) || site.id === value)
+            .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' ? `${site.name} (Angebot)` : site.name }))}
           filter={({ options, search }) => {
             const needle = search.trim().toLowerCase()
             return options.filter((option) => {

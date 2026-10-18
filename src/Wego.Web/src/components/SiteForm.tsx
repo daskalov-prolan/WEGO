@@ -1,8 +1,8 @@
-import { Alert, Button, Group, Radio, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Alert, Button, Group, Radio, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { SiteInput, SiteNameSource } from '../api/types'
+import type { SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
 import { Sheet } from './Sheet'
 
@@ -44,6 +44,18 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
     <Sheet onClose={onClose} title={<Text fw={700}>{title}</Text>}>
       <form onSubmit={submit}>
         <Stack gap="sm">
+          {initial.status !== undefined && (
+            <div>
+              <Text size="sm" fw={500} mb={4}>
+                Beginnt als
+              </Text>
+              <SegmentedControl
+                value={site.status}
+                onChange={(value) => setSite((current) => ({ ...current, status: value as SiteStatus }))}
+                data={['Angebot', 'Bauphase']}
+              />
+            </div>
+          )}
           <TextInput
             label="Auftraggeber"
             description="Kunde oder Hausverwaltung"

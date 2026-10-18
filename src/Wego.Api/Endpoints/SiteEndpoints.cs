@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Wego.Api.Data;
 
@@ -8,11 +9,14 @@ public static class SiteEndpoints
 {
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
-        DateOnly? PlannedStart, DateOnly? PlannedEnd);
+        DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status);
 
     public record SiteInput(string? Client, string? Street, string? HouseNumber, string? AddressAddition,
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
-        DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null);
+        DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null);
+
+    public record StatusRequest(SiteStatus Status);
+    public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
 
     public record MergeRequest(int TargetId);
 
@@ -27,12 +31,19 @@ public static class SiteEndpoints
         group.MapGet("/{id:int}", async (int id, WegoDbContext db) =>
             await db.Sites.FindAsync(id) is { } site ? Results.Ok(ToDto(site)) : Results.NotFound());
 
-        group.MapPost("/", async (SiteInput input, WegoDbContext db) =>
+        // A new site starts as offer (Angebot), or directly in construction when the offer was made elsewhere.
+        group.MapPost("/", async (SiteInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var site = new Site();
+            var site = new Site { Status = input.Status ?? SiteStatus.Angebot };
+            if (site.Status is not (SiteStatus.Angebot or SiteStatus.Bauphase))
+                return ApiErrors.BadRequest("Eine neue Baustelle beginnt im Angebot oder in der Bauphase.");
             var error = Apply(site, input);
             if (error is not null) return ApiErrors.BadRequest(error);
 
+            site.StatusChanges.Add(new SiteStatusChange
+            {
+                To = site.Status, ChangedAt = DateTime.UtcNow, ChangedBy = user.Identity?.Name,
+            });
             db.Sites.Add(site);
             await db.SaveChangesAsync();
             return Results.Created($"/api/sites/{site.Id}", ToDto(site));
@@ -49,6 +60,30 @@ public static class SiteEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
         }).RequireAuthorization(Roles.Planer);
+
+        group.MapPost("/{id:int}/status", async (int id, StatusRequest request, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var site = await db.Sites.FindAsync(id);
+            if (site is null) return Results.NotFound();
+            if (!Enum.IsDefined(request.Status)) return ApiErrors.BadRequest("Unbekannter Status.");
+            if (!ActivityPhases.CanChange(site.Status, request.Status))
+                return ApiErrors.BadRequest($"Von „{site.Status}“ kann nicht zu „{request.Status}“ gewechselt werden.");
+
+            db.SiteStatusChanges.Add(new SiteStatusChange
+            {
+                SiteId = id, From = site.Status, To = request.Status, ChangedAt = DateTime.UtcNow,
+                ChangedBy = user.Identity?.Name,
+            });
+            site.Status = request.Status;
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(site));
+        }).RequireAuthorization(Roles.Planer);
+
+        group.MapGet("/{id:int}/history", async (int id, WegoDbContext db) =>
+            await db.SiteStatusChanges.Where(c => c.SiteId == id)
+                .OrderBy(c => c.ChangedAt).ThenBy(c => c.Id)
+                .Select(c => new StatusChangeDto(c.From, c.To, c.ChangedAt, c.ChangedBy))
+                .ToListAsync()).RequireAuthorization(Roles.Planer);
 
         // Two records for the same site (e.g. typed twice): the entries move over, the duplicate goes.
         group.MapPost("/{id:int}/merge", async (int id, MergeRequest request, WegoDbContext db) =>
@@ -93,7 +128,7 @@ public static class SiteEndpoints
     }
 
     public static SiteDto ToDto(Site s) => new(s.Id, s.Name, s.Client, s.Street, s.HouseNumber, s.AddressAddition,
-        s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd);
+        s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

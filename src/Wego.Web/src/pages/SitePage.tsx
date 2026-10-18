@@ -17,6 +17,7 @@ import { api, messageOf } from '../api/client'
 import type { Site, SiteReport } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteLocation } from '../components/SiteLocation'
+import { SiteStatusPanel } from '../components/SiteStatus'
 import { Stat } from '../components/Stat'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
@@ -102,6 +103,16 @@ export function SitePage({ year, siteId }: Props) {
 
       {site && (
         <Paper withBorder p="md" mb="lg" className="site-card">
+          <div className="site-status">
+            <Text size="xs" c="dimmed" mb={4}>
+              Status
+            </Text>
+            <SiteStatusPanel
+              site={site}
+              canEdit
+              onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
+            />
+          </div>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <div>
               <Text size="xs" c="dimmed">

@@ -255,6 +255,37 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Site_status_follows_the_job_and_every_change_is_logged()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateSiteAsync(planer, "Statusbaustelle");
+        Task<HttpResponseMessage> Change(string status) =>
+            planer.PostAsJsonAsync($"/api/sites/{id}/status", new { status });
+
+        var site = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
+        Assert.Equal("Angebot", site.GetProperty("status").GetString());
+
+        // Not two steps at once, and not back.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Change("Abgeschlossen")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Change("Bauphase")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Change("Angebot")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Change("Abgeschlossen")).StatusCode);
+        // Cancelled can follow any status, but nothing follows it.
+        Assert.Equal(HttpStatusCode.OK, (await Change("Storniert")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Change("Bauphase")).StatusCode);
+
+        var history = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}/history");
+        Assert.Equal(["Angebot", "Bauphase", "Abgeschlossen", "Storniert"],
+            history.EnumerateArray().Select(c => c.GetProperty("to").GetString()));
+        Assert.Equal(JsonValueKind.Null, history[0].GetProperty("from").ValueKind);
+        Assert.Equal("Planer", history[1].GetProperty("changedBy").GetString());
+
+        var direct = await planer.PostAsJsonAsync("/api/sites", new { client = "Direkt", nameSource = "Auftraggeber", status = "Bauphase" });
+        Assert.Equal("Bauphase", (await direct.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        var closed = await planer.PostAsJsonAsync("/api/sites", new { client = "Zu", nameSource = "Auftraggeber", status = "Abgeschlossen" });
+        Assert.Equal(HttpStatusCode.BadRequest, closed.StatusCode);
+    }
+    [Fact]
     public async Task Duplicate_sites_are_merged_with_their_entries()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

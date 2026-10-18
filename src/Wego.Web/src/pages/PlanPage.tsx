@@ -22,7 +22,7 @@ import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
-import { allowedActivities } from '../lib/activities'
+import { allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
@@ -31,6 +31,7 @@ import {
   addDays,
   addMonths,
   daysOfYear,
+  formatDate,
   isoWeek,
   MONTHS,
   todayIso,
@@ -53,24 +54,6 @@ const PERSPECTIVE_KEY = 'wego.plan.perspective'
 
 /** Rows of the plan: one per employee, or one per construction site. */
 type Perspective = 'employees' | 'sites'
-
-const ANCHOR_KEY = 'wego.plan.anchor'
-
-function readRemembered(): string | null {
-  try {
-    return sessionStorage.getItem(ANCHOR_KEY)
-  } catch {
-    return null
-  }
-}
-
-function remember(iso: string) {
-  try {
-    sessionStorage.setItem(ANCHOR_KEY, iso)
-  } catch {
-    // Without storage the plan starts at the current week again.
-  }
-}
 
 function loadPerspective(): Perspective {
   try {
@@ -118,12 +101,8 @@ export function PlanPage({ year, canEdit }: Props) {
   const [error, setError] = useState('')
   const [chosenView, setChosenView] = useState<View>('week')
   // The days that are currently in view; follows the scrolling.
-  // Coming back (e.g. from the page of a site) continues where one was; otherwise the current week.
-  const remembered = readRemembered()
-  const start =
-    remembered && remembered >= first && remembered <= last
-      ? remembered
-      : weekOf(today >= first && today <= last ? today : first)[0].iso
+  // The plan always opens at today; one scrolls from there into the past or the future.
+  const start = today >= first && today <= last ? today : first
   const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 13) })
   const anchor = visible.from
   const scroller = useRef<HTMLDivElement>(null)
@@ -132,6 +111,8 @@ export function PlanPage({ year, canEdit }: Props) {
   const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: anchor, smooth: false })
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
+  // Plan by site: by default only sites that are not done or cancelled.
+  const [openOnly, setOpenOnly] = useState(true)
   const [siteDay, setSiteDay] = useState<{ siteId: number; date: string } | null>(null)
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
@@ -175,6 +156,7 @@ export function PlanPage({ year, canEdit }: Props) {
     const shown = new Set(plan.employees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
     const rows = new Map<number, SiteRow & { start: string }>()
     for (const site of plan.sites) {
+      if (openOnly && !isOpen(site.status)) continue
       if (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle)) continue
       const planned = site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
       if (planned) rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart! })
@@ -182,7 +164,7 @@ export function PlanPage({ year, canEdit }: Props) {
     for (const entry of plan.entries) {
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
-      if (!site || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
+      if (!site || (openOnly && !isOpen(site.status)) || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
@@ -191,7 +173,22 @@ export function PlanPage({ year, canEdit }: Props) {
       rows.set(site.id, row)
     }
     return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
-  }, [plan, hidden, filter, siteById, year])
+  }, [plan, hidden, filter, siteById, year, openOnly])
+
+  // Open sites with work before today: shown as a hint, since the plan always opens at today.
+  const earlierWork = useMemo(() => {
+    let earliest: string | null = null
+    const sites = new Set<number>()
+    for (const row of siteRows) {
+      if (!isOpen(row.site.status)) continue
+      for (const date of row.byDate.keys()) {
+        if (date >= today) continue
+        sites.add(row.site.id)
+        if (!earliest || date < earliest) earliest = date
+      }
+    }
+    return earliest ? { earliest, sites: sites.size } : null
+  }, [siteRows, today])
 
   // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
   const recentSites = useMemo(() => {
@@ -206,7 +203,7 @@ export function PlanPage({ year, canEdit }: Props) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([id]) => siteById.get(id))
-      .filter((site): site is Site => site !== undefined)
+      .filter((site): site is Site => site !== undefined && isOpen(site.status))
   }, [plan, anchor, siteById])
 
   const needle = filter.trim().toLowerCase()
@@ -253,7 +250,6 @@ export function PlanPage({ year, canEdit }: Props) {
   const scrollToDate = (iso: string, smooth = false) => {
     const from = clamp(iso)
     setVisible({ from, to: clamp(addDays(from, view === 'week' ? 13 : 30)) })
-    remember(from)
     if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
   }
 
@@ -261,7 +257,6 @@ export function PlanPage({ year, canEdit }: Props) {
     const next = readVisible()
     if (next && (next.from !== visible.from || next.to !== visible.to)) {
       setVisible(next)
-      remember(next.from)
     }
   }
 
@@ -485,10 +480,7 @@ export function PlanPage({ year, canEdit }: Props) {
             </ActionIcon>
           </Group>
           {inYear(today) && (
-            <Button
-              variant="default"
-              onClick={() => scrollToDate(view === 'week' ? weekOf(today)[0].iso : addDays(today, -3), true)}
-            >
+            <Button variant="default" onClick={() => scrollToDate(today, true)}>
               Heute
             </Button>
           )}
@@ -560,6 +552,32 @@ export function PlanPage({ year, canEdit }: Props) {
             <Tooltip label="Baustellen dieser Woche auf freie Tage der nächsten Woche übertragen">
               <Button variant="light" onClick={copyWeekForward}>
                 Woche fortsetzen
+              </Button>
+            </Tooltip>
+          )}
+
+          {perspective === 'sites' && (
+            <Switch
+              label="Nur unerledigte Baustellen"
+              checked={openOnly}
+              onChange={(event) => setOpenOnly(event.currentTarget.checked)}
+            />
+          )}
+
+          {perspective === 'sites' && earlierWork && (
+            <Tooltip
+              label={`${earlierWork.sites} offene Baustellen haben Einsätze vor heute, der früheste am ${formatDate(earlierWork.earliest)}. Klicken springt dorthin.`}
+              multiline
+              w={260}
+            >
+              <Button
+                variant="light"
+                color="orange"
+                ml="auto"
+                className="earlier-work"
+                onClick={() => scrollToDate(earlierWork.earliest, true)}
+              >
+                ◀ Frühere Einsätze: {earlierWork.sites} offene Baustellen
               </Button>
             </Tooltip>
           )}
@@ -712,8 +730,11 @@ export function PlanPage({ year, canEdit }: Props) {
             const changes = [...selected].map(parseKey).map(({ employeeId, date }) => {
               // Everybody gets their main activity, or the chosen one if they can do it.
               const employee = plan.employees.find((e) => e.id === employeeId)!
+              const status = template.siteId === null ? undefined : siteById.get(template.siteId)?.status
               const activity =
-                choice !== 'main' && allowedActivities(employee).includes(choice) ? choice : employee.mainActivity
+                choice !== 'main' && allowedActivities(employee, status).includes(choice)
+                  ? choice
+                  : defaultActivity(employee, status)
               const entry = { ...template, activity }
               return {
                 employeeId,
@@ -818,7 +839,7 @@ export function PlanPage({ year, canEdit }: Props) {
                   {
                     type: 'Baustelle' as const,
                     siteId: siteDay.siteId,
-                    activity: employee.mainActivity,
+                    activity: defaultActivity(employee, siteById.get(siteDay.siteId)?.status),
                     startTime: null,
                     endTime: null,
                     note: null,

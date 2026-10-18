@@ -60,12 +60,19 @@ function Item({ color, label }: { color: string; label: string }) {
   )
 }
 
-/** The colours of the plan with their meaning: activities in the order of the job, then absences and holidays. */
+/** The colours of the plan: the activities of the offer and of the construction, then absences and holidays. */
 export function ActivityLegend() {
   return (
     <Group gap="sm" className="activity-legend" wrap="wrap">
-      {ACTIVITIES.map((activity, index) => (
-        <Item key={activity.value} color={activity.background} label={`${index + 1}. ${activity.label}`} />
+      {(['Angebot', 'Bauphase'] as const).map((phase) => (
+        <Group gap="sm" key={phase} wrap="wrap">
+          <Text size="xs" fw={700} c="dimmed">
+            {phase}:
+          </Text>
+          {ACTIVITIES.filter((activity) => activity.phase === phase).map((activity) => (
+            <Item key={activity.value} color={activity.background} label={activity.label} />
+          ))}
+        </Group>
       ))}
       <Item color={ABSENCE.background} label="Urlaub / Krank" />
       <Item color={PUBLIC_HOLIDAY.background} label="Feiertag" />

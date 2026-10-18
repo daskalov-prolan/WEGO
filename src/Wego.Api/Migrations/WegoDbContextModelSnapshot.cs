@@ -202,6 +202,11 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Street")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -211,6 +216,40 @@ namespace Wego.Api.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Sites");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.SiteStatusChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("From")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ChangedAt");
+
+                    b.ToTable("SiteStatusChanges");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
@@ -231,6 +270,17 @@ namespace Wego.Api.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.SiteStatusChange", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany("StatusChanges")
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Site");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Navigation("Entries");
@@ -239,6 +289,8 @@ namespace Wego.Api.Migrations
             modelBuilder.Entity("Wego.Api.Data.Site", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("StatusChanges");
                 });
 #pragma warning restore 612, 618
         }

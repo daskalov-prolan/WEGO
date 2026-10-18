@@ -2,7 +2,7 @@ import { Alert, Button, Checkbox, ColorSwatch, Group, Select, Stack, Text, TextI
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
-import { ACTIVITIES, activityLabel, allowedActivities } from '../lib/activities'
+import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities } from '../lib/activities'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
 
@@ -28,7 +28,9 @@ export function AssignSite(props: Props) {
   const [siteId, setSiteId] = useState<number | null>(null)
   const [activity, setActivity] = useState<ActivityChoice>('main')
   // Who cannot do the chosen activity keeps their main activity.
-  const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e).includes(activity))
+  const status = sites.find((site) => site.id === siteId)?.status
+  const offered = status ? activitiesOfStatus(status) : ACTIVITIES.map((a) => a.value)
+  const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e, status).includes(activity))
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [note, setNote] = useState('')
@@ -76,8 +78,8 @@ export function AssignSite(props: Props) {
             onChange={(value) => setActivity((value ?? 'main') as ActivityChoice)}
             allowDeselect={false}
             data={[
-              { value: 'main', label: 'Haupttätigkeit des jeweiligen Mitarbeiters' },
-              ...ACTIVITIES.map((a) => ({ value: a.value, label: a.label })),
+              { value: 'main', label: 'Passende Haupttätigkeit des jeweiligen Mitarbeiters' },
+              ...ACTIVITIES.filter((a) => offered.includes(a.value)).map((a) => ({ value: a.value, label: a.label })),
             ]}
             leftSection={
               activity === 'main' ? undefined : (
@@ -89,7 +91,7 @@ export function AssignSite(props: Props) {
             <Alert color="yellow" variant="light">
               {unable.map((e) => e.name).join(', ')} {unable.length === 1 ? 'führt' : 'führen'} keine{' '}
               {activityLabel(activity as Activity)} aus und {unable.length === 1 ? 'bekommt' : 'bekommen'} die eigene
-              Haupttätigkeit.
+              passende Haupttätigkeit.
             </Alert>
           )}
           {recentSites.length > 0 && (
@@ -115,7 +117,11 @@ export function AssignSite(props: Props) {
           <SitePicker
             sites={sites}
             value={siteId}
-            onChange={setSiteId}
+            onChange={(next) => {
+              setSiteId(next)
+              const nextStatus = sites.find((site) => site.id === next)?.status
+              if (activity !== 'main' && nextStatus && !activitiesOfStatus(nextStatus).includes(activity)) setActivity('main')
+            }}
             onCreate={onCreateSite}
             onUpdate={onUpdateSite}
             required

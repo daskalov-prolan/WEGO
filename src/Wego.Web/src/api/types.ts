@@ -1,7 +1,27 @@
 export type Role = 'Planer' | 'Mitarbeiter'
 export type EntryType = 'Baustelle' | 'Urlaub' | 'Krank'
 /** What is done on a site that day, in the order of the job. */
-export type Activity = 'Besichtigung' | 'Abriss' | 'Trockenbau' | 'Sanitaer' | 'RenoDeco' | 'Fliesen' | 'Endmontage'
+export type Activity =
+  | 'Besichtigung'
+  | 'Angebotskalkulation'
+  | 'Angebotsbesprechung'
+  | 'Abriss'
+  | 'Trockenbau'
+  | 'Sanitaer'
+  | 'RenoDeco'
+  | 'Fliesen'
+  | 'Endmontage'
+
+/** Where a construction site stands: offer, construction, done, or cancelled. */
+export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert'
+
+export interface StatusChange {
+  from: SiteStatus | null
+  to: SiteStatus
+  /** ISO date and time (UTC) */
+  changedAt: string
+  changedBy: string | null
+}
 
 export interface User {
   id: number
@@ -42,10 +62,14 @@ export interface SiteInput {
   /** yyyy-MM-dd */
   plannedStart: string | null
   plannedEnd: string | null
+  /** Only when a site is created; later the status changes on its own. */
+  status?: SiteStatus
 }
 
 /** A construction site (Baustelle). The name is derived from the client or the street. */
-export interface Site extends NamedItem, SiteInput {}
+export interface Site extends NamedItem, SiteInput {
+  status: SiteStatus
+}
 
 export type HolidayKind = 'Schulferien' | 'Feiertag'
 

@@ -5,7 +5,7 @@ import type { Entry, Plan } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
 
-const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null }
+const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const }
 
 const plan: Plan = {
   year: 2026,
@@ -16,6 +16,8 @@ const plan: Plan = {
   sites: [
     { id: 10, name: 'Familie Schulze', ...noAddress },
     { id: 11, name: 'Familie Meier', ...noAddress },
+    { id: 12, name: 'Familie Werner', ...noAddress },
+    { id: 13, name: 'Altbau', ...noAddress, status: 'Abgeschlossen' as const },
   ],
   schoolHolidays: [
     { id: 5, name: 'Winterferien', kind: 'Schulferien', startDate: '2026-02-02', endDate: '2026-02-07' },
@@ -27,6 +29,8 @@ const plan: Plan = {
     entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
     { ...entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null), note: 'mit 2 Helfern' },
     { ...entry(5, 2, '2026-03-13', 11, 'Familie Meier', null, null), note: 'Wasser abstellen!', noteImportant: true },
+    entry(6, 2, '2026-02-20', 12, 'Familie Werner', null, null),
+    entry(7, 1, '2026-03-04', 13, 'Altbau', null, null),
   ],
 }
 
@@ -141,7 +145,16 @@ describe('PlanPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
 
     // Rows in the order the work starts: Schulze and Meier on 2 March.
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Meier', 'Familie Schulze'])
+    // Done sites are left out by default; Werner had work before today, so the hint shows up.
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual([
+      'Familie Werner',
+      'Familie Meier',
+      'Familie Schulze',
+    ])
+    expect(screen.getByRole('button', { name: /Frühere Einsätze: 1 offene Baustellen/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte Baustellen' }))
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toContain('Altbau')
+    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte Baustellen' }))
     const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ })
     expect(within(meierMonday).getAllByText('Anna').length).toBeGreaterThan(0)
     const meierTuesday = screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ })

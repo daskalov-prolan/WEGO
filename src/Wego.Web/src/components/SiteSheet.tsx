@@ -4,6 +4,7 @@ import { formatDate } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SiteLocation } from './SiteLocation'
+import { StatusBadge } from './SiteStatus'
 
 interface Props {
   site: Site
@@ -20,6 +21,7 @@ export function SiteSheet({ site, canEdit, showPageLink = true, onEdit, onClose 
   return (
     <Sheet onClose={onClose} title={<Text fw={700}>{site.name}</Text>} size="md">
       <Stack gap="sm">
+        <StatusBadge status={site.status} />
         <div>
           <Text size="xs" c="dimmed">
             Auftraggeber

@@ -12,6 +12,8 @@ import type {
   Site,
   SiteInput,
   SiteReport,
+  SiteStatus,
+  StatusChange,
   User,
   Vacation,
 } from './types'
@@ -83,6 +85,8 @@ export const api = {
   /** Moves the entries of a duplicate to the remaining site and deletes the duplicate. */
   mergeSite: (id: number, targetId: number) => request<Site>('POST', `/api/sites/${id}/merge`, { targetId }),
   deleteSite: (id: number) => request<void>('DELETE', `/api/sites/${id}`),
+  changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
+  siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
   siteReport: (id: number, year: number) => request<SiteReport>('GET', `/api/reports/sites/${id}?year=${year}`),
   employeeReport: (id: number, year: number) =>
