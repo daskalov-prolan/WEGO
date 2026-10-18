@@ -1,4 +1,4 @@
-import { Alert, Group, Paper, Text, Title } from '@mantine/core'
+import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
@@ -26,10 +26,14 @@ const pad = (n: number) => String(n).padStart(2, '0')
  */
 export function SiteMiniPlan({ site, canEdit }: Props) {
   const today = todayIso()
-  const start = weekOf(site.plannedStart ?? today)[0].iso
+  const buildStart = weekOf(site.plannedStart ?? today)[0].iso
+  // Monday of the first of the two weeks shown; moved with the arrows.
+  const [start, setStart] = useState(buildStart)
   const weeks = [weekOf(start), weekOf(addDays(start, 7))]
   const days = weeks.flat()
-  const years = [...new Set(days.map((day) => Number(day.iso.slice(0, 4))))]
+  // The year shown and the next one: enough to find the next week with room.
+  const firstYear = Number(start.slice(0, 4))
+  const years = [firstYear, firstYear + 1]
   const yearsKey = years.join(',')
 
   const [plans, setPlans] = useState<Plan[]>([])
@@ -37,15 +41,23 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   const [filter, setFilter] = useState<Set<Activity>>(new Set())
   const [openDay, setOpenDay] = useState<string | null>(null)
 
-  const load = useCallback(() => {
+  const reload = useCallback(() => {
     Promise.all(yearsKey.split(',').map((year) => api.plan(Number(year)))).then(setPlans, (e) =>
       setError(messageOf(e)),
     )
   }, [yearsKey])
-  useEffect(load, [load])
+  useEffect(reload, [reload])
 
   const entries = useMemo(() => plans.flatMap((plan) => plan.entries), [plans])
   const employees: PlanEmployee[] = plans[0]?.employees ?? []
+  const publicHolidays = useMemo(() => {
+    const set = new Set<string>()
+    for (const holiday of plans.flatMap((plan) => plan.schoolHolidays)) {
+      if (holiday.kind !== 'Feiertag') continue
+      for (let iso = holiday.startDate; iso <= holiday.endDate; iso = addDays(iso, 1)) set.add(iso)
+    }
+    return set
+  }, [plans])
 
   // Work at this site and elsewhere, per day of the two weeks.
   const byDay = (() => {
@@ -75,13 +87,46 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
       .filter((task) => task.planned < task.estimated)
   })()
 
+  // Who counts for how full a week is: everybody whose main activity is still to plan at this site.
+  const openActivities = new Set(openTasks.map((task) => task.activity))
+  const relevant = employees.filter((employee) => employee.mainActivity && openActivities.has(employee.mainActivity))
+  const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
+
+  /** Share of the working days (Mon–Fri, no public holidays) on which these people are planned anywhere. */
+  const load = (monday: string): number | null => {
+    if (relevant.length === 0) return null
+    let capacity = 0
+    let taken = 0
+    for (let offset = 0; offset < 5; offset++) {
+      const iso = addDays(monday, offset)
+      if (publicHolidays.has(iso)) continue
+      for (const employee of relevant) {
+        capacity++
+        if (busy.has(`${employee.id}|${iso}`)) taken++
+      }
+    }
+    return capacity === 0 ? 1 : taken / capacity
+  }
+
+  /** The next week after the first one shown that is planned to less than half; within the loaded years. */
+  const nextWithRoom = (() => {
+    const lastDay = `${years[years.length - 1]}-12-31`
+    for (let monday = addDays(start, 7); monday <= lastDay; monday = addDays(monday, 7)) {
+      const share = load(monday)
+      if (share !== null && share < 0.5) return monday
+    }
+    return null
+  })()
+
+  const percent = (share: number | null) => (share === null ? '–' : `${Math.round(share * 100)} %`)
+
   const entriesOf = (employeeId: number, date: string) =>
     entries.filter((entry) => entry.employeeId === employeeId && entry.date === date)
 
   const save = async (changes: { employeeId: number; date: string; entries: ReturnType<typeof toInput>[] }[], message: string) => {
     await api.saveDays(changes)
     notifications.show({ message, color: 'green' })
-    load()
+    reload()
   }
 
   const plan = async (activity: Activity | null, employeeIds: number[], date: string) => {
@@ -118,12 +163,45 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
 
   return (
     <Paper withBorder p="md" mb="lg" className="mini-plan">
-      <Group justify="space-between" mb="xs">
+      <Group justify="space-between" mb="xs" gap="xs">
         <Title order={4}>Planung</Title>
-        <Text size="sm" c="dimmed">
-          KW {isoWeek(days[0].iso)}–{isoWeek(days[7].iso)}
-          {site.plannedStart ? ' ab geplantem Baubeginn' : ' ab heute (kein Baubeginn geplant)'}
-        </Text>
+        <Group gap={6}>
+          <ActionIcon variant="default" onClick={() => setStart(addDays(start, -7))} aria-label="Woche zurück">
+            ‹
+          </ActionIcon>
+          <Text size="sm" fw={700} c="wego.9">
+            KW {isoWeek(days[0].iso)}–{isoWeek(days[7].iso)}
+          </Text>
+          <ActionIcon variant="default" onClick={() => setStart(addDays(start, 7))} aria-label="Woche vor">
+            ›
+          </ActionIcon>
+          {site.plannedStart && (
+            <Button size="compact-sm" variant="default" onClick={() => setStart(buildStart)}>
+              Baubeginn
+            </Button>
+          )}
+          <Button size="compact-sm" variant="default" onClick={() => setStart(weekOf(today)[0].iso)}>
+            Heute
+          </Button>
+          <Tooltip
+            label={
+              relevant.length === 0
+                ? 'Niemand hat eine der offenen Tätigkeiten als Haupttätigkeit.'
+                : `Gezählt: ${relevant.map((employee) => employee.name).join(', ')} (Haupttätigkeit offen auf dieser Baustelle)`
+            }
+            multiline
+            w={260}
+          >
+            <Button
+              size="compact-sm"
+              variant="light"
+              disabled={!nextWithRoom}
+              onClick={() => nextWithRoom && setStart(nextWithRoom)}
+            >
+              Nächste Woche unter 50 % ›
+            </Button>
+          </Tooltip>
+        </Group>
       </Group>
       <ActivityLegend selected={filter} onChange={setFilter} />
       {error && (
@@ -156,7 +234,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
                   ? async () => {
                       await api.updateSiteTask(site.id, task.activity, 1, true)
                       notifications.show({ message: `${activityLabel(task.activity)}: nicht nötig.` })
-                      load()
+                      reload()
                     }
                   : undefined
               }
@@ -167,7 +245,9 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         <div className="mini-weeks">
           {weeks.map((week) => (
             <div className="mini-week" key={week[0].iso}>
-              <div className="mini-week-label">KW {isoWeek(week[0].iso)}</div>
+              <div className="mini-week-label" title="Auslastung der Mitarbeiter mit offener Haupttätigkeit">
+                KW {isoWeek(week[0].iso)} · {percent(load(week[0].iso))}
+              </div>
               {week.map((day) => {
                 const slot = byDay.get(day.iso)!
                 return (

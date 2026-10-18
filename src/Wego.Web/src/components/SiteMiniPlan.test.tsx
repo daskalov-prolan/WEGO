@@ -52,13 +52,29 @@ afterEach(() => {
 })
 
 describe('SiteMiniPlan', () => {
+  it('moves by week and jumps to the next week planned to less than half', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 10–11')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Woche vor' }))
+    expect(screen.getByText('KW 11–12')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Baubeginn' }))
+    expect(screen.getByText('KW 10–11')).toBeInTheDocument()
+
+    // KW 10 itself is at 20 %, but the jump looks for the next week after the first one shown.
+    await user.click(screen.getByRole('button', { name: /Nächste Woche unter 50 %/ }))
+    expect(screen.getByText('KW 11–12')).toBeInTheDocument()
+  })
+
   it('shows two calendar weeks from the planned start, the work here and elsewhere, and the open activities', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
 
     // Planned start Wednesday 4 March: the weeks begin on Monday 2 March.
-    expect(await screen.findByText('KW 10')).toBeInTheDocument()
-    expect(screen.getByText('KW 11')).toBeInTheDocument()
+    // Bernd (main activity Fliesen, still open) works one of five days in KW 10, none in KW 11.
+    expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
+    expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()
 
     const thursday = screen.getByRole('button', { name: 'Familie Schulze, 2026-03-05' })
     expect(within(thursday).getAllByText('Anna').length).toBeGreaterThan(0)
