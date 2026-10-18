@@ -1015,64 +1015,70 @@ a:hover {
   cursor: pointer;
 }
 
-/* ---------- site page: two weeks of planning ---------- */
+/* ---------- site page: planning ---------- */
 
-.mini-grid {
-  display: grid;
-  grid-template-columns: 170px 1fr;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.mini-weeks {
+.mini-tasks {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 10px 0 8px;
 }
 
-.mini-week {
-  display: grid;
-  grid-template-columns: 44px repeat(5, minmax(96px, 1fr)) repeat(2, minmax(60px, 0.6fr));
-  min-width: 660px;
+.mini-tasks .task-box {
+  width: auto;
+  margin: 0;
+}
+
+/* About one week in view, one and a half when there is room; Saturday and Sunday as narrow strips. */
+.mini-scroll {
+  container-type: inline-size;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
 }
 
-.mini-week-label {
-  display: grid;
-  place-items: center;
-  background: var(--wego-teal-dark);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
+.mini-strip {
+  --weekend: 19px;
+  --day: max(96px, calc((100cqw - 2 * var(--weekend)) / 5));
+  display: flex;
+  width: max-content;
+}
+
+@container (min-width: 1150px) {
+  .mini-strip {
+    --day: calc((100cqw - 3 * var(--weekend)) / 7.5);
+  }
 }
 
 .mini-day {
   display: flex;
+  flex: none;
   flex-direction: column;
-  min-width: 0;
+  width: var(--day);
   border-left: 1px solid var(--border);
 }
 
 .mini-day.weekend {
+  width: var(--weekend);
   background: var(--surface-weekend);
 }
 
 .mini-day-head {
-  padding: 4px 6px;
+  padding: 3px 6px;
+  overflow: hidden;
   background: var(--wego-teal);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .mini-day-head.weekend {
+  padding: 3px 0;
   background: #3a8f97;
+  font-size: 0.6rem;
+  text-align: center;
 }
 
 .mini-day-head.today {
@@ -1084,6 +1090,29 @@ a:hover {
   opacity: 0.85;
 }
 
+.mini-week-mark {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.mini-day.weekend .mini-day-body {
+  padding: 1px;
+}
+
+/* On the narrow weekend only the colours of what is planned there. */
+.mini-day.weekend .chip {
+  min-height: 10px;
+  padding: 0;
+  border-left: 0;
+  background: var(--entry-strong);
+  font-size: 0;
+}
+
+.mini-day.weekend .mini-elsewhere {
+  border-top: 0;
+}
 .mini-day-body {
   display: flex;
   flex: 1;
@@ -1128,8 +1157,23 @@ a:hover {
   font-weight: 500;
 }
 
-@media (max-width: 720px) {
-  .mini-grid {
-    grid-template-columns: 1fr;
-  }
+
+/* The work at this site stands out from the work elsewhere. */
+.mini-here {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(57, 187, 207, 0.16);
+  box-shadow: inset 0 0 0 1.5px var(--wego-aqua);
+}
+
+.mini-here .chip {
+  font-weight: 700;
+}
+
+.mini-day.weekend .mini-here {
+  padding: 0;
+  box-shadow: none;
 }

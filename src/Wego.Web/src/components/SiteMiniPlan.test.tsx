@@ -57,33 +57,33 @@ describe('SiteMiniPlan', () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     // Without a filter: the first entry at this site (Abriss on 5 March), not the planned start in April.
-    expect(await screen.findByText('KW 10–11')).toBeInTheDocument()
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
     const legend = within(screen.getByRole('group', { name: /Ablauf/ }))
     // No Fliesen at this site yet: back to the planned start.
     await user.click(legend.getByRole('button', { name: 'Fliesenarbeiten' }))
-    expect(screen.getByText('KW 14–15')).toBeInTheDocument()
+    expect(screen.getByText('KW 14 · ab 30.03.')).toBeInTheDocument()
 
     // Abriss as well: its first entry decides.
     await user.click(legend.getByRole('button', { name: 'Abriss / Baubeginn' }))
-    expect(screen.getByText('KW 10–11')).toBeInTheDocument()
+    expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
   })
 
   it('moves by week and jumps to the next week planned to less than half', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10–11')).toBeInTheDocument()
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Woche vor' }))
-    expect(screen.getByText('KW 11–12')).toBeInTheDocument()
+    expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Baubeginn' }))
-    expect(screen.getByText('KW 14–15')).toBeInTheDocument()
+    expect(screen.getByText('KW 14 · ab 30.03.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Heute' }))
-    expect(screen.getByText('KW 10–11')).toBeInTheDocument()
+    expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
     // KW 10 itself is at 20 %, but the jump looks for the next week after the first one shown.
     await user.click(screen.getByRole('button', { name: /Nächste Woche unter 50 %/ }))
-    expect(screen.getByText('KW 11–12')).toBeInTheDocument()
+    expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
   })
 
   it('shows two calendar weeks from the planned start, the work here and elsewhere, and the open activities', async () => {

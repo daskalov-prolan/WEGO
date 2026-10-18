@@ -1,10 +1,10 @@
 import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Plan, PlanEmployee, Site } from '../api/types'
 import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
-import { addDays, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
+import { addDays, daysBetween, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
 import { toInput } from '../lib/ui'
 import { ActivityLegend } from './ActivityPicker'
 import { Chip } from './Chip'
@@ -32,27 +32,34 @@ function firstWeek(all: Entry[], activities: Set<Activity>, siteId: number, fall
 }
 
 /**
- * Planning on the page of a site: the two calendar weeks from the planned start, one column per day.
- * The days show the work at this site and, below it, where the employees are elsewhere. The activities
- * still to plan are boxes on the left; a click plans them with employees and day.
+ * Planning on the page of a site: the activities still to plan as boxes in a row, below them the days in one
+ * row that scrolls sideways (about a week in view, one and a half when there is room; weekends narrow).
+ * Each day shows the work at this site and, below it, where the employees are elsewhere.
  */
 export function SiteMiniPlan({ site, canEdit }: Props) {
   const today = todayIso()
   const buildStart = weekOf(site.plannedStart ?? today)[0].iso
-  // Monday of the first of the two weeks shown; moved with the arrows.
-  const [start, setStart] = useState(buildStart)
-  const weeks = [weekOf(start), weekOf(addDays(start, 7))]
-  const days = weeks.flat()
-  // The year shown and the next one: enough to find the next week with room.
-  const firstYear = Number(start.slice(0, 4))
-  const years = [firstYear, firstYear + 1]
+  // Monday of the first week in view, follows the scrolling.
+  const [visible, setVisible] = useState(buildStart)
+  const scroller = useRef<HTMLDivElement>(null)
+  // The days drawn; it grows by four weeks when one scrolls to its left or right end.
+  const [range, setRange] = useState({ from: addDays(buildStart, -14), to: addDays(buildStart, 41) })
+  // Width of the strip before it grew to the left: the scroll position is moved by what was added.
+  const grownLeft = useRef<number | null>(null)
+  // A week to bring to the left edge once it is drawn (first load, arrows, jumps) – not on every reload.
+  const scrollTarget = useRef<string | null>(buildStart)
+  const days = daysBetween(range.from, range.to)
+  // The years of the days drawn and the next one: enough to find the next week with room.
+  const firstYear = Number(range.from.slice(0, 4))
+  const lastYear = Number(range.to.slice(0, 4)) + 1
+  const years = Array.from({ length: lastYear - firstYear + 1 }, (_, index) => firstYear + index)
   const yearsKey = years.join(',')
 
   const [plans, setPlans] = useState<Plan[]>([])
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<Set<Activity>>(new Set())
   const [openDay, setOpenDay] = useState<string | null>(null)
-  // The first load decides where the two weeks start; later loads (after planning) keep the position.
+  // The first load decides where the days start; later loads (after planning, scrolling) keep the position.
   const positioned = useRef(false)
   const startFor = (all: Entry[], activities: Set<Activity>) => firstWeek(all, activities, site.id, buildStart)
 
@@ -63,7 +70,10 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         if (!positioned.current) {
           positioned.current = true
           // No filter is chosen yet on the first load; later the filter jumps by itself when it changes.
-          setStart(firstWeek(loaded.flatMap((plan) => plan.entries), new Set(), site.id, buildStart))
+          const first = firstWeek(loaded.flatMap((plan) => plan.entries), new Set(), site.id, buildStart)
+          setVisible(first)
+          scrollTarget.current = first
+          setRange({ from: addDays(first, -14), to: addDays(first, 41) })
         }
       },
       (e) => setError(messageOf(e)),
@@ -85,7 +95,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   // Work at this site and elsewhere, per day of the two weeks.
   const byDay = (() => {
     const map = new Map<string, { here: Entry[]; elsewhere: Entry[] }>()
-    for (let offset = 0; offset < 14; offset++) map.set(addDays(start, offset), { here: [], elsewhere: [] })
+    for (const day of days) map.set(day.iso, { here: [], elsewhere: [] })
     for (const entry of entries) {
       const slot = map.get(entry.date)
       if (!slot) continue
@@ -131,10 +141,10 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     return capacity === 0 ? 1 : taken / capacity
   }
 
-  /** The next week after the first one shown that is planned to less than half; within the loaded years. */
+  /** The next week after the first one in view that is planned to less than half; within the loaded years. */
   const nextWithRoom = (() => {
     const lastDay = `${years[years.length - 1]}-12-31`
-    for (let monday = addDays(start, 7); monday <= lastDay; monday = addDays(monday, 7)) {
+    for (let monday = addDays(visible, 7); monday <= lastDay; monday = addDays(monday, 7)) {
       const share = load(monday)
       if (share !== null && share < 0.5) return monday
     }
@@ -176,11 +186,63 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     await save(changes, `${what} am ${date.slice(8, 10)}.${date.slice(5, 7)}. eingeplant.`)
   }
 
+  const go = (monday: string) => {
+    setVisible(monday)
+    scrollTarget.current = monday
+    // A week outside of what is drawn: draw around it again.
+    if (monday < range.from || addDays(monday, 13) > range.to) setRange({ from: addDays(monday, -14), to: addDays(monday, 41) })
+  }
+
+  // Bring the chosen week to the left edge as soon as it is drawn.
+  useLayoutEffect(() => {
+    const target = scrollTarget.current
+    const column = target && document.getElementById(`mini-${target}`)
+    if (!scroller.current || !column || plans.length === 0) return
+    scroller.current.scrollTo?.({ left: column.offsetLeft - scroller.current.offsetLeft })
+    scrollTarget.current = null
+  })
+
+  // After growing to the left, keep the same days in view.
+  useLayoutEffect(() => {
+    const element = scroller.current
+    if (!element || grownLeft.current === null) return
+    element.scrollLeft += element.scrollWidth - grownLeft.current
+    grownLeft.current = null
+  }, [range.from])
+
+  const onScroll = () => {
+    const element = scroller.current
+    if (!element) return
+    const left = element.scrollLeft
+    // Near an end: four more weeks into the past or the future.
+    if (left < 150 && grownLeft.current === null) {
+      grownLeft.current = element.scrollWidth
+      setRange((current) => ({ ...current, from: addDays(current.from, -28) }))
+    } else if (left + element.clientWidth > element.scrollWidth - 150) {
+      setRange((current) => ({ ...current, to: addDays(current.to, 28) }))
+    }
+    const first = [...element.querySelectorAll<HTMLElement>('.mini-day')].find(
+      (column) => column.offsetLeft - element.offsetLeft + column.offsetWidth > left + 1,
+    )
+    const monday = first ? weekOf(first.id.slice(5))[0].iso : visible
+    if (monday !== visible) setVisible(monday)
+  }
+
   const isDimmed = (entry: Entry) => filter.size > 0 && !(entry.activity && filter.has(entry.activity))
 
   const dayHead = (day: Day) => (
     <div className={['mini-day-head', day.isWeekend ? 'weekend' : '', day.iso === today ? 'today' : ''].join(' ')}>
-      <span className="wd">{day.weekday}</span> {pad(day.dayOfMonth)}.{pad(day.month + 1)}.
+      {/* Mondays carry the calendar week and how full it is. */}
+      <span className="mini-week-mark" title="Auslastung der Mitarbeiter mit offener Haupttätigkeit">
+        {day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)} · ${percent(load(day.iso))}` : '\u00a0'}
+      </span>
+      <span className="wd">{day.weekday}</span>
+      {!day.isWeekend && (
+        <span className="num">
+          {' '}
+          {pad(day.dayOfMonth)}.{pad(day.month + 1)}.
+        </span>
+      )}
     </div>
   )
 
@@ -189,21 +251,21 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
       <Group justify="space-between" mb="xs" gap="xs">
         <Title order={4}>Planung</Title>
         <Group gap={6}>
-          <ActionIcon variant="default" onClick={() => setStart(addDays(start, -7))} aria-label="Woche zurück">
+          <ActionIcon variant="default" onClick={() => go(addDays(visible, -7))} aria-label="Woche zurück">
             ‹
           </ActionIcon>
           <Text size="sm" fw={700} c="wego.9">
-            KW {isoWeek(days[0].iso)}–{isoWeek(days[7].iso)}
+            KW {isoWeek(visible)} · ab {visible.slice(8, 10)}.{visible.slice(5, 7)}.
           </Text>
-          <ActionIcon variant="default" onClick={() => setStart(addDays(start, 7))} aria-label="Woche vor">
+          <ActionIcon variant="default" onClick={() => go(addDays(visible, 7))} aria-label="Woche vor">
             ›
           </ActionIcon>
           {site.plannedStart && (
-            <Button size="compact-sm" variant="default" onClick={() => setStart(buildStart)}>
+            <Button size="compact-sm" variant="default" onClick={() => go(buildStart)}>
               Baubeginn
             </Button>
           )}
-          <Button size="compact-sm" variant="default" onClick={() => setStart(weekOf(today)[0].iso)}>
+          <Button size="compact-sm" variant="default" onClick={() => go(weekOf(today)[0].iso)}>
             Heute
           </Button>
           <Tooltip
@@ -219,7 +281,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
               size="compact-sm"
               variant="light"
               disabled={!nextWithRoom}
-              onClick={() => nextWithRoom && setStart(nextWithRoom)}
+              onClick={() => nextWithRoom && go(nextWithRoom)}
             >
               Nächste Woche unter 50 % ›
             </Button>
@@ -230,7 +292,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         selected={filter}
         onChange={(next) => {
           setFilter(next)
-          setStart(startFor(entries, next))
+          go(startFor(entries, next))
         }}
       />
       {error && (
@@ -239,79 +301,75 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         </Alert>
       )}
 
-      <div className="mini-grid">
-        <div className="mini-tasks">
-          <Text size="xs" fw={700} c="dimmed" mb={4}>
-            Ungeplant
+      <div className="mini-tasks">
+        <Text size="xs" fw={700} c="dimmed">
+          Ungeplant:
+        </Text>
+        {openTasks.length === 0 && (
+          <Text size="xs" c="dimmed">
+            alles eingeplant
           </Text>
-          {openTasks.length === 0 && (
-            <Text size="xs" c="dimmed">
-              Alles eingeplant.
-            </Text>
-          )}
-          {openTasks.map((task) => (
-            <TaskBox
-              key={task.activity}
-              task={task}
-              employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(task.activity))}
-              defaultDate={days.find((day) => !day.isWeekend && day.iso >= today)?.iso ?? days[0].iso}
-              minDate={`${years[0]}-01-01`}
-              maxDate={`${years[years.length - 1]}-12-31`}
-              onPlan={canEdit ? (employeeIds, date) => plan(task.activity, employeeIds, date) : undefined}
-              onNotNeeded={
-                canEdit
-                  ? async () => {
-                      await api.updateSiteTask(site.id, task.activity, 1, true)
-                      notifications.show({ message: `${activityLabel(task.activity)}: nicht nötig.` })
-                      reload()
-                    }
-                  : undefined
-              }
-            />
-          ))}
-        </div>
+        )}
+        {openTasks.map((task) => (
+          <TaskBox
+            key={task.activity}
+            task={task}
+            employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(task.activity))}
+            defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
+            minDate={`${years[0]}-01-01`}
+            maxDate={`${years[years.length - 1]}-12-31`}
+            onPlan={canEdit ? (employeeIds, date) => plan(task.activity, employeeIds, date) : undefined}
+            onNotNeeded={
+              canEdit
+                ? async () => {
+                    await api.updateSiteTask(site.id, task.activity, 1, true)
+                    notifications.show({ message: `${activityLabel(task.activity)}: nicht nötig.` })
+                    reload()
+                  }
+                : undefined
+            }
+          />
+        ))}
+      </div>
 
-        <div className="mini-weeks">
-          {weeks.map((week) => (
-            <div className="mini-week" key={week[0].iso}>
-              <div className="mini-week-label" title="Auslastung der Mitarbeiter mit offener Haupttätigkeit">
-                KW {isoWeek(week[0].iso)} · {percent(load(week[0].iso))}
-              </div>
-              {week.map((day) => {
-                const slot = byDay.get(day.iso)!
-                return (
-                  <div key={day.iso} className={day.isWeekend ? 'mini-day weekend' : 'mini-day'}>
-                    {dayHead(day)}
-                    <button
-                      type="button"
-                      className="mini-day-body"
-                      aria-label={`${site.name}, ${day.iso}`}
-                      onClick={() => setOpenDay(day.iso)}
-                    >
+      <div className="mini-scroll" ref={scroller} onScroll={onScroll}>
+        <div className="mini-strip">
+          {days.map((day) => {
+            const slot = byDay.get(day.iso)!
+            return (
+              <div key={day.iso} id={`mini-${day.iso}`} className={day.isWeekend ? 'mini-day weekend' : 'mini-day'}>
+                {dayHead(day)}
+                <button
+                  type="button"
+                  className="mini-day-body"
+                  aria-label={`${site.name}, ${day.iso}`}
+                  onClick={() => setOpenDay(day.iso)}
+                >
+                  {slot.here.length > 0 && (
+                    <span className="mini-here">
                       {slot.here.map((entry) => (
                         <Chip key={entry.id} entry={entry} label={entry.employeeName} dimmed={isDimmed(entry)} />
                       ))}
-                      {slot.elsewhere.length > 0 && (
-                        <span className="mini-elsewhere">
-                          {slot.elsewhere.map((entry) => (
-                            <Chip
-                              key={entry.id}
-                              entry={entry}
-                              label={`${entry.employeeName}: ${entry.type === 'Baustelle' ? entry.siteName : entry.type}`}
-                              dimmed={isDimmed(entry)}
-                            />
-                          ))}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+                    </span>
+                  )}
+                  {slot.elsewhere.length > 0 && (
+                    <span className="mini-elsewhere">
+                      {slot.elsewhere.map((entry) => (
+                        <Chip
+                          key={entry.id}
+                          entry={entry}
+                          label={`${entry.employeeName}: ${entry.type === 'Baustelle' ? entry.siteName : entry.type}`}
+                          dimmed={isDimmed(entry)}
+                        />
+                      ))}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
-
       {openDay && (
         <SiteDayDialog
           site={site}
