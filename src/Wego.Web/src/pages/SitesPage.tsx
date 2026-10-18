@@ -2,20 +2,20 @@ import { Alert, Button, Group, SegmentedControl, Table, Text, TextInput, Title, 
 import { notifications } from '@mantine/notifications'
 import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Site } from '../api/types'
+import type { Entry, Site } from '../api/types'
+import { SiteActivities } from '../components/SiteActivities'
 import { SiteForm } from '../components/SiteForm'
 import { StatusBadge } from '../components/SiteStatus'
 import { isOpen } from '../lib/activities'
 import { formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
+import { openTasksBySite } from '../lib/tasks'
 
-type SortKey = 'name' | 'client' | 'plannedStart' | 'plannedEnd'
+type SortKey = 'name' | 'plannedStart'
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
-  { key: 'client', label: 'Auftraggeber' },
   { key: 'plannedStart', label: 'Geplanter Start' },
-  { key: 'plannedEnd', label: 'Geplantes Ende' },
 ]
 
 function compare(a: Site, b: Site, key: SortKey): number {
@@ -27,8 +27,8 @@ function compare(a: Site, b: Site, key: SortKey): number {
 }
 
 /**
- * Planner-only: all construction sites, sorted by planned start by default. Sorted by a date, the list
- * opens where the sites begin that start after today.
+ * Planner-only: all construction sites with their status and the activities still to plan, sorted by planned
+ * start by default; then the list opens where the sites begin that start after today.
  */
 export function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
@@ -42,6 +42,17 @@ export function SitesPage() {
   useEffect(() => {
     api.sites().then(setSites, (e) => setError(messageOf(e)))
   }, [])
+
+  // Which activities are planned already: the entries of last year, this year and the next one.
+  const [entries, setEntries] = useState<Entry[]>([])
+  useEffect(() => {
+    const year = Number(today.slice(0, 4))
+    Promise.all([year - 1, year, year + 1].map((one) => api.plan(one))).then(
+      (plans) => setEntries(plans.flatMap((plan) => plan.entries ?? [])),
+      (e) => setError(messageOf(e)),
+    )
+  }, [today])
+  const open = useMemo(() => openTasksBySite(sites, entries), [sites, entries])
 
   const needle = search.trim().toLowerCase()
   const rows = useMemo(() => {
@@ -58,9 +69,9 @@ export function SitesPage() {
     return [...withValue.reverse(), ...sorted.filter((site) => !site[sort.key])]
   }, [sites, needle, sort, show])
 
-  // Sorted by a date: jump to the first site whose planned start lies after today.
+  // Sorted by the planned start: jump to the first site whose planned start lies after today.
   const firstUpcoming =
-    sort.key === 'plannedStart' || sort.key === 'plannedEnd'
+    sort.key === 'plannedStart'
       ? rows.find((site) => site.plannedStart && site.plannedStart > today)
       : undefined
   useEffect(() => {
@@ -117,9 +128,8 @@ export function SitesPage() {
                   </UnstyledButton>
                 </Table.Th>
               ))}
-              <Table.Th>Label-Nr.</Table.Th>
-              <Table.Th>Adresse</Table.Th>
-              <Table.Th>Status</Table.Th>
+              <Table.Th w={120}>Status</Table.Th>
+              <Table.Th>Tätigkeiten</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -134,13 +144,12 @@ export function SitesPage() {
                   <Table.Td fw={600}>
                     <a href={`#/baustellen/${site.id}`}>{site.name}</a>
                   </Table.Td>
-                  <Table.Td>{site.client}</Table.Td>
                   <Table.Td>{site.plannedStart && formatDate(site.plannedStart)}</Table.Td>
-                  <Table.Td>{site.plannedEnd && formatDate(site.plannedEnd)}</Table.Td>
-                  <Table.Td>{site.labelProjectNumber}</Table.Td>
-                  <Table.Td>{formatAddress(site)}</Table.Td>
                   <Table.Td>
                     <StatusBadge status={site.status} />
+                  </Table.Td>
+                  <Table.Td>
+                    <SiteActivities site={site} open={open.get(site.id) ?? []} />
                   </Table.Td>
                 </Table.Tr>
               )

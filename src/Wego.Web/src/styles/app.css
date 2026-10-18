@@ -1106,6 +1106,18 @@ a:hover {
   box-shadow: 0 0 0 1.5px var(--entry-strong), 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
+/* The activities of a site in the list of sites: those still to plan stand out. */
+.site-activities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.flow-step.open {
+  font-weight: 700;
+  box-shadow: 0 0 0 1.5px var(--entry-strong);
+}
+
 /* Planned already: greyed, nothing to drag. */
 .flow-step.planned {
   opacity: 0.45;
