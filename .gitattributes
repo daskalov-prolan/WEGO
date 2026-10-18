@@ -1,0 +1,4 @@
+# Files that run or are read on Linux keep LF, also in a Windows checkout.
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/** text eol=lf
