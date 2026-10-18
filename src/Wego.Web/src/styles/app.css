@@ -297,25 +297,107 @@ a:hover {
   box-shadow: inset 0 0 0 2px var(--wego-aqua);
 }
 
-/* ---------- plan matrix: days from top to bottom, one column per employee ---------- */
+/* ---------- timeline: one row per employee, the days from left to right ---------- */
 
-.matrix {
-  --day-col: 96px;
-  --employee-min: 112px;
-  width: 100%;
-  /* The columns share the width, but never get narrower than --employee-min: then the table scrolls sideways. */
-  min-width: calc(var(--day-col) + var(--columns) * var(--employee-min));
+.plan-scroll {
+  container-type: inline-size;
+}
+
+.timeline {
+  --name-col: 150px;
+  --month-row: 26px;
+  /* Zoom: how wide a day is. Week and month fill the screen, but never get narrower than readable. */
+  --day-w: max(118px, calc((100cqw - var(--name-col)) / 7));
+  --weekend-w: var(--day-w);
+  width: calc(var(--name-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+  user-select: none;
 }
 
-.matrix .col-day {
-  width: var(--day-col);
+.timeline.zoom-month {
+  --day-w: max(44px, calc((100cqw - var(--name-col)) / 31));
 }
 
-.matrix th,
-.matrix td {
+.timeline.zoom-year {
+  --day-w: 20px;
+}
+
+.timeline .col-employee {
+  width: var(--name-col);
+}
+
+.timeline .col-day {
+  width: var(--day-w);
+}
+
+.timeline .col-weekend {
+  width: var(--weekend-w);
+}
+
+/* "Wochenenden ausblenden": Saturday and Sunday as strips of about half a centimetre. */
+.timeline.fold-weekends {
+  --weekend-w: 19px;
+}
+
+.timeline.fold-weekends .day-row th.weekend {
+  padding: 4px 0;
+  font-size: 0.6rem;
+}
+
+.timeline.fold-weekends .day-row th.weekend .num,
+.timeline.fold-weekends td.weekend .cell-full,
+.timeline.fold-weekends td.weekend .compact-name,
+.timeline.fold-weekends td.weekend .compact-more,
+.timeline.fold-weekends td.weekend .note-icon {
+  display: none;
+}
+
+/* What is planned on a folded weekend still shows as a block of colour. */
+.timeline.fold-weekends td.weekend .cell {
+  padding: 1px;
+}
+
+.timeline.fold-weekends td.weekend .cell-compact {
+  display: block;
+  height: 100%;
+  min-height: 26px;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0;
+}
+
+.timeline .cell {
+  position: relative;
+}
+
+.note-icon {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 13px;
+  height: 13px;
+  color: var(--wego-teal-dark);
+  pointer-events: none;
+}
+
+.timeline.zoom-year .note-icon {
+  display: none;
+}
+
+/* Room for the note sign, so that it does not cover the site name. */
+.timeline .cell.has-note .cell-full,
+.timeline .cell.has-note .cell-compact {
+  margin-right: 12px;
+}
+
+.timeline.zoom-year .cell-compact {
+  margin-right: 0;
+}
+
+.timeline th,
+.timeline td {
   padding: 0;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -323,102 +405,112 @@ a:hover {
   vertical-align: top;
 }
 
-.matrix thead th {
+/* Month names and days stay at the top, the employees on the left. */
+.timeline thead th {
   position: sticky;
-  top: 0;
   z-index: 3;
-  padding: 8px;
-  overflow: hidden;
   background: var(--wego-teal);
   color: #fff;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.matrix thead th a {
-  color: inherit;
-}
-
-.matrix thead th.corner {
-  left: 0;
-  z-index: 4;
-}
-
-.matrix th.day {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  padding: 6px 8px;
-  background: var(--surface);
   font-weight: 400;
   white-space: nowrap;
 }
 
-.matrix th.day .wd {
+.timeline .month-row th {
+  top: 0;
+  height: var(--month-row);
+  padding: 0 8px;
+  background: var(--wego-teal-dark);
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* The month name moves along while its days scroll by. */
+.timeline .month-row th.month span {
+  position: sticky;
+  left: calc(var(--name-col) + 8px);
+}
+
+.timeline .day-row th {
+  top: var(--month-row);
+  padding: 4px 6px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.timeline .day-row .wd {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.timeline .day-row .num {
+  display: block;
   font-weight: 700;
 }
 
-.matrix th.day .holiday-name {
-  display: block;
+.timeline th.corner {
+  top: 0;
+  left: 0;
+  z-index: 5;
+  padding: 8px;
+  background: var(--wego-teal-dark);
+  vertical-align: bottom;
+}
+
+.timeline th.employee {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  padding: 8px 8px 8px 12px;
   overflow: hidden;
-  color: #1f6b2a;
-  font-size: 0.7rem;
+  background: var(--surface);
+  color: var(--wego-teal-dark);
+  font-weight: 700;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.matrix tr.weekend th.day,
-.matrix tr.weekend td {
-  background: var(--surface-weekend);
+.timeline th.employee a {
+  color: inherit;
 }
 
-.matrix tr.holiday th.day {
-  background: #d3f0d6;
+.timeline .day-row th.weekend {
+  background: #3a8f97;
 }
 
-.matrix tr.public-holiday th.day {
-  background: #5cc46a;
+.timeline .day-row th.holiday {
+  background: #8fd29a;
   color: #0b3412;
 }
 
-.matrix tr.public-holiday td {
-  background: #e3f5e5;
+.timeline .day-row th.public-holiday {
+  background: #2e9e3e;
 }
 
-.matrix tr.today th.day {
+.timeline .day-row th.today {
   background: var(--wego-aqua);
   color: #fff;
 }
 
-.matrix tr.today th.day .holiday-name {
-  color: #fff;
+.timeline td.weekend {
+  background: var(--surface-weekend);
 }
 
-.matrix tr.today td {
-  background: rgba(57, 187, 207, 0.1);
+.timeline td.holiday {
+  background: #eef9ef;
 }
 
-/* An empty weekend in the week view: only a thin line. */
-.matrix tr.folded th.day {
-  padding: 1px 8px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
+.timeline td.public-holiday {
+  background: #d3f0d6;
 }
 
-.matrix tr.month-row th {
-  position: sticky;
-  left: 0;
-  padding: 6px 8px;
-  background: var(--wego-teal-dark);
-  color: #fff;
-  scroll-margin-top: 40px;
+.timeline td.today {
+  background: rgba(57, 187, 207, 0.12);
 }
 
-.matrix tr {
-  scroll-margin-top: 40px;
-}
-
-.matrix .cell {
-  min-height: 44px;
+.timeline .cell {
+  min-height: 60px;
   padding: 4px;
 }
 
@@ -428,7 +520,7 @@ a:hover {
   gap: 3px;
 }
 
-/* The short form of a cell, used when the plan has little room (see the container query below). */
+/* The short form of a cell: site name in the colour of the activity. */
 .cell-compact {
   display: none;
   align-items: center;
@@ -454,41 +546,76 @@ a:hover {
   flex: none;
   font-weight: 700;
 }
-/* Little room for the plan (phone, or half a browser window): short cells, narrow columns. */
-@container plan (max-width: 760px) {
-  .matrix {
-    --day-col: 58px;
-    --employee-min: 66px;
+
+/* Month: site names only. */
+.timeline.zoom-month .cell-full {
+  display: none;
+}
+
+.timeline.zoom-month .cell-compact {
+  display: flex;
+}
+
+.timeline.zoom-month .cell {
+  justify-content: center;
+  min-height: 44px;
+  padding: 3px 2px;
+}
+
+/* Year: only the colour of the activity. */
+.timeline.zoom-year .cell-full,
+.timeline.zoom-year .compact-name,
+.timeline.zoom-year .compact-more,
+.timeline.zoom-year .day-row .wd {
+  display: none;
+}
+
+.timeline.zoom-year .cell-compact {
+  display: block;
+  height: 100%;
+  min-height: 26px;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0;
+}
+
+.timeline.zoom-year .cell {
+  min-height: 28px;
+  padding: 1px;
+}
+
+.timeline.zoom-year .day-row th {
+  padding: 4px 0;
+  font-size: 0.68rem;
+}
+
+/* Little room (phone, half a browser window): narrow name column, short cells also in the week. */
+@container (max-width: 760px) {
+  .timeline {
+    --name-col: 86px;
+    --day-w: max(70px, calc((100cqw - var(--name-col)) / 7));
   }
 
-  .matrix thead th {
-    padding: 6px 3px;
-    font-size: 0.78rem;
-    text-align: center;
+  .timeline.zoom-month {
+    --day-w: 40px;
   }
 
-  .matrix th.day {
-    padding: 4px 5px;
-    font-size: 0.78rem;
+  .timeline th.employee {
+    padding: 6px 4px 6px 9px;
+    font-size: 0.82rem;
   }
 
-  .matrix th.day .num {
-    display: block;
-    font-size: 0.72rem;
-  }
-
-  .matrix th.day .holiday-name,
-  .matrix .cell-full {
+  .timeline.zoom-week .cell-full {
     display: none;
   }
 
-  .matrix .cell-compact {
+  .timeline.zoom-week .cell-compact {
     display: flex;
   }
 
-  .matrix .cell {
+  .timeline.zoom-week .cell {
     justify-content: center;
-    min-height: 40px;
+    min-height: 46px;
     padding: 3px 2px;
   }
 }

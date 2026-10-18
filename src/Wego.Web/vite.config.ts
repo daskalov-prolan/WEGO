@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
+    // The plan renders a whole year of cells, which jsdom takes its time with.
+    testTimeout: 20000,
   },
 })

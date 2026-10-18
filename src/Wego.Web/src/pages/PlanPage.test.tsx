@@ -23,7 +23,7 @@ const plan: Plan = {
     entry(1, 1, '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
     entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
     entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
-    entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null),
+    { ...entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null), note: 'mit 2 Helfern' },
   ],
 }
 
@@ -60,7 +60,7 @@ afterEach(() => {
 const cell = (label: RegExp) => screen.getByRole('button', { name: label })
 
 describe('PlanPage', () => {
-  it('starts with the current week: days in rows, employees in columns, a split day with its time windows', async () => {
+  it('starts with the current week: employees in rows, days from left to right, a split day with its time windows', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
 
     expect(await screen.findByText('KW 10 · 02.03.–08.03.2026')).toBeInTheDocument()
@@ -70,10 +70,8 @@ describe('PlanPage', () => {
     // The short form for narrow screens names the first site and counts the rest.
     expect(within(monday).getByText('+1')).toBeInTheDocument()
 
-    const header = screen.getAllByRole('columnheader').map((th) => th.textContent)
-    expect(header).toEqual(['Tag', 'Anna', 'Bernd'])
-    const firstRow = screen.getAllByRole('row')[1]
-    expect(within(firstRow).getByRole('rowheader')).toHaveTextContent('Mo 02.03.')
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd'])
+    expect(document.getElementById('col-2026-03-02')).toHaveTextContent('Mo02.03.')
   })
 
   it('moves by week and by month', async () => {
@@ -85,12 +83,32 @@ describe('PlanPage', () => {
     expect(within(cell(/Bernd, Donnerstag, 12.03.2026/)).getAllByText('Familie Schulze')).not.toHaveLength(0)
 
     await userEvent.click(screen.getByRole('radio', { name: 'Monat' }))
-    expect(screen.getByText('März 2026')).toBeInTheDocument()
-    expect(within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')).not.toHaveLength(0)
+    expect(screen.getAllByText('März 2026').length).toBeGreaterThan(0)
 
     await userEvent.click(screen.getByRole('button', { name: 'Zurück' }))
-    expect(screen.getByText('Februar 2026')).toBeInTheDocument()
-    expect(screen.getAllByTitle('Winterferien').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Februar 2026').length).toBeGreaterThan(0)
+    expect(document.getElementById('col-2026-02-03')).toHaveAttribute('title', expect.stringContaining('Winterferien'))
+  })
+
+  it('folds weekends to narrow strips unless switched off', async () => {
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+    const table = () => document.querySelector('table.timeline')!
+
+    expect(table()).toHaveClass('fold-weekends')
+    await userEvent.click(screen.getByRole('switch', { name: 'Wochenenden ausblenden' }))
+    expect(table()).not.toHaveClass('fold-weekends')
+    expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
+  })
+
+  it('marks a cell with a note', async () => {
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+
+    const withNote = cell(/Bernd, Donnerstag, 12.03.2026/)
+    expect(within(withNote).getByRole('img', { name: 'mit Notiz' })).toBeInTheDocument()
+    expect(withNote).toHaveAttribute('title', expect.stringContaining('Notiz: mit 2 Helfern'))
+    expect(within(cell(/Anna, Montag, 02.03.2026/)).queryByRole('img', { name: 'mit Notiz' })).not.toBeInTheDocument()
   })
 
   it('dims everything but the filtered customer', async () => {
@@ -105,17 +123,16 @@ describe('PlanPage', () => {
     expect(screen.getByText(/2 Tage mit Einsätzen in 2026/)).toBeInTheDocument()
   })
 
-  it('shows the year as in the Excel sheet', async () => {
+  it('zooms out to the whole year and marks holidays', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
     await userEvent.click(screen.getByRole('radio', { name: 'Jahr' }))
 
-    const row = document.getElementById('d-2026-03-02')!
-    expect(within(row).getAllByText('Familie Schulze')).not.toHaveLength(0)
-    expect(screen.getAllByText('Winterferien')).toHaveLength(6)
-    expect(document.getElementById('d-2026-03-08')).toHaveClass('public-holiday')
-    expect(document.getElementById('d-2026-02-03')).toHaveClass('holiday')
+    expect(document.querySelector('table.timeline')).toHaveClass('zoom-year')
+    expect(cell(/Anna, Montag, 02.03.2026/)).toHaveAttribute('title', 'Familie Schulze / Familie Meier')
+    expect(document.getElementById('col-2026-03-08')).toHaveClass('public-holiday')
+    expect(document.getElementById('col-2026-02-03')).toHaveClass('holiday')
   })
 
   it('opens a read-only day for employees and the editor for planners', async () => {
@@ -173,7 +190,7 @@ describe('PlanPage', () => {
       expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
       expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
     ])
-    expect(await screen.findByRole('button', { name: 'Rückgängig' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
   })
 })

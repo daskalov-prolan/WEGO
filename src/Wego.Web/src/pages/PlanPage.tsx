@@ -6,6 +6,7 @@ import {
   Menu,
   Paper,
   SegmentedControl,
+  Switch,
   Text,
   TextInput,
   Tooltip,
@@ -13,7 +14,7 @@ import {
 import { DatePickerInput } from '@mantine/dates'
 import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Customer, DayEntryInput, Entry, Plan, PlanEmployee } from '../api/types'
 import { ActivityLegend } from '../components/ActivityPicker'
@@ -21,14 +22,13 @@ import { AssignSite } from '../components/AssignSite'
 import { allowedActivities } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { DayMatrix } from '../components/PlanMatrix'
+import { TimelineMatrix } from '../components/PlanMatrix'
 import {
   addDays,
   addMonths,
   daysOfYear,
   isoWeek,
   MONTHS,
-  monthOf,
   todayIso,
   weekOf,
 } from '../lib/dates'
@@ -44,6 +44,15 @@ type View = 'week' | 'month' | 'year'
 type DayChange = { employeeId: number; date: string; entries: DayEntryInput[] }
 
 const HIDDEN_KEY = 'wego.plan.hiddenEmployees'
+const WEEKENDS_KEY = 'wego.plan.showWeekends'
+
+function loadFoldWeekends(): boolean {
+  try {
+    return localStorage.getItem(WEEKENDS_KEY) !== 'true'
+  } catch {
+    return true
+  }
+}
 
 function loadHidden(): number[] {
   try {
@@ -60,9 +69,9 @@ const parseKey = (key: string) => {
 }
 
 /**
- * The plan of everybody. The week is the working unit: employees in rows, weekdays in columns, which
- * fits from phone to desktop. Month and year are overviews; the year grid (as in the Excel sheet)
- * is offered on wide screens only. Planners select cells to fill many days at once.
+ * The plan of everybody as a timeline: one row per employee, the days of the year from left to right,
+ * scrolled freely while the employees stay in view. Woche, Monat and Jahr are zoom levels.
+ * Planners select cells to fill many days at once.
  */
 export function PlanPage({ year, canEdit }: Props) {
   const first = `${year}-01-01`
@@ -73,7 +82,15 @@ export function PlanPage({ year, canEdit }: Props) {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState('')
   const [chosenView, setChosenView] = useState<View>('week')
-  const [anchor, setAnchor] = useState(today >= first && today <= last ? today : first)
+  // The days that are currently in view; follows the scrolling.
+  const start = weekOf(today >= first && today <= last ? today : first)[0].iso
+  const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 6) })
+  const anchor = visible.from
+  const scroller = useRef<HTMLDivElement>(null)
+  const notificationCount = useRef(0)
+  // A scroll that has to wait until the table is drawn (first load, other zoom, weekends shown or folded).
+  const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: anchor, smooth: false })
+  const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
   const [open, setOpen] = useState<{ employee: PlanEmployee; date: string } | null>(null)
@@ -135,10 +152,69 @@ export function PlanPage({ year, canEdit }: Props) {
 
   const view = chosenView
   const inYear = (iso: string) => iso >= first && iso <= last
-  const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
-  const step = (direction: 1 | -1) =>
-    go(view === 'month' ? addMonths(anchor, direction) : addDays(anchor, 7 * direction))
+  const clamp = (iso: string) => (iso < first ? first : iso > last ? last : iso)
 
+  const nameWidth = () => scroller.current?.querySelector<HTMLElement>('th.corner')?.offsetWidth ?? 0
+
+  /** The days between the employee names and the right edge, read from the drawn columns. */
+  const readVisible = () => {
+    const element = scroller.current
+    if (!element) return null
+    const left = element.scrollLeft + nameWidth()
+    const right = element.scrollLeft + element.clientWidth
+    let from: string | null = null
+    let to: string | null = null
+    for (const column of element.querySelectorAll<HTMLElement>('th.dayhead')) {
+      if (column.offsetWidth === 0) return null
+      const iso = column.id.slice(4)
+      if (!from && column.offsetLeft + column.offsetWidth > left + 1) from = iso
+      if (column.offsetLeft < right) to = iso
+    }
+    return from && to ? { from, to } : null
+  }
+
+  const scrollNow = (iso: string, smooth: boolean) => {
+    const column = document.getElementById(`col-${iso}`)
+    if (!scroller.current || !column) return false
+    scroller.current.scrollTo?.({ left: column.offsetLeft - nameWidth(), behavior: smooth ? 'smooth' : 'auto' })
+    return true
+  }
+
+  /** Scrolls so that the given day is the first one next to the employee names. */
+  const scrollToDate = (iso: string, smooth = false) => {
+    const from = clamp(iso)
+    setVisible({ from, to: clamp(addDays(from, view === 'week' ? 6 : 30)) })
+    if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
+  }
+
+  const onScroll = () => {
+    const next = readVisible()
+    if (next && (next.from !== visible.from || next.to !== visible.to)) setVisible(next)
+  }
+
+  // Runs after every drawing of the table: carries out a scroll that had to wait for it.
+  useLayoutEffect(() => {
+    const pending = pendingScroll.current
+    if (pending && scrollNow(pending.iso, pending.smooth)) pendingScroll.current = null
+  })
+
+  const changeZoom = (next: View) => {
+    pendingScroll.current = { iso: anchor, smooth: false }
+    setChosenView(next)
+  }
+
+  const toggleWeekends = (fold: boolean) => {
+    pendingScroll.current = { iso: anchor, smooth: false }
+    setFoldWeekends(fold)
+    try {
+      localStorage.setItem(WEEKENDS_KEY, String(!fold))
+    } catch {
+      // Without storage the choice lasts until the page is reloaded.
+    }
+  }
+
+  const step = (direction: 1 | -1) =>
+    scrollToDate(view === 'week' ? addDays(weekOf(anchor)[0].iso, 7 * direction) : addMonths(anchor, direction), true)
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
 
@@ -185,7 +261,7 @@ export function PlanPage({ year, canEdit }: Props) {
     }))
     merge(changes, await api.saveDays(changes))
 
-    const id = `saved-${Date.now()}`
+    const id = `saved-${++notificationCount.current}`
     notifications.show({
       id,
       autoClose: 7000,
@@ -245,20 +321,18 @@ export function PlanPage({ year, canEdit }: Props) {
     }
     try {
       await save(changes, `${changes.length} Tage in die nächste Woche übernommen.`)
-      go(addDays(anchor, 7))
+      scrollToDate(addDays(weekOf(anchor)[0].iso, 7), true)
     } catch (e) {
       notifications.show({ color: 'red', message: messageOf(e) })
     }
   }
 
-  const week = weekOf(anchor).filter((day) => inYear(day.iso))
   const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
+  const middle = addDays(visible.from, Math.floor((Date.parse(visible.to) - Date.parse(visible.from)) / 172800000))
   const title =
     view === 'week'
-      ? `KW ${isoWeek(anchor)} · ${short(week[0].iso)}–${short(week[week.length - 1].iso)}${year}`
-      : view === 'month'
-        ? `${MONTHS[Number(anchor.slice(5, 7)) - 1]} ${year}`
-        : `${year}`
+      ? `KW ${isoWeek(visible.from)} · ${short(visible.from)}–${short(visible.to)}${year}`
+      : `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
 
   const filteredCustomer = plan.customers.find((customer) => customer.name.toLowerCase() === needle)
   const shared = {
@@ -282,30 +356,25 @@ export function PlanPage({ year, canEdit }: Props) {
         <Group gap="xs" wrap="wrap">
           <SegmentedControl
             value={view}
-            onChange={(value) => setChosenView(value as View)}
+            onChange={(value) => changeZoom(value as View)}
             data={[
               { value: 'week', label: 'Woche' },
               { value: 'month', label: 'Monat' },
               { value: 'year', label: 'Jahr' },
             ]}
           />
-          {view !== 'year' && (
-            <Group gap={4}>
-              <ActionIcon variant="default" size="lg" onClick={() => step(-1)} aria-label="Zurück">
-                ‹
-              </ActionIcon>
-              <ActionIcon variant="default" size="lg" onClick={() => step(1)} aria-label="Weiter">
-                ›
-              </ActionIcon>
-            </Group>
-          )}
+          <Group gap={4}>
+            <ActionIcon variant="default" size="lg" onClick={() => step(-1)} aria-label="Zurück">
+              ‹
+            </ActionIcon>
+            <ActionIcon variant="default" size="lg" onClick={() => step(1)} aria-label="Weiter">
+              ›
+            </ActionIcon>
+          </Group>
           {inYear(today) && (
             <Button
               variant="default"
-              onClick={() => {
-                setAnchor(today)
-                if (view === 'year') document.getElementById(`d-${today}`)?.scrollIntoView({ block: 'start' })
-              }}
+              onClick={() => scrollToDate(view === 'week' ? weekOf(today)[0].iso : addDays(today, -3), true)}
             >
               Heute
             </Button>
@@ -324,17 +393,21 @@ export function PlanPage({ year, canEdit }: Props) {
             type="search"
             aria-label="Nach Baustelle (Kunde) filtern"
           />
-          {view !== 'year' && (
-            <DatePickerInput
-              value={anchor}
-              onChange={(value) => value && go(value)}
-              minDate={first}
-              maxDate={last}
-              valueFormat="DD.MM.YYYY"
-              aria-label="Datum"
-              w={130}
-            />
-          )}
+          <DatePickerInput
+            value={anchor}
+            onChange={(value) => value && scrollToDate(value, true)}
+            minDate={first}
+            maxDate={last}
+            valueFormat="DD.MM.YYYY"
+            aria-label="Datum"
+            w={130}
+          />
+
+          <Switch
+            label="Wochenenden ausblenden"
+            checked={foldWeekends}
+            onChange={(event) => toggleWeekends(event.currentTarget.checked)}
+          />
 
           <Menu closeOnItemClick={false} position="bottom-start" withinPortal>
             <Menu.Target>
@@ -390,7 +463,7 @@ export function PlanPage({ year, canEdit }: Props) {
         )}
       </div>
 
-      <div className="plan-scroll">
+      <div className="plan-scroll" ref={scroller} onScroll={onScroll}>
         {plan.employees.length === 0 ? (
           <p className="page">
             Noch keine Mitarbeiter angelegt.
@@ -401,17 +474,8 @@ export function PlanPage({ year, canEdit }: Props) {
               </>
             )}
           </p>
-        ) : view === 'week' ? (
-          <DayMatrix days={week} foldEmptyWeekends {...shared} />
-        ) : view === 'month' ? (
-          <DayMatrix days={monthOf(anchor)} {...shared} />
         ) : (
-          // In the whole year a filter is only useful if it removes the days without a match.
-          <DayMatrix
-            days={matchingDates ? yearDays.filter((day) => matchingDates.has(day.iso)) : yearDays}
-            monthHeadings
-            {...shared}
-          />
+          <TimelineMatrix days={yearDays} zoom={view} foldWeekends={foldWeekends} {...shared} />
         )}
       </div>
 
