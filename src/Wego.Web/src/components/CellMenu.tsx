@@ -1,5 +1,6 @@
 import { Paper } from '@mantine/core'
 import { useEffect, useRef } from 'react'
+import { clipMenuItems } from '../lib/clipboard'
 
 export interface CellMenuItem {
   label: string
@@ -54,4 +55,14 @@ export function CellMenu({ x, y, items, onClose }: { x: number; y: number; items
       ))}
     </Paper>
   )
+}
+
+/** The right-click menu of a cell in a plan view: copy, cut and paste with the shared clipboard. */
+export function ClipMenu({
+  x,
+  y,
+  onClose,
+  ...options
+}: { x: number; y: number; onClose: () => void } & Parameters<typeof clipMenuItems>[0]) {
+  return <CellMenu x={x} y={y} onClose={onClose} items={clipMenuItems(options)} />
 }

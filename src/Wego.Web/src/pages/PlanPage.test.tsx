@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
+import { setClip } from '../lib/clipboard'
 
 const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const, tasks: [], labelProjectNumber: null }
 
@@ -54,6 +55,8 @@ function entry(id: number, employeeId: number, date: string, siteId: number, sit
 let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+  // The clipboard is shared by all plan views: empty for each test.
+  setClip(null)
   localStorage.clear()
   sessionStorage.clear()
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-03-02T09:00:00') })
@@ -604,10 +607,13 @@ describe('PlanPage', () => {
       await user.click(items.getByRole('menuitem', { name: 'Einfügen' }))
       await waitFor(() => expect(batch()).not.toBeNull())
       // Bernd gets Meier; Anna keeps Schulze.
-      expect(batch()).toEqual([
-        { employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] },
-        { employeeId: 1, date: '2026-03-02', entries: [expect.objectContaining({ siteId: 10 })] },
-      ])
+      expect(batch()).toEqual(
+        expect.arrayContaining([
+          { employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] },
+          { employeeId: 1, date: '2026-03-02', entries: [expect.objectContaining({ siteId: 10 })] },
+        ]),
+      )
+      expect(batch()).toHaveLength(2)
     })
 
     it('cuts a cell and pastes it into all selected cells, emptying the source', async () => {

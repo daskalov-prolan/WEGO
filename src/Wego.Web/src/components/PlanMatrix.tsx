@@ -513,6 +513,8 @@ interface SiteTimelineProps {
   onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
   /** Planners: entries and open activities can be dragged onto a cell of a site and a day. */
   dropOn?: (site: Site, date: string) => DropHandlers
+  /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
+  onCellMenu?: (site: Site, date: string, at: { x: number; y: number; entryId?: number }) => void
 }
 
 /**
@@ -569,6 +571,12 @@ export function SiteTimeline(props: SiteTimelineProps) {
                   aria-label={`${site.name}, ${formatDateLong(day.iso)}`}
                   title={cellTitle(entries, (entry) => entryTitle({ ...entry, siteName: entry.employeeName }))}
                   onClick={() => onOpenCell(site, day.iso)}
+                  onContextMenu={(event) => {
+                    if (!props.onCellMenu) return
+                    event.preventDefault()
+                    const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+                    props.onCellMenu(site, day.iso, { x: event.clientX, y: event.clientY, entryId: chip ? Number(chip.dataset.entryId) : undefined })
+                  }}
                 >
                   <span className="cell-full">
                     {entries.map((entry) => (
