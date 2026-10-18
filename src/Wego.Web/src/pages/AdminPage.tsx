@@ -1,6 +1,5 @@
 import {
   Alert,
-  Anchor,
   Badge,
   Button,
   Checkbox,
@@ -25,13 +24,13 @@ import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Access, Activity, Customer, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
+import type { Access, Activity, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
 import { ActivitySelect } from '../components/ActivityPicker'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
 
-/** Planner-only: employees and their rights, school holidays, construction sites. */
+/** Planner-only: employees and their rights, school and public holidays. Sites have their own page. */
 export function AdminPage({ year }: { year: number }) {
   return (
     <div className="page">
@@ -41,14 +40,10 @@ export function AdminPage({ year }: { year: number }) {
       <Tabs defaultValue="employees" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
-          <Tabs.Tab value="sites">Baustellen</Tabs.Tab>
           <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
           <EmployeesSection year={year} />
-        </Tabs.Panel>
-        <Tabs.Panel value="sites">
-          <CustomersSection />
         </Tabs.Panel>
         <Tabs.Panel value="holidays">
           <SchoolHolidaysSection year={year} />
@@ -580,139 +575,6 @@ function SchoolHolidaysSection({ year }: { year: number }) {
           </Button>
         </Group>
       </Paper>
-    </Stack>
-  )
-}
-
-function CustomersSection() {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [editing, setEditing] = useState<Customer | null>(null)
-  const [search, setSearch] = useState('')
-  const [error, setError] = useState('')
-  const [formError, setFormError] = useState('')
-
-  const load = useCallback(() => {
-    api.customers().then(setCustomers, (e) => setError(messageOf(e)))
-  }, [])
-  useEffect(load, [load])
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!editing) return
-    try {
-      await api.updateCustomer(editing.id, {
-        name: editing.name,
-        location: editing.location,
-        description: editing.description,
-      })
-      setEditing(null)
-      setFormError('')
-      notifications.show({ message: 'Baustelle gespeichert.', color: 'green' })
-      load()
-    } catch (e) {
-      setFormError(messageOf(e))
-    }
-  }
-
-  const needle = search.trim().toLowerCase()
-  const visible = needle ? customers.filter((customer) => customer.name.toLowerCase().includes(needle)) : customers
-
-  return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        Baustellen entstehen beim Eintragen im Gesamtplan. Ort und Beschreibung sehen die Handwerker in „Mein
-        Plan“. Wer einer Baustelle den Namen einer anderen gibt, führt beide zusammen – so lassen sich
-        Schreibvarianten bereinigen.
-      </Text>
-
-      <Group gap="sm" align="flex-end">
-        <TextInput
-          label="Suchen"
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          placeholder="Kundenname"
-        />
-        <Text size="sm" c="dimmed">
-          {visible.length} von {customers.length} Baustellen
-        </Text>
-      </Group>
-
-      {error && (
-        <Alert color="red" variant="light">
-          {error}
-        </Alert>
-      )}
-
-      <Table.ScrollContainer minWidth={620}>
-        <Table striped highlightOnHover withTableBorder>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Kunde</Table.Th>
-              <Table.Th>Ort / Adresse</Table.Th>
-              <Table.Th>Beschreibung</Table.Th>
-              <Table.Th />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {visible.map((customer) => (
-              <Table.Tr key={customer.id}>
-                <Table.Td>
-                  <Anchor href={`#/baustellen/${customer.id}`}>{customer.name}</Anchor>
-                </Table.Td>
-                <Table.Td>{customer.location}</Table.Td>
-                <Table.Td>{customer.description}</Table.Td>
-                <Table.Td ta="right">
-                  <Button size="compact-sm" variant="default" onClick={() => setEditing(customer)}>
-                    Bearbeiten
-                  </Button>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-
-      {editing && (
-        <Sheet onClose={() => setEditing(null)} title={<Text fw={700}>Baustelle bearbeiten</Text>}>
-          <form onSubmit={submit}>
-            <Stack gap="sm">
-              <TextInput
-                label="Kunde"
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.currentTarget.value })}
-                required
-                maxLength={200}
-              />
-              <TextInput
-                label="Ort / Adresse"
-                placeholder="z. B. Musterstraße 5, 13125 Berlin"
-                value={editing.location ?? ''}
-                onChange={(e) => setEditing({ ...editing, location: e.currentTarget.value || null })}
-                maxLength={200}
-              />
-              <TextInput
-                label="Beschreibung"
-                description="Art des Umbaus, Fliesen, Hinweise"
-                value={editing.description ?? ''}
-                onChange={(e) => setEditing({ ...editing, description: e.currentTarget.value || null })}
-                maxLength={1000}
-              />
-              {formError && (
-                <Alert color="red" variant="light">
-                  {formError}
-                </Alert>
-              )}
-              <Group justify="flex-end">
-                <Button variant="default" onClick={() => setEditing(null)}>
-                  Abbrechen
-                </Button>
-                <Button type="submit">Speichern</Button>
-              </Group>
-            </Stack>
-          </form>
-        </Sheet>
-      )}
     </Stack>
   )
 }

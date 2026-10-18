@@ -1,6 +1,5 @@
 import {
   Alert,
-  Autocomplete,
   Button,
   CloseButton,
   Group,
@@ -12,17 +11,19 @@ import {
 } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee } from '../api/types'
+import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
 import { allowedActivities } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
+import { SitePicker } from './SitePicker'
 
 interface Props {
   employee: PlanEmployee
   date: string
   entries: Entry[]
-  customerNames: string[]
+  sites: Site[]
+  onCreateSite: (input: SiteInput) => Promise<Site>
   /** Sites of the weeks around this day, offered as one-tap buttons. */
   recentSites: NamedItem[]
   onClose: () => void
@@ -33,16 +34,16 @@ interface Props {
 
 interface Row {
   type: EntryType
-  customerName: string
+  siteId: number | null
   activity: Activity | null
   start: string
   end: string
   note: string
 }
 
-const emptyRow = (type: EntryType, customerName = '', activity: Activity | null = null): Row => ({
+const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activity | null = null): Row => ({
   type,
-  customerName,
+  siteId,
   activity: type === 'Baustelle' ? activity : null,
   start: '',
   end: '',
@@ -52,7 +53,7 @@ const emptyRow = (type: EntryType, customerName = '', activity: Activity | null 
 function toInputs(rows: Row[]): DayEntryInput[] {
   return rows.map((row) => ({
     type: row.type,
-    customerName: row.type === 'Baustelle' ? row.customerName.trim() : null,
+    siteId: row.type === 'Baustelle' ? row.siteId : null,
     activity: row.type === 'Baustelle' ? row.activity : null,
     startTime: row.start ? `${row.start}:00` : null,
     endTime: row.end ? `${row.end}:00` : null,
@@ -61,16 +62,16 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 }
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
-export function DayEditor({ employee, date, entries, customerNames, recentSites, onClose, onSave, onCopy }: Props) {
+export function DayEditor({ employee, date, entries, sites, onCreateSite, recentSites, onClose, onSave, onCopy }: Props) {
   // A new site row starts with what the employee typically does.
   const main = employee.mainActivity
   const allowed = allowedActivities(employee)
   const [rows, setRows] = useState<Row[]>(() =>
     entries.length === 0
-      ? [emptyRow('Baustelle', '', main)]
+      ? [emptyRow('Baustelle', null, main)]
       : entries.map((e) => ({
           type: e.type,
-          customerName: e.customerName ?? '',
+          siteId: e.siteId,
           activity: e.activity,
           start: e.startTime?.slice(0, 5) ?? '',
           end: e.endTime?.slice(0, 5) ?? '',
@@ -84,11 +85,11 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...change } : row)))
 
   // A recent site fills the first empty site row, or becomes an additional one.
-  const pick = (name: string) =>
+  const pick = (siteId: number) =>
     setRows((current) => {
-      const index = current.findIndex((row) => row.type === 'Baustelle' && row.customerName.trim() === '')
-      if (index >= 0) return current.map((row, i) => (i === index ? { ...row, customerName: name } : row))
-      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', name, main)]
+      const index = current.findIndex((row) => row.type === 'Baustelle' && row.siteId === null)
+      if (index >= 0) return current.map((row, i) => (i === index ? { ...row, siteId } : row))
+      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', siteId, main)]
     })
 
   const submit = async (event: FormEvent) => {
@@ -125,7 +126,7 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                     type="button"
                     key={site.id}
                     className="site-pick"
-                    onClick={() => pick(site.name)}
+                    onClick={() => pick(site.id)}
                   >
                     {site.name}
                   </button>
@@ -161,15 +162,12 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                   />
                 </Group>
                 {row.type === 'Baustelle' && (
-                  <Autocomplete
-                    label="Kunde"
-                    value={row.customerName}
-                    onChange={(value) => update(index, { customerName: value })}
-                    data={customerNames}
-                    limit={8}
+                  <SitePicker
+                    sites={sites}
+                    value={row.siteId}
+                    onChange={(siteId) => update(index, { siteId })}
+                    onCreate={onCreateSite}
                     required
-                    maxLength={200}
-                    data-autofocus={index === 0 && entries.length === 0 ? true : undefined}
                   />
                 )}
                 {row.type === 'Baustelle' && (
@@ -206,7 +204,7 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
           ))}
 
           <Group gap="xs">
-            <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', '', main)])}>
+            <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
               + Baustelle
             </Button>
             <Button size="xs" variant="light" color="green" onClick={() => setRows([emptyRow('Urlaub')])}>

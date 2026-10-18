@@ -262,6 +262,28 @@ a:hover {
   background: #e3f6f7;
 }
 
+/* The site name in a cell opens the record of the site. */
+.site-link {
+  cursor: pointer;
+}
+
+.site-link:hover {
+  text-decoration: underline;
+}
+
+.sites-table .site-row {
+  cursor: pointer;
+  scroll-margin-top: 48px;
+}
+
+.sites-table .site-row.first-upcoming td {
+  border-top: 2px solid var(--wego-aqua);
+}
+
+.sort-button {
+  font-weight: 700;
+  white-space: nowrap;
+}
 .site-card {
   border-left: 4px solid var(--wego-teal);
 }

@@ -22,35 +22,6 @@ namespace Wego.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Wego.Api.Data.Customer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Location")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("Customers");
-                });
-
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Property<int>("Id")
@@ -120,9 +91,6 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("integer");
-
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
@@ -136,6 +104,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int?>("SiteId")
+                        .HasColumnType("integer");
+
                     b.Property<TimeOnly?>("StartTime")
                         .HasColumnType("time without time zone");
 
@@ -144,9 +115,9 @@ namespace Wego.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId", "Date");
-
                     b.HasIndex("EmployeeId", "Date");
+
+                    b.HasIndex("SiteId", "Date");
 
                     b.ToTable("PlanEntries");
                 });
@@ -180,30 +151,89 @@ namespace Wego.Api.Migrations
                     b.ToTable("SchoolHolidays");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.Site", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AddressAddition")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Client")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("HouseNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(220)
+                        .HasColumnType("character varying(220)");
+
+                    b.Property<string>("NameSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly?>("PlannedEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PlannedStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PostalCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Street")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Sites");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
-                    b.HasOne("Wego.Api.Data.Customer", "Customer")
-                        .WithMany("Entries")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Wego.Api.Data.Employee", "Employee")
                         .WithMany("Entries")
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Customer");
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany("Entries")
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Employee");
+
+                    b.Navigation("Site");
                 });
 
-            modelBuilder.Entity("Wego.Api.Data.Customer", b =>
+            modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Navigation("Entries");
                 });
 
-            modelBuilder.Entity("Wego.Api.Data.Employee", b =>
+            modelBuilder.Entity("Wego.Api.Data.Site", b =>
                 {
                     b.Navigation("Entries");
                 });

@@ -101,7 +101,7 @@ function parsePart(raw) {
 
 function parseCell(raw, activity) {
   const value = raw.replace(/\s+/g, ' ').trim()
-  if (/^krank$/i.test(value)) return [{ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note: null }]
+  if (/^krank$/i.test(value)) return [{ type: 'Krank', siteName: null, activity: null, startTime: null, endTime: null, note: null }]
 
   const entries = []
   for (const piece of value.split('/')) {
@@ -109,11 +109,11 @@ function parseCell(raw, activity) {
     // "frei", "?" and "......" are not places of work.
     if (!/[\p{L}\d]/u.test(name) || /^frei$/i.test(name)) continue
     if (/^krank$/i.test(name)) {
-      entries.push({ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note })
+      entries.push({ type: 'Krank', siteName: null, activity: null, startTime: null, endTime: null, note })
       continue
     }
-    if (entries.some((e) => e.customerName?.toLowerCase() === name.toLowerCase())) continue
-    entries.push({ type: 'Baustelle', customerName: name, activity, startTime: null, endTime: null, note })
+    if (entries.some((e) => e.siteName?.toLowerCase() === name.toLowerCase())) continue
+    entries.push({ type: 'Baustelle', siteName: name, activity, startTime: null, endTime: null, note })
   }
   return entries
 }
@@ -156,7 +156,7 @@ async function readSheet() {
         let entries = []
         if (value) entries = parseCell(value, activityOf(cell))
         else if (isYellow(cell) && weekday !== 0 && weekday !== 6)
-          entries = [{ type: 'Urlaub', customerName: null, activity: null, startTime: null, endTime: null, note: null }]
+          entries = [{ type: 'Urlaub', siteName: null, activity: null, startTime: null, endTime: null, note: null }]
 
         if (entries.length > 0) days.push({ employee, date, entries })
       }
@@ -193,7 +193,7 @@ function readProjects(sheet, blocks) {
       const key = name.toLowerCase()
       const known = sites.get(key)
       if (known && known.month === block.month) {
-        // Two jobs for the same customer in one month.
+        // Two jobs for the same site in one month.
         known.description = [known.description, description].filter(Boolean).join(' / ') || null
         known.location ??= location
       } else {
@@ -206,8 +206,8 @@ function readProjects(sheet, blocks) {
 }
 
 /** The site a project row belongs to: same name, or the name without first name or addition. */
-function matchSite(project, customers) {
-  const byName = new Map(customers.map((customer) => [customer.name.toLowerCase(), customer]))
+function matchSite(project, sites) {
+  const byName = new Map(sites.map((site) => [site.name.toLowerCase(), site]))
   return byName.get(project.name.toLowerCase()) ?? byName.get(project.name.split(/[\s,]+/)[0].toLowerCase()) ?? null
 }
 
@@ -217,8 +217,8 @@ function summarize({ employees, days, sites }) {
   for (const day of days) {
     for (const entry of day.entries) {
       if (entry.type !== 'Baustelle') continue
-      const key = entry.customerName.toLowerCase()
-      customers.set(key, { name: customers.get(key)?.name ?? entry.customerName, days: (customers.get(key)?.days ?? 0) + 1 })
+      const key = entry.siteName.toLowerCase()
+      customers.set(key, { name: customers.get(key)?.name ?? entry.siteName, days: (customers.get(key)?.days ?? 0) + 1 })
     }
   }
 
@@ -269,28 +269,60 @@ async function importAll({ employees, days, sites }) {
   if (only !== 'plan') await importSites(call, base, sites)
 }
 
-async function importSites(call, base, sites) {
-  const customers = await call('GET', '/api/customers')
+const STREET = /\b(chaussee|straße|str\.|weg|allee|damm|platz)\b/i
+
+/** "13467 RD" -> postal code and city, "Bucher Chaussee 5" -> street and number, "Karow" -> city. */
+function address(location) {
+  if (!location) return {}
+  const postal = location.match(/^(\d{5})\s*(.*)$/)
+  if (postal) return { postalCode: postal[1], city: postal[2] || null }
+  const street = location.match(/^(.*?)\s+(\d+\s*[a-z]?)$/i)
+  if (STREET.test(location) && street) return { street: street[1], houseNumber: street[2] }
+  if (STREET.test(location)) return { street: location }
+  return { city: location }
+}
+
+async function importSites(call, base, projects) {
+  const sites = await call('GET', '/api/sites')
   let updated = 0
   const unmatched = []
-  for (const project of sites) {
-    const customer = matchSite(project, customers)
-    if (!customer) {
+  for (const project of projects) {
+    const site = matchSite(project, sites)
+    if (!site) {
       unmatched.push(project.name)
       continue
     }
     // What a planner already entered in the application is kept.
-    const location = customer.location ?? project.location
-    const description = customer.description ?? project.description
-    if (location === customer.location && description === customer.description) continue
-    const saved = await call('PUT', `/api/customers/${customer.id}`, { name: customer.name, location, description })
-    Object.assign(customer, saved)
+    const found = address(project.location)
+    const hasAddress = site.street || site.postalCode || site.city
+    const input = {
+      ...site,
+      ...(hasAddress ? {} : found),
+      description: site.description ?? project.description,
+    }
+    if (hasAddress && input.description === site.description) continue
+    Object.assign(site, await call('PUT', `/api/sites/${site.id}`, input))
     updated++
   }
   console.log(
     `Sites in ${base}: ${updated} updated, ${unmatched.length} projects without a site of that name` +
       (unmatched.length ? `: ${unmatched.join(', ')}` : ''),
   )
+}
+
+/** Site id per name; sites that do not exist yet are created with the name as client (Auftraggeber). */
+async function siteIds(call, days) {
+  const ids = new Map((await call('GET', '/api/sites')).map((site) => [site.name.toLowerCase(), site.id]))
+  let created = 0
+  for (const day of days) {
+    for (const entry of day.entries) {
+      if (entry.type !== 'Baustelle' || ids.has(entry.siteName.toLowerCase())) continue
+      const site = await call('POST', '/api/sites', { client: entry.siteName, nameSource: 'Auftraggeber' })
+      ids.set(entry.siteName.toLowerCase(), site.id)
+      created++
+    }
+  }
+  return { ids, created }
 }
 
 async function importPlan(call, base, employees, days) {
@@ -307,22 +339,29 @@ async function importPlan(call, base, employees, days) {
     created++
   }
 
+  const sites = await siteIds(call, days)
   let saved = 0
   const failed = []
   for (const day of days) {
+    const entries = day.entries.map(({ siteName, ...entry }) => ({
+      ...entry,
+      siteId: entry.type === 'Baustelle' ? sites.ids.get(siteName.toLowerCase()) : null,
+    }))
     try {
-      await call('PUT', `/api/plan/${ids.get(day.employee.toLowerCase())}/${day.date}`, day.entries)
+      await call('PUT', `/api/plan/${ids.get(day.employee.toLowerCase())}/${day.date}`, entries)
       saved++
     } catch (error) {
       failed.push(`${day.date} ${day.employee}: ${error.message}`)
     }
   }
 
-  console.log(`Imported into ${base}: ${created} employees created, ${saved} days saved, ${failed.length} failed`)
+  console.log(
+    `Imported into ${base}: ${created} employees and ${sites.created} sites created, ${saved} days saved, ` +
+      `${failed.length} failed`,
+  )
   for (const line of failed.slice(0, 20)) console.log('  ' + line)
   if (failed.length > 0) process.exitCode = 1
 }
-
 const data = await readSheet()
 summarize(data)
 if (apply) await importAll(data)

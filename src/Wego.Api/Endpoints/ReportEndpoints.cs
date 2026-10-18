@@ -9,26 +9,26 @@ public static class ReportEndpoints
 {
     /// <summary>Days = number of days with at least one entry; Hours = sum of the time windows that were entered.</summary>
     public record ReportRow(int Id, string Name, int Days, double Hours);
-    public record CustomerReportDto(int CustomerId, string CustomerName, int Year, int TotalDays, double TotalHours,
+    public record SiteReportDto(int SiteId, string SiteName, int Year, int TotalDays, double TotalHours,
         IReadOnlyList<ReportRow> Employees, IReadOnlyList<EntryDto> Entries);
 
     public record VacationDto(int EmployeeId, string EmployeeName, int Entitlement, int Used, int Remaining,
         int SickDays);
     public record EmployeeReportDto(int EmployeeId, string EmployeeName, int Year, int TotalDays, double TotalHours,
-        IReadOnlyList<ReportRow> Customers, IReadOnlyList<EntryDto> Entries, VacationDto Vacation);
+        IReadOnlyList<ReportRow> Sites, IReadOnlyList<EntryDto> Entries, VacationDto Vacation);
 
     public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/reports");
 
-        group.MapGet("/customers/{id:int}", async (int id, int year, WegoDbContext db) =>
+        group.MapGet("/sites/{id:int}", async (int id, int year, WegoDbContext db) =>
         {
-            var customer = await db.Customers.FindAsync(id);
-            if (customer is null) return Results.NotFound();
+            var site = await db.Sites.FindAsync(id);
+            if (site is null) return Results.NotFound();
 
             var (from, to) = YearRange(year);
             var entries = Sort((await EntriesQuery(db)
-                    .Where(e => e.CustomerId == id && e.Type == EntryType.Baustelle && e.Date >= from && e.Date <= to)
+                    .Where(e => e.SiteId == id && e.Type == EntryType.Baustelle && e.Date >= from && e.Date <= to)
                     .ToListAsync())
                 .Select(ToDto));
 
@@ -38,7 +38,7 @@ public static class ReportEndpoints
                 .OrderByDescending(r => r.Days).ThenBy(r => r.Name)
                 .ToList();
 
-            return Results.Ok(new CustomerReportDto(customer.Id, customer.Name, year,
+            return Results.Ok(new SiteReportDto(site.Id, site.Name, year,
                 rows.Sum(r => r.Days), rows.Sum(r => r.Hours), rows, entries));
         }).RequireAuthorization(Roles.Planer);
 
@@ -57,8 +57,8 @@ public static class ReportEndpoints
 
             var entries = Sort(all.Where(e => e.Type == EntryType.Baustelle).Select(ToDto));
             var rows = entries
-                .GroupBy(e => (e.CustomerId, e.CustomerName))
-                .Select(g => ToRow(g.Key.CustomerId ?? 0, g.Key.CustomerName ?? "", g))
+                .GroupBy(e => (e.SiteId, e.SiteName))
+                .Select(g => ToRow(g.Key.SiteId ?? 0, g.Key.SiteName ?? "", g))
                 .OrderByDescending(r => r.Days).ThenBy(r => r.Name)
                 .ToList();
 

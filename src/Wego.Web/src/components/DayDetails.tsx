@@ -1,5 +1,6 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core'
-import type { Customer, Entry, NamedItem, SchoolHoliday } from '../api/types'
+import type { Entry, NamedItem, SchoolHoliday, Site } from '../api/types'
+import { formatAddress } from '../lib/sites'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
 import { Sheet } from './Sheet'
@@ -10,7 +11,7 @@ interface Props {
   date: string
   entries: Entry[]
   holiday?: SchoolHoliday
-  siteById: Map<number, Customer>
+  siteById: Map<number, Site>
   onClose: () => void
 }
 
@@ -29,11 +30,12 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
         </Group>
         {entries.length === 0 && <Text>Nicht eingeplant.</Text>}
         {entries.map((entry) => {
-          const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
+          const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
+          const address = site && formatAddress(site)
           return (
             <div key={entry.id} className="day-details-entry">
               <Chip entry={entry} withActivity />
-              {site?.location && <SiteLocation location={site.location} />}
+              {address && <SiteLocation location={address} />}
             </div>
           )
         })}

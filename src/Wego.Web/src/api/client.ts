@@ -1,7 +1,5 @@
 import type {
   Access,
-  Customer,
-  CustomerReport,
   DayEntryInput,
   Employee,
   EmployeeInput,
@@ -11,6 +9,9 @@ import type {
   NamedItem,
   Plan,
   SchoolHoliday,
+  Site,
+  SiteInput,
+  SiteReport,
   User,
   Vacation,
 } from './types'
@@ -76,12 +77,14 @@ export const api = {
   saveDays: (days: { employeeId: number; date: string; entries: DayEntryInput[] }[]) =>
     request<Entry[]>('PUT', '/api/plan/batch', days),
 
-  customers: () => request<Customer[]>('GET', '/api/customers'),
-  updateCustomer: (id: number, input: Omit<Customer, 'id'>) =>
-    request<Customer>('PUT', `/api/customers/${id}`, input),
+  sites: () => request<Site[]>('GET', '/api/sites'),
+  createSite: (input: SiteInput) => request<Site>('POST', '/api/sites', input),
+  updateSite: (id: number, input: SiteInput) => request<Site>('PUT', `/api/sites/${id}`, input),
+  /** Moves the entries of a duplicate to the remaining site and deletes the duplicate. */
+  mergeSite: (id: number, targetId: number) => request<Site>('POST', `/api/sites/${id}/merge`, { targetId }),
+  deleteSite: (id: number) => request<void>('DELETE', `/api/sites/${id}`),
 
-  customerReport: (id: number, year: number) =>
-    request<CustomerReport>('GET', `/api/reports/customers/${id}?year=${year}`),
+  siteReport: (id: number, year: number) => request<SiteReport>('GET', `/api/reports/sites/${id}?year=${year}`),
   employeeReport: (id: number, year: number) =>
     request<EmployeeReport>('GET', `/api/reports/employees/${id}?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),

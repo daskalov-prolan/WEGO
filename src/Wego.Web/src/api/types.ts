@@ -25,11 +25,27 @@ export interface NamedItem {
   name: string
 }
 
-/** A construction site, named after the customer. */
-export interface Customer extends NamedItem {
-  location: string | null
+/** Which field names a construction site in the plan. */
+export type SiteNameSource = 'Auftraggeber' | 'Strasse'
+
+/** What a planner enters for a construction site. */
+export interface SiteInput {
+  /** Auftraggeber: the customer or the property management. */
+  client: string | null
+  street: string | null
+  houseNumber: string | null
+  addressAddition: string | null
+  postalCode: string | null
+  city: string | null
+  nameSource: SiteNameSource
   description: string | null
+  /** yyyy-MM-dd */
+  plannedStart: string | null
+  plannedEnd: string | null
 }
+
+/** A construction site (Baustelle). The name is derived from the client or the street. */
+export interface Site extends NamedItem, SiteInput {}
 
 export type HolidayKind = 'Schulferien' | 'Feiertag'
 
@@ -49,8 +65,8 @@ export interface Entry {
   employeeName: string
   date: string
   type: EntryType
-  customerId: number | null
-  customerName: string | null
+  siteId: number | null
+  siteName: string | null
   activity: Activity | null
   startTime: string | null
   endTime: string | null
@@ -68,12 +84,12 @@ export interface Plan {
   employees: PlanEmployee[]
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
-  customers: Customer[]
+  sites: Site[]
 }
 
 export interface DayEntryInput {
   type: EntryType
-  customerName: string | null
+  siteId: number | null
   activity: Activity | null
   startTime: string | null
   endTime: string | null
@@ -87,9 +103,9 @@ export interface ReportRow {
   hours: number
 }
 
-export interface CustomerReport {
-  customerId: number
-  customerName: string
+export interface SiteReport {
+  siteId: number
+  siteName: string
   year: number
   totalDays: number
   totalHours: number
@@ -112,7 +128,7 @@ export interface EmployeeReport {
   year: number
   totalDays: number
   totalHours: number
-  customers: ReportRow[]
+  sites: ReportRow[]
   entries: Entry[]
   vacation: Vacation
 }

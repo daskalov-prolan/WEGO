@@ -60,7 +60,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
         <>
           <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="sm" mb="lg">
             <Stat value={current.totalDays} label={`Tage auf Baustellen ${current.year}`} />
-            <Stat value={current.customers.length} label="Baustellen" />
+            <Stat value={current.sites.length} label="Baustellen" />
             <Stat
               value={`${current.vacation.used} / ${current.vacation.entitlement}`}
               label="Urlaubstage verbraucht bzw. eingeplant"
@@ -80,13 +80,13 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
             <Table striped highlightOnHover withTableBorder>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Baustelle (Kunde)</Table.Th>
+                  <Table.Th>Baustelle</Table.Th>
                   <Table.Th ta="right">Einsatztage</Table.Th>
                   <Table.Th ta="right">Stunden</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {current.customers.map((row) => (
+                {current.sites.map((row) => (
                   <Table.Tr key={row.id}>
                     <Table.Td>
                       <Anchor href={`#/baustellen/${row.id}`}>{row.name}</Anchor>
@@ -95,7 +95,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
                     <Table.Td ta="right">{formatHours(row.hours)}</Table.Td>
                   </Table.Tr>
                 ))}
-                {current.customers.length === 0 && (
+                {current.sites.length === 0 && (
                   <Table.Tr>
                     <Table.Td colSpan={3}>Keine Einsätze in {current.year}.</Table.Td>
                   </Table.Tr>
@@ -112,7 +112,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Tag</Table.Th>
-                  <Table.Th>Baustelle (Kunde)</Table.Th>
+                  <Table.Th>Baustelle</Table.Th>
                   <Table.Th>Zeitfenster</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -120,7 +120,7 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
                 {current.entries.map((entry) => (
                   <Table.Tr key={entry.id}>
                     <Table.Td>{formatDate(entry.date)}</Table.Td>
-                    <Table.Td>{entry.customerName}</Table.Td>
+                    <Table.Td>{entry.siteName}</Table.Td>
                     <Table.Td>{formatTimeRange(entry) || 'ganztägig'}</Table.Td>
                   </Table.Tr>
                 ))}

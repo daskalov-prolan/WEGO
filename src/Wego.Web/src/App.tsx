@@ -3,11 +3,12 @@ import { api, UNAUTHORIZED_EVENT } from './api/client'
 import type { User } from './api/types'
 import { AppShell } from './components/AppShell'
 import { AdminPage } from './pages/AdminPage'
-import { CustomerReportPage } from './pages/CustomerReportPage'
 import { EmployeeReportPage } from './pages/EmployeeReportPage'
 import { LoginPage, NewPasswordPage } from './pages/LoginPage'
 import { MyPlanPage } from './pages/MyPlanPage'
 import { PlanPage } from './pages/PlanPage'
+import { SitePage } from './pages/SitePage'
+import { SitesPage } from './pages/SitesPage'
 import { CURRENT_YEAR } from './lib/dates'
 
 function useHashRoute(): string[] {
@@ -70,7 +71,8 @@ export default function App() {
   let content
   if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
   // Reports and administration are for planners only.
-  else if (page === 'baustellen' && isPlaner) content = <CustomerReportPage year={year} customerId={selectedId} />
+  else if (page === 'baustellen' && isPlaner)
+    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} /> : <SitesPage />
   else if (page === 'mitarbeiter' && isPlaner) content = <EmployeeReportPage year={year} employeeId={selectedId} />
   else if (page === 'verwaltung' && isPlaner) content = <AdminPage year={year} />
   else content = <PlanPage key={year} year={year} canEdit={isPlaner} />

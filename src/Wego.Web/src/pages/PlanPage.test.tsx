@@ -5,15 +5,17 @@ import type { Entry, Plan } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
 
+const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null }
+
 const plan: Plan = {
   year: 2026,
   employees: [
     { id: 1, name: 'Anna', mainActivity: null, additionalActivities: [] },
     { id: 2, name: 'Bernd', mainActivity: 'Sanitaer', additionalActivities: ['Abriss'] },
   ],
-  customers: [
-    { id: 10, name: 'Familie Schulze', location: null, description: null },
-    { id: 11, name: 'Familie Meier', location: null, description: null },
+  sites: [
+    { id: 10, name: 'Familie Schulze', ...noAddress },
+    { id: 11, name: 'Familie Meier', ...noAddress },
   ],
   schoolHolidays: [
     { id: 5, name: 'Winterferien', kind: 'Schulferien', startDate: '2026-02-02', endDate: '2026-02-07' },
@@ -27,9 +29,9 @@ const plan: Plan = {
   ],
 }
 
-function entry(id: number, employeeId: number, date: string, customerId: number, customerName: string, start: string | null, end: string | null): Entry {
+function entry(id: number, employeeId: number, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
-    id, employeeId, employeeName: '', date, type: 'Baustelle', customerId, customerName, activity: null,
+    id, employeeId, employeeName: '', date, type: 'Baustelle', siteId, siteName, activity: null,
     startTime: start, endTime: end, note: null,
   }
 }
@@ -43,7 +45,7 @@ beforeEach(() => {
     if (url === '/api/plan/batch') {
       const days = JSON.parse(String(init?.body)) as { employeeId: number; date: string; entries: { type: string; activity: string | null }[] }[]
       const saved = days.flatMap((day, index) =>
-        day.entries.map((e) => ({ ...entry(100 + index, day.employeeId, day.date, 0, '', null, null), type: e.type, customerId: null, customerName: null })),
+        day.entries.map((e) => ({ ...entry(100 + index, day.employeeId, day.date, 0, '', null, null), type: e.type, activity: e.activity, siteId: null, siteName: null })),
       )
       return new Response(JSON.stringify(saved), { status: 200 })
     }
@@ -115,6 +117,20 @@ describe('PlanPage', () => {
     expect(screen.getAllByRole('rowheader')).toHaveLength(2)
   })
 
+  it('opens the record of a site from its name in a cell', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    const monday = cell(/Anna, Montag, 02.03.2026/)
+    await user.click(within(monday).getAllByRole('link', { name: 'Familie Meier' })[0])
+
+    expect(await screen.findByText('Auftraggeber')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bearbeiten' })).toBeInTheDocument()
+    // The day editor did not open.
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+  })
+
   it('marks a cell with a note', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
@@ -125,7 +141,7 @@ describe('PlanPage', () => {
     expect(within(cell(/Anna, Montag, 02.03.2026/)).queryByRole('img', { name: 'mit Notiz' })).not.toBeInTheDocument()
   })
 
-  it('dims everything but the filtered customer', async () => {
+  it('dims everything but the filtered site', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
@@ -167,14 +183,15 @@ describe('PlanPage', () => {
     await user.click(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
 
     const input = (label: RegExp) => screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT')!
-    await screen.findAllByLabelText(/^Kunde/)
-    await user.type(input(/^Kunde/), 'Familie Schulze')
+    await screen.findAllByLabelText(/^Baustelle/)
+    await user.click(input(/^Baustelle/))
+    await user.click(await screen.findByRole('option', { name: /Familie Schulze/, hidden: true }))
     expect(input(/^Tätigkeit/)).toHaveValue('Sanitär (Haupttätigkeit)')
     await user.click(input(/^Tätigkeit/))
-    // The customer suggestions of the field above are options too.
+    // The site options of the field above are options too.
     const options = (await screen.findAllByRole('option', { hidden: true }))
       .map((option) => option.textContent)
-      .filter((text) => !text?.startsWith('Familie'))
+      .filter((text) => !text?.includes('Familie'))
     expect(options).toEqual(['Sanitär (Haupttätigkeit)', 'Abriss / Baubeginn'])
     await user.click(await screen.findByRole('option', { name: 'Abriss / Baubeginn', hidden: true }))
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -182,7 +199,7 @@ describe('PlanPage', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
     expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
-      expect.objectContaining({ type: 'Baustelle', customerName: 'Familie Schulze', activity: 'Abriss' }),
+      expect.objectContaining({ type: 'Baustelle', siteId: 10, activity: 'Abriss' }),
     ])
   })
   it('lets planners select several cells and fill them in one go', async () => {

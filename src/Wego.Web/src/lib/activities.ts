@@ -55,10 +55,10 @@ export function entryStyle(entry: Pick<Entry, 'type' | 'activity'>): CSSProperti
 }
 
 /** Tooltip text: customer and activity, or Urlaub / Krank. */
-export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'customerName'>): string {
+export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
   if (entry.type !== 'Baustelle') return entry.type
   const activity = activityLabel(entry.activity)
-  return activity ? `${entry.customerName} – ${activity}` : (entry.customerName ?? '')
+  return activity ? `${entry.siteName} – ${activity}` : (entry.siteName ?? '')
 }
 
 /**

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
+import { formatAddress } from '../lib/sites'
 import { addDays, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { holidaysByDate, useSwipe } from '../lib/ui'
@@ -50,8 +51,8 @@ export function MyPlanPage({ year, user }: Props) {
         (other) =>
           other.employeeId !== user.id &&
           other.date === entry.date &&
-          other.customerId !== null &&
-          other.customerId === entry.customerId,
+          other.siteId !== null &&
+          other.siteId === entry.siteId,
       )
       .map((other) => {
         const time = formatTimeRange(other)
@@ -66,7 +67,7 @@ export function MyPlanPage({ year, user }: Props) {
     () => go(addDays(anchor, -7)),
   )
 
-  const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
+  const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
 
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
@@ -146,13 +147,14 @@ export function MyPlanPage({ year, user }: Props) {
                     )
                   }
                   const colleagues = colleaguesOf(entry)
-                  const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
+                  const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
+                  const address = site && formatAddress(site)
                   return (
                     <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
                       <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
-                      <span className="where">{entry.customerName}</span>
+                      <span className="where">{entry.siteName}</span>
                       {entry.activity && <span className="what">{activityLabel(entry.activity)}</span>}
-                      {site?.location && <SiteLocation location={site.location} />}
+                      {address && <SiteLocation location={address} />}
                       {site?.description && <span className="detail">{site.description}</span>}
                       {entry.note && <span className="detail">{entry.note}</span>}
                       <span className="detail">

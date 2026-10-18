@@ -1,9 +1,10 @@
-import { Alert, Autocomplete, Button, Checkbox, ColorSwatch, Group, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Button, Checkbox, ColorSwatch, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, NamedItem, PlanEmployee } from '../api/types'
+import type { Activity, DayEntryInput, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
 import { ACTIVITIES, activityLabel, allowedActivities } from '../lib/activities'
 import { Sheet } from './Sheet'
+import { SitePicker } from './SitePicker'
 
 /** 'main': every employee gets their own main activity. */
 export type ActivityChoice = Activity | 'main'
@@ -12,7 +13,8 @@ interface Props {
   cellCount: number
   /** The employees of the selected cells. */
   employees: PlanEmployee[]
-  customerNames: string[]
+  sites: Site[]
+  onCreateSite: (input: SiteInput) => Promise<Site>
   recentSites: NamedItem[]
   onClose: () => void
   /** add: keep what is already planned on those days and add the site as a further entry. */
@@ -20,8 +22,8 @@ interface Props {
 }
 
 /** Puts one construction site on all selected cells at once. */
-export function AssignSite({ cellCount, employees, customerNames, recentSites, onClose, onApply }: Props) {
-  const [name, setName] = useState('')
+export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSites, onClose, onApply }: Props) {
+  const [siteId, setSiteId] = useState<number | null>(null)
   const [activity, setActivity] = useState<ActivityChoice>('main')
   // Who cannot do the chosen activity keeps their main activity.
   const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e).includes(activity))
@@ -32,14 +34,15 @@ export function AssignSite({ cellCount, employees, customerNames, recentSites, o
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const apply = async (customerName: string) => {
+  const apply = async (chosen: number | null) => {
+    if (chosen === null) return
     setBusy(true)
     setError('')
     try {
       await onApply(
         {
           type: 'Baustelle',
-          customerName: customerName.trim(),
+          siteId: chosen,
           activity: null,
           startTime: start ? `${start}:00` : null,
           endTime: end ? `${end}:00` : null,
@@ -56,7 +59,7 @@ export function AssignSite({ cellCount, employees, customerNames, recentSites, o
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    void apply(name)
+    void apply(siteId)
   }
 
   return (
@@ -97,7 +100,7 @@ export function AssignSite({ cellCount, employees, customerNames, recentSites, o
                     key={site.id}
                     className="site-pick"
                     disabled={busy}
-                    onClick={() => apply(site.name)}
+                    onClick={() => apply(site.id)}
                   >
                     {site.name}
                   </button>
@@ -105,16 +108,7 @@ export function AssignSite({ cellCount, employees, customerNames, recentSites, o
               </Group>
             </div>
           )}
-          <Autocomplete
-            label="Kunde"
-            value={name}
-            onChange={setName}
-            data={customerNames}
-            limit={8}
-            required
-            maxLength={200}
-            data-autofocus
-          />
+          <SitePicker sites={sites} value={siteId} onChange={setSiteId} onCreate={onCreateSite} required />
           <Group grow gap="xs">
             <TextInput label="von" type="time" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
             <TextInput label="bis" type="time" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />

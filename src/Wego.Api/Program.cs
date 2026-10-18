@@ -94,6 +94,7 @@ app.UseRateLimiter();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapPlanEndpoints();
+app.MapSiteEndpoints();
 app.MapReportEndpoints();
 app.MapEmployeeEndpoints();
 app.MapSchoolHolidayEndpoints();

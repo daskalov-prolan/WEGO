@@ -6,7 +6,7 @@ namespace Wego.Api.Data;
 public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(options)
 {
     public DbSet<Employee> Employees => Set<Employee>();
-    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Site> Sites => Set<Site>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
 
@@ -31,12 +31,19 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.HasIndex(x => x.UserName).IsUnique();
         });
 
-        modelBuilder.Entity<Customer>(e =>
+        modelBuilder.Entity<Site>(e =>
         {
-            e.Property(x => x.Name).HasMaxLength(200);
-            e.Property(x => x.Location).HasMaxLength(200);
+            e.Property(x => x.Name).HasMaxLength(220);
+            e.Property(x => x.Client).HasMaxLength(200);
+            e.Property(x => x.Street).HasMaxLength(200);
+            e.Property(x => x.HouseNumber).HasMaxLength(20);
+            e.Property(x => x.AddressAddition).HasMaxLength(200);
+            e.Property(x => x.PostalCode).HasMaxLength(10);
+            e.Property(x => x.City).HasMaxLength(100);
+            e.Property(x => x.NameSource).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Description).HasMaxLength(1000);
-            e.HasIndex(x => x.Name).IsUnique();
+            // Not unique: one property management can order jobs at several addresses.
+            e.HasIndex(x => x.Name);
         });
 
         modelBuilder.Entity<PlanEntry>(e =>
@@ -44,10 +51,10 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Note).HasMaxLength(500);
             e.Property(x => x.Activity).HasConversion<string>().HasMaxLength(30);
             e.HasIndex(x => new { x.EmployeeId, x.Date });
-            e.HasIndex(x => new { x.CustomerId, x.Date });
+            e.HasIndex(x => new { x.SiteId, x.Date });
             e.HasOne(x => x.Employee).WithMany(x => x.Entries).HasForeignKey(x => x.EmployeeId)
                 .OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(x => x.Customer).WithMany(x => x.Entries).HasForeignKey(x => x.CustomerId)
+            e.HasOne(x => x.Site).WithMany(x => x.Entries).HasForeignKey(x => x.SiteId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

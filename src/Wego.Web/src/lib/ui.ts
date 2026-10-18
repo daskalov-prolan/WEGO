@@ -9,7 +9,7 @@ export const cellKey = (employeeId: number, date: string) => `${employeeId}|${da
 export function toInput(entry: Entry): DayEntryInput {
   return {
     type: entry.type,
-    customerName: entry.customerName,
+    siteId: entry.siteId,
     activity: entry.activity,
     startTime: entry.startTime,
     endTime: entry.endTime,

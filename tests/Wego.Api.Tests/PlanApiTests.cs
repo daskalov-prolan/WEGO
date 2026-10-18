@@ -31,23 +31,25 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
-    public async Task Split_day_is_saved_and_counted_in_the_customer_report()
+    public async Task Split_day_is_saved_and_counted_in_the_site_report()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var employeeId = await CreateEmployeeAsync(planer, "Split Tester", null, null);
+        var schulze = await CreateSiteAsync(planer, "Familie Schulze");
+        var meier = await CreateSiteAsync(planer, "Familie Meier");
+        var werner = await CreateSiteAsync(planer, "Familie Werner");
 
         var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-03-02", new object[]
         {
-            new { type = "Baustelle", customerName = "Familie Schulze", startTime = "08:00:00", endTime = "10:00:00" },
-            new { type = "Baustelle", customerName = "Familie Meier", startTime = "11:00:00", endTime = "13:00:00" },
-            new { type = "Baustelle", customerName = "Familie Werner", startTime = "13:00:00", endTime = "16:00:00" },
+            new { type = "Baustelle", siteId = schulze, startTime = "08:00:00", endTime = "10:00:00" },
+            new { type = "Baustelle", siteId = meier, startTime = "11:00:00", endTime = "13:00:00" },
+            new { type = "Baustelle", siteId = werner, startTime = "13:00:00", endTime = "16:00:00" },
         });
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
 
-        // A second day at the same site, written differently: it must not create a second customer.
         await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-03-03", new object[]
         {
-            new { type = "Baustelle", customerName = "familie schulze" },
+            new { type = "Baustelle", siteId = schulze },
         });
 
         var plan = await planer.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
@@ -55,10 +57,9 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             .Where(e => e.GetProperty("employeeId").GetInt32() == employeeId).ToList();
         Assert.Equal(4, entries.Count);
         Assert.Equal(["Familie Schulze", "Familie Meier", "Familie Werner", "Familie Schulze"],
-            entries.Select(e => e.GetProperty("customerName").GetString()));
+            entries.Select(e => e.GetProperty("siteName").GetString()));
 
-        var schulzeId = entries[0].GetProperty("customerId").GetInt32();
-        var report = await planer.GetFromJsonAsync<JsonElement>($"/api/reports/customers/{schulzeId}?year={Year}");
+        var report = await planer.GetFromJsonAsync<JsonElement>($"/api/reports/sites/{schulze}?year={Year}");
         Assert.Equal(2, report.GetProperty("totalDays").GetInt32());
         Assert.Equal(2.0, report.GetProperty("totalHours").GetDouble());
         Assert.Equal("Split Tester", report.GetProperty("employees")[0].GetProperty("name").GetString());
@@ -66,7 +67,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var employeeReport = await planer.GetFromJsonAsync<JsonElement>(
             $"/api/reports/employees/{employeeId}?year={Year}");
         Assert.Equal(2, employeeReport.GetProperty("totalDays").GetInt32());
-        Assert.Equal(3, employeeReport.GetProperty("customers").GetArrayLength());
+        Assert.Equal(3, employeeReport.GetProperty("sites").GetArrayLength());
     }
 
     [Fact]
@@ -76,7 +77,8 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var a = await CreateEmployeeAsync(planer, "Batch A", null, null);
         var b = await CreateEmployeeAsync(planer, "Batch B", null, null);
 
-        var site = new object[] { new { type = "Baustelle", customerName = "Familie Batch", activity = "Fliesen" } };
+        var siteId = await CreateSiteAsync(planer, "Familie Batch");
+        var site = new object[] { new { type = "Baustelle", siteId, activity = "Fliesen" } };
         var saved = await planer.PutAsJsonAsync("/api/plan/batch", new object[]
         {
             new { employeeId = a, date = $"{Year}-07-06", entries = site },
@@ -130,11 +132,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var employeeId = await CreateEmployeeAsync(planer, "Overlap Tester", null, null);
+        var siteA = await CreateSiteAsync(planer, "A");
+        var siteB = await CreateSiteAsync(planer, "B");
 
         var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-04-01", new object[]
         {
-            new { type = "Baustelle", customerName = "A", startTime = "08:00:00", endTime = "10:00:00" },
-            new { type = "Baustelle", customerName = "B", startTime = "09:00:00", endTime = "11:00:00" },
+            new { type = "Baustelle", siteId = siteA, startTime = "08:00:00", endTime = "10:00:00" },
+            new { type = "Baustelle", siteId = siteB, startTime = "09:00:00", endTime = "11:00:00" },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
@@ -154,9 +158,12 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.Forbidden, put.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/employees")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync($"/api/reports/vacation?year={Year}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/customers")).StatusCode);
+        // Sites can be read (the addresses are needed on the way), but not changed.
+        Assert.Equal(HttpStatusCode.OK, (await reader.GetAsync("/api/sites")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.PostAsJsonAsync("/api/sites",
+            new { client = "X", nameSource = "Auftraggeber" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync("/api/employees/names")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync($"/api/reports/customers/1?year={Year}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync($"/api/reports/sites/1?year={Year}")).StatusCode);
     }
 
     [Fact]
@@ -207,36 +214,64 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
-    public async Task Site_details_are_kept_and_survive_merging_two_spellings()
+    public async Task Site_name_comes_from_the_client_or_the_street()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var site = new
+        {
+            client = "Hausverwaltung Nord", street = "Hauptstraße", houseNumber = "12", addressAddition = "Hinterhaus",
+            postalCode = "13125", city = "Berlin", nameSource = "Strasse", description = "Komplettbad",
+            plannedStart = $"{Year}-05-04", plannedEnd = $"{Year}-05-29",
+        };
+
+        var byStreet = await (await planer.PostAsJsonAsync("/api/sites", site)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Hauptstraße 12", byStreet.GetProperty("name").GetString());
+        Assert.Equal("Hausverwaltung Nord", byStreet.GetProperty("client").GetString());
+        Assert.Equal($"{Year}-05-04", byStreet.GetProperty("plannedStart").GetString());
+
+        // The same client may order a second job elsewhere; switching the source renames the site.
+        var second = await planer.PostAsJsonAsync("/api/sites", site with { });
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var id = byStreet.GetProperty("id").GetInt32();
+        var byClient = await (await planer.PutAsJsonAsync($"/api/sites/{id}", new
+        {
+            site.client, site.street, site.houseNumber, site.addressAddition, site.postalCode, site.city,
+            nameSource = "Auftraggeber", site.description, site.plannedStart, site.plannedEnd,
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Hausverwaltung Nord", byClient.GetProperty("name").GetString());
+
+        var noStreet = await planer.PostAsJsonAsync("/api/sites", new { client = "Ohne Adresse", nameSource = "Strasse" });
+        Assert.Equal(HttpStatusCode.BadRequest, noStreet.StatusCode);
+
+        var endBeforeStart = await planer.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Rückwärts", nameSource = "Auftraggeber", plannedStart = $"{Year}-06-10", plannedEnd = $"{Year}-06-01",
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, endBeforeStart.StatusCode);
+    }
+
+    [Fact]
+    public async Task Duplicate_sites_are_merged_with_their_entries()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var employeeId = await CreateEmployeeAsync(planer, "Stammdaten Tester", null, null);
+        var right = await CreateSiteAsync(planer, "Samarrai");
+        var typo = await CreateSiteAsync(planer, "Sammarai", "Karower Damm");
         await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-06-01",
-            new object[] { new { type = "Baustelle", customerName = "Samarrai" } });
+            new object[] { new { type = "Baustelle", siteId = right } });
         await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-06-02",
-            new object[] { new { type = "Baustelle", customerName = "Sammarai" } });
+            new object[] { new { type = "Baustelle", siteId = typo } });
 
-        var customers = await planer.GetFromJsonAsync<JsonElement>("/api/customers");
-        int IdOf(string name) => customers.EnumerateArray()
-            .Single(c => c.GetProperty("name").GetString() == name).GetProperty("id").GetInt32();
-
-        var update = await planer.PutAsJsonAsync($"/api/customers/{IdOf("Samarrai")}",
-            new { name = "Samarrai", location = "13125 Karow", description = "Komplettbad" });
-        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
-
-        // Renaming the misspelt one to the correct name merges both.
-        var merged = await (await planer.PutAsJsonAsync($"/api/customers/{IdOf("Sammarai")}",
-            new { name = "Samarrai", location = (string?)null, description = "sollte nicht überschreiben" }))
+        var merged = await (await planer.PostAsJsonAsync($"/api/sites/{typo}/merge", new { targetId = right }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(IdOf("Samarrai"), merged.GetProperty("id").GetInt32());
-        Assert.Equal("13125 Karow", merged.GetProperty("location").GetString());
-        Assert.Equal("Komplettbad", merged.GetProperty("description").GetString());
+        Assert.Equal(right, merged.GetProperty("id").GetInt32());
+        // The remaining site takes over the address it did not have.
+        Assert.Equal("Karower Damm", merged.GetProperty("street").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await planer.GetAsync($"/api/sites/{typo}")).StatusCode);
 
-        var report = await planer.GetFromJsonAsync<JsonElement>(
-            $"/api/reports/customers/{IdOf("Samarrai")}?year={Year}");
+        var report = await planer.GetFromJsonAsync<JsonElement>($"/api/reports/sites/{right}?year={Year}");
         Assert.Equal(2, report.GetProperty("totalDays").GetInt32());
     }
-
     [Fact]
     public async Task Generated_access_lets_the_employee_sign_in_and_asks_for_an_own_password()
     {
@@ -275,6 +310,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var response = await client.PostAsJsonAsync("/api/auth/login", new { userName, password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return client;
+    }
+
+    private static async Task<int> CreateSiteAsync(HttpClient planer, string client, string? street = null)
+    {
+        var response = await planer.PostAsJsonAsync("/api/sites", new { client, street, nameSource = "Auftraggeber" });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
     }
 
     private static async Task<int> CreateEmployeeAsync(HttpClient planer, string name, string? userName,

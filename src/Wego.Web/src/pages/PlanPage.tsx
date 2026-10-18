@@ -16,7 +16,10 @@ import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Customer, DayEntryInput, Entry, Plan, PlanEmployee } from '../api/types'
+import type { DayEntryInput, Entry, Plan, PlanEmployee, Site, SiteInput } from '../api/types'
+import { SiteForm } from '../components/SiteForm'
+import { SiteSheet } from '../components/SiteSheet'
+import { toSiteInput } from '../lib/sites'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
 import { allowedActivities } from '../lib/activities'
@@ -96,6 +99,8 @@ export function PlanPage({ year, canEdit }: Props) {
   const [open, setOpen] = useState<{ employee: PlanEmployee; date: string } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assigning, setAssigning] = useState(false)
+  // A site opened from a cell, and whether its form is open.
+  const [shownSite, setShownSite] = useState<{ site: Site; editing: boolean } | null>(null)
   const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[] } | null>(null)
 
   useEffect(() => {
@@ -120,8 +125,7 @@ export function PlanPage({ year, canEdit }: Props) {
   const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
 
 
-  const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
-  const customerNames = useMemo(() => (plan?.customers ?? []).map((site) => site.name), [plan])
+  const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
   const yearDays = useMemo(() => daysOfYear(year), [year])
 
   // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
@@ -130,19 +134,19 @@ export function PlanPage({ year, canEdit }: Props) {
     const to = addDays(from, 20)
     const counts = new Map<number, number>()
     for (const entry of plan?.entries ?? []) {
-      if (entry.customerId === null || entry.date < from || entry.date > to) continue
-      counts.set(entry.customerId, (counts.get(entry.customerId) ?? 0) + 1)
+      if (entry.siteId === null || entry.date < from || entry.date > to) continue
+      counts.set(entry.siteId, (counts.get(entry.siteId) ?? 0) + 1)
     }
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([id]) => siteById.get(id))
-      .filter((site): site is Customer => site !== undefined)
+      .filter((site): site is Site => site !== undefined)
   }, [plan, anchor, siteById])
 
   const needle = filter.trim().toLowerCase()
   const matches = useCallback(
-    (entry: Entry) => needle !== '' && (entry.customerName ?? '').toLowerCase().includes(needle),
+    (entry: Entry) => needle !== '' && (entry.siteName ?? '').toLowerCase().includes(needle),
     [needle],
   )
   const matchingDates = useMemo(() => {
@@ -239,18 +243,9 @@ export function PlanPage({ year, canEdit }: Props) {
     const keys = new Set(changes.map((change) => cellKey(change.employeeId, change.date)))
     setPlan((current) => {
       if (!current) return current
-      const known = new Set(current.customers.map((site) => site.id))
-      const added = saved
-        .filter((entry) => entry.customerId !== null && !known.has(entry.customerId))
-        .map((entry) => ({ id: entry.customerId!, name: entry.customerName!, location: null, description: null }))
       return {
         ...current,
         entries: [...current.entries.filter((e) => !keys.has(cellKey(e.employeeId, e.date))), ...saved],
-        customers: added.length
-          ? [...current.customers, ...new Map(added.map((site) => [site.id, site])).values()].sort((a, b) =>
-              a.name.localeCompare(b.name, 'de'),
-            )
-          : current.customers,
       }
     })
   }
@@ -336,7 +331,30 @@ export function PlanPage({ year, canEdit }: Props) {
       ? `KW ${[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')} · ${short(visible.from)}–${short(visible.to)}${year}`
       : `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
 
-  const filteredCustomer = plan.customers.find((customer) => customer.name.toLowerCase() === needle)
+  const filteredSite = plan.sites.find((site) => site.name.toLowerCase() === needle)
+  const nameOf = (input: DayEntryInput) => (input.siteId === null ? input.type : (siteById.get(input.siteId)?.name ?? ''))
+
+  const createSite = async (input: SiteInput) => {
+    const site = await api.createSite(input)
+    setPlan((current) =>
+      current && { ...current, sites: [...current.sites, site].sort((a, b) => a.name.localeCompare(b.name, 'de')) },
+    )
+    return site
+  }
+
+  /** Saves a site and shows its new name in all cells at once. */
+  const updateSite = async (id: number, input: SiteInput) => {
+    const site = await api.updateSite(id, input)
+    setPlan(
+      (current) =>
+        current && {
+          ...current,
+          sites: current.sites.map((other) => (other.id === id ? site : other)),
+          entries: current.entries.map((entry) => (entry.siteId === id ? { ...entry, siteName: site.name } : entry)),
+        },
+    )
+    return site
+  }
   const shared = {
     employees,
     entriesOf,
@@ -345,6 +363,10 @@ export function PlanPage({ year, canEdit }: Props) {
     isDimmed,
     linkNames: canEdit,
     onOpen: (employee: PlanEmployee, date: string) => setOpen({ employee, date }),
+    onOpenSite: (siteId: number) => {
+      const site = siteById.get(siteId)
+      if (site) setShownSite({ site, editing: false })
+    },
     selectable: canEdit,
     selected,
     onSelectedChange: setSelected,
@@ -456,10 +478,10 @@ export function PlanPage({ year, canEdit }: Props) {
           {matchingDates && (
             <Text size="sm" c="dimmed">
               {matchingDates.size} {matchingDates.size === 1 ? 'Tag' : 'Tage'} mit Einsätzen in {year}
-              {filteredCustomer && canEdit && (
+              {filteredSite && canEdit && (
                 <>
                   {' · '}
-                  <a href={`#/baustellen/${filteredCustomer.id}`}>Auswertung öffnen</a>
+                  <a href={`#/baustellen/${filteredSite.id}`}>Auswertung öffnen</a>
                 </>
               )}
             </Text>
@@ -511,7 +533,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Urlaub', customerName: null, activity: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Urlaub', siteId: null, activity: null, startTime: null, endTime: null, note: null }],
                     `${selected.size} Tage als Urlaub eingetragen.`,
                   )
                 }
@@ -524,7 +546,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Krank', siteId: null, activity: null, startTime: null, endTime: null, note: null }],
                     `${selected.size} Tage als krank eingetragen.`,
                   )
                 }
@@ -537,7 +559,7 @@ export function PlanPage({ year, canEdit }: Props) {
                   variant="default"
                   onClick={() => {
                     setClipboard({
-                      label: singleEntries.map((e) => e.customerName ?? e.type).join(' / '),
+                      label: singleEntries.map((e) => e.siteName ?? e.type).join(' / '),
                       entries: singleEntries.map(toInput),
                     })
                     notifications.show({ message: 'Kopiert. Felder auswählen und „Einfügen“ wählen.', autoClose: 3000 })
@@ -581,7 +603,8 @@ export function PlanPage({ year, canEdit }: Props) {
           employees={plan.employees.filter((employee) =>
             [...selected].some((key) => parseKey(key).employeeId === employee.id),
           )}
-          customerNames={customerNames}
+          sites={plan.sites}
+          onCreateSite={createSite}
           recentSites={recentSites}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
@@ -598,7 +621,7 @@ export function PlanPage({ year, canEdit }: Props) {
               }
             })
             const entry = template
-            await save(changes, `${entry.customerName} in ${changes.length} Felder eingetragen.`)
+            await save(changes, `${nameOf(entry)} in ${changes.length} Felder eingetragen.`)
             setAssigning(false)
             setSelected(new Set())
           }}
@@ -612,7 +635,8 @@ export function PlanPage({ year, canEdit }: Props) {
             employee={open.employee}
             date={open.date}
             entries={entriesOf(open.employee.id, open.date)}
-            customerNames={customerNames}
+            sites={plan.sites}
+            onCreateSite={createSite}
             recentSites={recentSites}
             onClose={() => setOpen(null)}
             onSave={async (entries) => {
@@ -624,7 +648,7 @@ export function PlanPage({ year, canEdit }: Props) {
             }}
             onCopy={(entries) => {
               setClipboard({
-                label: entries.map((e) => e.customerName || e.type).join(' / ') || 'leerer Tag',
+                label: entries.map(nameOf).join(' / ') || 'leerer Tag',
                 entries,
               })
               setOpen(null)
@@ -642,6 +666,26 @@ export function PlanPage({ year, canEdit }: Props) {
             onClose={() => setOpen(null)}
           />
         ))}
-    </div>
+
+      {shownSite &&
+        (shownSite.editing ? (
+          <SiteForm
+            title="Baustelle bearbeiten"
+            initial={toSiteInput(shownSite.site)}
+            onClose={() => setShownSite(null)}
+            onSave={async (input) => {
+              await updateSite(shownSite.site.id, input)
+              setShownSite(null)
+              notifications.show({ message: 'Baustelle gespeichert.', color: 'green' })
+            }}
+          />
+        ) : (
+          <SiteSheet
+            site={shownSite.site}
+            canEdit={canEdit}
+            onEdit={() => setShownSite({ ...shownSite, editing: true })}
+            onClose={() => setShownSite(null)}
+          />
+        ))}    </div>
   )
 }

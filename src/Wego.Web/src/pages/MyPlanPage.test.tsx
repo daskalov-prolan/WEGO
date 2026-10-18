@@ -7,9 +7,9 @@ import { MyPlanPage } from './MyPlanPage'
 
 const user: User = { id: 1, name: 'Anna', userName: 'anna', role: 'Mitarbeiter', showInPlan: true, mustChangePassword: false }
 
-function entry(id: number, employeeId: number, employeeName: string, date: string, customerId: number, customerName: string, start: string | null, end: string | null): Entry {
+function entry(id: number, employeeId: number, employeeName: string, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
-    id, employeeId, employeeName, date, type: 'Baustelle', customerId, customerName, activity: null,
+    id, employeeId, employeeName, date, type: 'Baustelle', siteId, siteName, activity: null,
     startTime: start, endTime: end, note: null,
   }
 }
@@ -21,14 +21,19 @@ const plan: Plan = {
     { id: 2, name: 'Bernd', mainActivity: null, additionalActivities: [] },
     { id: 3, name: 'Carla', mainActivity: null, additionalActivities: [] },
   ],
-  customers: [{ id: 10, name: 'Familie Schulze', location: 'Musterweg 3, 13125 Berlin', description: 'Komplettbad' }],
+  sites: [
+    {
+      id: 10, name: 'Familie Schulze', client: 'Familie Schulze', street: 'Musterweg', houseNumber: '3', addressAddition: null,
+      postalCode: '13125', city: 'Berlin', nameSource: 'Auftraggeber', description: 'Komplettbad', plannedStart: null, plannedEnd: null,
+    },
+  ],
   schoolHolidays: [],
   entries: [
     entry(1, 1, 'Anna', '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
     entry(2, 1, 'Anna', '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
     entry(3, 2, 'Bernd', '2026-03-02', 10, 'Familie Schulze', null, null),
     entry(4, 3, 'Carla', '2026-03-02', 12, 'Familie Werner', null, null),
-    { ...entry(5, 1, 'Anna', '2026-03-03', 0, '', null, null), type: 'Urlaub', customerId: null, customerName: null },
+    { ...entry(5, 1, 'Anna', '2026-03-03', 0, '', null, null), type: 'Urlaub', siteId: null, siteName: null },
     entry(6, 1, 'Anna', '2026-03-10', 12, 'Familie Werner', null, null),
   ],
 }

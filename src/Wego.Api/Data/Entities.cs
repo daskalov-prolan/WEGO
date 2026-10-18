@@ -57,21 +57,45 @@ public class Employee
     public List<PlanEntry> Entries { get; set; } = [];
 }
 
-/// <summary>A construction site, identified by the customer's name.</summary>
-public class Customer
+/// <summary>Which field gives a construction site the name shown in the plan.</summary>
+public enum SiteNameSource
+{
+    Auftraggeber,
+    Strasse,
+}
+
+/// <summary>A construction site (Baustelle): who ordered the job and where it is.</summary>
+public class Site
 {
     public int Id { get; set; }
-    public required string Name { get; set; }
 
-    /// <summary>Address or district of the site, as the craftsmen need it to get there.</summary>
-    public string? Location { get; set; }
+    /// <summary>Shown in the plan; derived from <see cref="Client"/> or the street, see <see cref="NameSource"/>.</summary>
+    public string Name { get; private set; } = "";
+
+    /// <summary>Auftraggeber: the customer or the property management.</summary>
+    public string? Client { get; set; }
+
+    public string? Street { get; set; }
+    public string? HouseNumber { get; set; }
+    public string? AddressAddition { get; set; }
+    public string? PostalCode { get; set; }
+    public string? City { get; set; }
+
+    public SiteNameSource NameSource { get; set; } = SiteNameSource.Auftraggeber;
+
+    public DateOnly? PlannedStart { get; set; }
+    public DateOnly? PlannedEnd { get; set; }
 
     /// <summary>What is done there: kind of conversion, tiles, remarks.</summary>
     public string? Description { get; set; }
 
     public List<PlanEntry> Entries { get; set; } = [];
-}
 
+    /// <summary>Sets <see cref="Name"/> from the chosen field; call after changing client, street or source.</summary>
+    public void UpdateName() => Name = (NameSource == SiteNameSource.Strasse
+        ? $"{Street} {HouseNumber}"
+        : Client ?? "").Trim();
+}
 /// <summary>
 /// One entry in a day cell of an employee. A day can hold several entries
 /// (split day), each with an optional time window.
@@ -83,8 +107,8 @@ public class PlanEntry
     public Employee Employee { get; set; } = null!;
     public DateOnly Date { get; set; }
     public EntryType Type { get; set; }
-    public int? CustomerId { get; set; }
-    public Customer? Customer { get; set; }
+    public int? SiteId { get; set; }
+    public Site? Site { get; set; }
     public Activity? Activity { get; set; }
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }

@@ -8,17 +8,16 @@ public static class PlanEndpoints
     public const int MaxEntriesPerDay = 10;
 
     public record PlanEmployeeDto(int Id, string Name, Activity? MainActivity, IReadOnlyList<Activity> AdditionalActivities);
-    public record CustomerDto(int Id, string Name, string? Location, string? Description);
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
-        int? CustomerId, string? CustomerName, Activity? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
+        int? SiteId, string? SiteName, Activity? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
         string? Note);
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
-        IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<CustomerDto> Customers);
+        IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites);
 
-    public record DayEntryInput(EntryType Type, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime,
+    /// <summary>A site entry names its construction site by <paramref name="SiteId"/>.</summary>
+    public record DayEntryInput(EntryType Type, int? SiteId, TimeOnly? StartTime, TimeOnly? EndTime,
         string? Note, Activity? Activity = null);
-    public record UpdateCustomerRequest(string Name, string? Location, string? Description);
     public record DayInput(int EmployeeId, DateOnly Date, DayEntryInput[] Entries);
 
     public const int MaxDaysPerBatch = 400;
@@ -49,12 +48,11 @@ public static class PlanEndpoints
                 .Select(h => new SchoolHolidayDto(h.Id, h.Name, h.Kind, h.StartDate, h.EndDate))
                 .ToListAsync();
 
-            var customers = await db.Customers
-                .OrderBy(c => c.Name)
-                .Select(c => new CustomerDto(c.Id, c.Name, c.Location, c.Description))
-                .ToListAsync();
+            var sites = (await db.Sites.AsNoTracking().OrderBy(s => s.Name).ToListAsync())
+                .Select(SiteEndpoints.ToDto)
+                .ToList();
 
-            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, customers);
+            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites);
         });
 
         // Replaces all entries of one employee on one day, so a split day is always saved as a whole.
@@ -79,49 +77,6 @@ public static class PlanEndpoints
 
             return await SaveDays(db, days);
         }).RequireAuthorization(Roles.Planer);
-        app.MapGet("/api/customers", async (WegoDbContext db) =>
-            await db.Customers
-                .OrderBy(c => c.Name)
-                .Select(c => new CustomerDto(c.Id, c.Name, c.Location, c.Description))
-                .ToListAsync()).RequireAuthorization(Roles.Planer);
-
-        // Renaming to the name of another customer merges both, which is how typos get cleaned up.
-        app.MapPut("/api/customers/{id:int}", async (int id, UpdateCustomerRequest request, WegoDbContext db) =>
-        {
-            var name = request.Name?.Trim();
-            if (string.IsNullOrEmpty(name) || name.Length > 200)
-                return ApiErrors.BadRequest("Bitte einen Kundennamen mit höchstens 200 Zeichen angeben.");
-            var location = Clean(request.Location);
-            var description = Clean(request.Description);
-            if (location?.Length > 200) return ApiErrors.BadRequest("Der Ort darf höchstens 200 Zeichen lang sein.");
-            if (description?.Length > 1000)
-                return ApiErrors.BadRequest("Die Beschreibung darf höchstens 1000 Zeichen lang sein.");
-
-            var customer = await db.Customers.FindAsync(id);
-            if (customer is null) return Results.NotFound();
-
-            var target = await db.Customers
-                .FirstOrDefaultAsync(c => c.Id != id && c.Name.ToLower() == name.ToLower());
-            if (target is null)
-            {
-                customer.Name = name;
-                customer.Location = location;
-                customer.Description = description;
-                await db.SaveChangesAsync();
-                return Results.Ok(ToDto(customer));
-            }
-
-            // The site that remains keeps its own details and takes over only what it is missing.
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            await db.PlanEntries.Where(e => e.CustomerId == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(e => e.CustomerId, target.Id));
-            target.Location ??= location;
-            target.Description ??= description;
-            db.Customers.Remove(customer);
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return Results.Ok(ToDto(target));
-        }).RequireAuthorization(Roles.Planer);
     }
 
     /// <summary>Replaces the entries of the given days in one transaction and returns what is stored now.</summary>
@@ -132,6 +87,11 @@ public static class PlanEndpoints
             var error = Validate(day.Entries ?? []);
             if (error is not null) return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: {error}");
         }
+
+        var siteIds = days.SelectMany(d => d.Entries ?? []).Where(e => e.SiteId is not null)
+            .Select(e => e.SiteId!.Value).Distinct().ToList();
+        if (await db.Sites.CountAsync(s => siteIds.Contains(s.Id)) != siteIds.Count)
+            return ApiErrors.BadRequest("Eine der Baustellen gibt es nicht (mehr).");
 
         await using var transaction = await db.Database.BeginTransactionAsync();
 
@@ -144,16 +104,13 @@ public static class PlanEndpoints
 
             foreach (var input in day.Entries ?? [])
             {
-                Customer? customer = null;
-                if (input.Type == EntryType.Baustelle)
-                    customer = await FindOrCreateCustomer(db, input.CustomerName!.Trim());
 
                 db.PlanEntries.Add(new PlanEntry
                 {
                     EmployeeId = day.EmployeeId,
                     Date = day.Date,
                     Type = input.Type,
-                    Customer = customer,
+                    SiteId = input.Type == EntryType.Baustelle ? input.SiteId : null,
                     // The activity belongs to work on a site; vacation and sick days have none.
                     Activity = input.Type == EntryType.Baustelle ? input.Activity : null,
                     StartTime = input.StartTime,
@@ -176,18 +133,15 @@ public static class PlanEndpoints
         return Results.Ok(Sort(saved.Select(ToDto)));
     }
 
-    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private static CustomerDto ToDto(Customer c) => new(c.Id, c.Name, c.Location, c.Description);
 
     public static (DateOnly From, DateOnly To) YearRange(int year) =>
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
 
     public static IQueryable<PlanEntry> EntriesQuery(WegoDbContext db) =>
-        db.PlanEntries.AsNoTracking().Include(e => e.Customer).Include(e => e.Employee);
+        db.PlanEntries.AsNoTracking().Include(e => e.Site).Include(e => e.Employee);
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
-        e.CustomerId, e.Customer?.Name, e.Activity, e.StartTime, e.EndTime, e.Note);
+        e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note);
 
     public static List<EntryDto> Sort(IEnumerable<EntryDto> entries) => entries
         .OrderBy(e => e.Date)
@@ -205,12 +159,8 @@ public static class PlanEndpoints
             if (!Enum.IsDefined(input.Type)) return "Unbekannte Art des Eintrags.";
             if (input.Activity is { } activity && !Enum.IsDefined(activity)) return "Unbekannte Tätigkeit.";
 
-            if (input.Type == EntryType.Baustelle)
-            {
-                var name = input.CustomerName?.Trim();
-                if (string.IsNullOrEmpty(name)) return "Bitte für jede Baustelle einen Kundennamen angeben.";
-                if (name.Length > 200) return "Der Kundenname darf höchstens 200 Zeichen lang sein.";
-            }
+            if (input.Type == EntryType.Baustelle && input.SiteId is null)
+                return "Bitte für jeden Einsatz eine Baustelle wählen.";
 
             if ((input.StartTime is null) != (input.EndTime is null))
                 return "Bitte Beginn und Ende des Zeitfensters angeben oder beide leer lassen.";
@@ -227,21 +177,5 @@ public static class PlanEndpoints
         }
 
         return null;
-    }
-
-    private static async Task<Customer> FindOrCreateCustomer(WegoDbContext db, string name)
-    {
-        var local = db.Customers.Local
-            .FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (local is not null) return local;
-
-        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower());
-        if (customer is null)
-        {
-            customer = new Customer { Name = name };
-            db.Customers.Add(customer);
-        }
-
-        return customer;
     }
 }

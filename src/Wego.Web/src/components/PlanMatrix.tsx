@@ -12,11 +12,13 @@ export interface MatrixProps {
   entriesOf: (employeeId: number, date: string) => Entry[]
   holidayByDate: Map<string, SchoolHoliday>
   today: string
-  /** With a customer filter: entries of other customers are dimmed. */
+  /** With a site filter: entries of other sites are dimmed. */
   isDimmed: (entry: Entry) => boolean
   /** Planners get links from the names into the employee report. */
   linkNames: boolean
   onOpen: (employee: PlanEmployee, date: string) => void
+  /** Click on a site name in a cell: opens the record of that site. */
+  onOpenSite: (siteId: number) => void
   /** Planners can select several cells: drag with the mouse, Ctrl+click, or long press on touch screens. */
   selectable: boolean
   selected: Set<string>
@@ -71,7 +73,10 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
     press.current = null
   }
 
-  return (employeeIndex: number, dayIndex: number) => {
+  // A click on a site name is the end of a drag or part of a selection on touch screens: then it is the cell's.
+  const siteClickBelongsToCell = () => swallowClick.current || (selectable && selected.size > 0 && pointerType.current !== 'mouse')
+
+  const handlers = (employeeIndex: number, dayIndex: number) => {
     const employee = employees[employeeIndex]
     const day = days[dayIndex]
     const key = cellKey(employee.id, day.iso)
@@ -133,6 +138,8 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
       },
     }
   }
+
+  return { handlers, siteClickBelongsToCell }
 }
 
 function EmployeeName({ employee, link }: { employee: NamedItem; link: boolean }) {
@@ -167,7 +174,12 @@ function dayClass(day: Day, holiday: SchoolHoliday | undefined, today: string) {
 export function TimelineMatrix(props: MatrixProps) {
   const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends } = props
   const weekends = days.filter((day) => day.isWeekend).length
-  const handlers = useCellSelection(props, days)
+  const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
+  const openSite = (siteId: number, event: MouseEvent) => {
+    if (siteClickBelongsToCell()) return
+    event.stopPropagation()
+    props.onOpenSite(siteId)
+  }
 
   const months: { month: number; count: number }[] = []
   for (const day of days) {
@@ -252,7 +264,7 @@ export function TimelineMatrix(props: MatrixProps) {
                     >
                       <span className="cell-full">
                         {entries.map((entry) => (
-                          <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} />
+                          <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} />
                         ))}
                       </span>
                       {first && (
@@ -264,8 +276,11 @@ export function TimelineMatrix(props: MatrixProps) {
                           ].join(' ')}
                           style={entryStyle(first)}
                         >
-                          <span className="compact-name">
-                            {first.type === 'Baustelle' ? first.customerName : first.type}
+                          <span
+                            className="compact-name"
+                            onClick={(event) => first.siteId !== null && openSite(first.siteId, event)}
+                          >
+                            {first.type === 'Baustelle' ? first.siteName : first.type}
                           </span>
                           {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
                         </span>
