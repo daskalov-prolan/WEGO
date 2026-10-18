@@ -1,8 +1,11 @@
+import { Alert, Anchor, Paper, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Customer, CustomerReport } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
+import { Stat } from '../components/Stat'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
+import { siteStyle } from '../lib/ui'
 
 interface Props {
   year: number
@@ -25,111 +28,114 @@ export function CustomerReportPage({ year, customerId }: Props) {
   }, [customerId, year])
 
   const site = customers.find((customer) => customer.id === customerId)
+  const current = report && report.customerId === customerId && report.year === year ? report : null
 
   return (
     <div className="page">
-      <h1>Auswertung nach Baustelle</h1>
+      <Title order={2} mb="md">
+        Auswertung nach Baustelle
+      </Title>
 
-      <div className="toolbar">
-        <label className="field">
-          Baustelle (Kunde)
-          <select
-            value={customerId ?? ''}
-            onChange={(e) => (window.location.hash = `#/baustellen/${e.target.value}`)}
-          >
-            <option value="">Bitte wählen</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <Select
+        label="Baustelle (Kunde)"
+        placeholder="Kunden suchen"
+        searchable
+        limit={50}
+        maw={360}
+        mb="md"
+        value={customerId === null ? null : String(customerId)}
+        onChange={(value) => value && (window.location.hash = `#/baustellen/${value}`)}
+        data={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
+      />
 
-      {error && <p className="error">{error}</p>}
-
-      {site && (site.location || site.description) && (
-        <p className="site-details">
-          {site.location && <SiteLocation location={site.location} />}
-          {site.description && <span>{site.description}</span>}
-        </p>
+      {error && (
+        <Alert color="red" variant="light" mb="md">
+          {error}
+        </Alert>
       )}
 
-      {report && report.customerId === customerId && report.year === year && (
+      {site && (site.location || site.description) && (
+        <Paper withBorder p="sm" mb="md" className="site-card" style={siteStyle(site.id)}>
+          <Stack gap={2}>
+            {site.location && <SiteLocation location={site.location} />}
+            {site.description && <Text size="sm">{site.description}</Text>}
+          </Stack>
+        </Paper>
+      )}
+
+      {current && (
         <>
-          <div className="stats">
-            <div className="stat">
-              <div className="value">{report.totalDays}</div>
-              <div className="label">Einsatztage {report.year}</div>
-            </div>
-            <div className="stat">
-              <div className="value">{report.employees.length}</div>
-              <div className="label">Mitarbeiter</div>
-            </div>
-            <div className="stat">
-              <div className="value">{formatHours(report.totalHours)}</div>
-              <div className="label">Stunden laut Zeitfenstern</div>
-            </div>
-          </div>
-          <p className="muted">
-            Ein Einsatztag ist ein Tag, an dem ein Mitarbeiter auf dieser Baustelle eingeplant war, auch bei
-            geteilten Tagen. Stunden werden nur aus Einträgen mit Zeitfenster berechnet.
-          </p>
+          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm" mb="xs">
+            <Stat value={current.totalDays} label={`Einsatztage ${current.year}`} />
+            <Stat value={current.employees.length} label="Mitarbeiter" />
+            <Stat value={formatHours(current.totalHours)} label="Stunden laut Zeitfenstern" />
+          </SimpleGrid>
+          <Text size="sm" c="dimmed" mb="lg">
+            Ein Einsatztag ist ein Tag, an dem ein Mitarbeiter auf dieser Baustelle eingeplant war, auch bei geteilten
+            Tagen. Stunden werden nur aus Einträgen mit Zeitfenster berechnet.
+          </Text>
 
-          <h2>Nach Mitarbeiter</h2>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Mitarbeiter</th>
-                <th className="num">Einsatztage</th>
-                <th className="num">Stunden</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.employees.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <a href={`#/mitarbeiter/${row.id}`}>{row.name}</a>
-                  </td>
-                  <td className="num">{row.days}</td>
-                  <td className="num">{formatHours(row.hours)}</td>
-                </tr>
-              ))}
-              {report.employees.length === 0 && (
-                <tr>
-                  <td colSpan={3}>Keine Einsätze in {report.year}.</td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Summe</td>
-                <td className="num">{report.totalDays}</td>
-                <td className="num">{formatHours(report.totalHours)}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <Title order={4} mb="xs">
+            Nach Mitarbeiter
+          </Title>
+          <Table.ScrollContainer minWidth={380} mb="lg">
+            <Table striped highlightOnHover withTableBorder>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Mitarbeiter</Table.Th>
+                  <Table.Th ta="right">Einsatztage</Table.Th>
+                  <Table.Th ta="right">Stunden</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {current.employees.map((row) => (
+                  <Table.Tr key={row.id}>
+                    <Table.Td>
+                      <Anchor href={`#/mitarbeiter/${row.id}`}>{row.name}</Anchor>
+                    </Table.Td>
+                    <Table.Td ta="right">{row.days}</Table.Td>
+                    <Table.Td ta="right">{formatHours(row.hours)}</Table.Td>
+                  </Table.Tr>
+                ))}
+                {current.employees.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={3}>Keine Einsätze in {current.year}.</Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+              <Table.Tfoot>
+                <Table.Tr>
+                  <Table.Th>Summe</Table.Th>
+                  <Table.Th ta="right">{current.totalDays}</Table.Th>
+                  <Table.Th ta="right">{formatHours(current.totalHours)}</Table.Th>
+                </Table.Tr>
+              </Table.Tfoot>
+            </Table>
+          </Table.ScrollContainer>
 
-          <h2>Alle Einsätze</h2>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tag</th>
-                <th>Mitarbeiter</th>
-                <th>Zeitfenster</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.entries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{formatDate(entry.date)}</td>
-                  <td>{entry.employeeName}</td>
-                  <td>{formatTimeRange(entry) || 'ganztägig'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Title order={4} mb="xs">
+            Alle Einsätze
+          </Title>
+          <Table.ScrollContainer minWidth={380}>
+            <Table striped withTableBorder>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Tag</Table.Th>
+                  <Table.Th>Mitarbeiter</Table.Th>
+                  <Table.Th>Zeitfenster</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {current.entries.map((entry) => (
+                  <Table.Tr key={entry.id}>
+                    <Table.Td>{formatDate(entry.date)}</Table.Td>
+                    <Table.Td>{entry.employeeName}</Table.Td>
+                    <Table.Td>{formatTimeRange(entry) || 'ganztägig'}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         </>
       )}
     </div>

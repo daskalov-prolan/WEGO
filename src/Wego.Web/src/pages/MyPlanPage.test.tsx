@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, User } from '../api/types'
+import { renderWithProviders } from '../test-utils'
 import { MyPlanPage } from './MyPlanPage'
 
 const user: User = { id: 1, name: 'Anna', userName: 'anna', role: 'Mitarbeiter', showInPlan: true, mustChangePassword: false }
@@ -54,7 +55,7 @@ afterEach(() => {
 
 describe('MyPlanPage', () => {
   it('shows the own week: where, when and with whom', async () => {
-    render(<MyPlanPage year={2026} user={user} />)
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
 
     const monday = (await screen.findByText('Montag, 02.03.2026')).closest('section')!
     expect(within(monday).getByText('Heute')).toBeInTheDocument()
@@ -71,11 +72,11 @@ describe('MyPlanPage', () => {
 
     const tuesday = screen.getByText('Dienstag, 03.03.2026').closest('section')!
     expect(within(tuesday).getByText('Urlaub')).toBeInTheDocument()
-    expect(await screen.findByText(/von 30 Tagen noch verfügbar/)).toHaveTextContent('29')
+    expect(await screen.findByText('Urlaub: 29 von 30 Tagen frei')).toBeInTheDocument()
   })
 
   it('moves to the next week', async () => {
-    render(<MyPlanPage year={2026} user={user} />)
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
     await screen.findByText('Montag, 02.03.2026')
 
     await userEvent.click(screen.getByRole('button', { name: 'Nächste Woche' }))

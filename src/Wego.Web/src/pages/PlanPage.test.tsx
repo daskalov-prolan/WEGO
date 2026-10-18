@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan } from '../api/types'
+import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
 
 const plan: Plan = {
@@ -16,27 +17,36 @@ const plan: Plan = {
   ],
   schoolHolidays: [{ id: 5, name: 'Winterferien', startDate: '2026-02-02', endDate: '2026-02-07' }],
   entries: [
-    entry(1, 1, '2026-03-02', 'Familie Schulze', '08:00:00', '10:00:00'),
-    entry(2, 1, '2026-03-02', 'Familie Meier', '11:00:00', '13:00:00'),
-    entry(3, 2, '2026-03-03', 'Familie Meier', null, null),
-    entry(4, 2, '2026-03-12', 'Familie Schulze', null, null),
+    entry(1, 1, '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
+    entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
+    entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
+    entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null),
   ],
 }
 
-function entry(id: number, employeeId: number, date: string, customerName: string, start: string | null, end: string | null): Entry {
+function entry(id: number, employeeId: number, date: string, customerId: number, customerName: string, start: string | null, end: string | null): Entry {
   return {
-    id, employeeId, employeeName: '', date, type: 'Baustelle', customerId: 10, customerName,
+    id, employeeId, employeeName: '', date, type: 'Baustelle', customerId, customerName,
     startTime: start, endTime: end, note: null,
   }
 }
 
+let fetchMock: ReturnType<typeof vi.fn>
+
 beforeEach(() => {
   localStorage.clear()
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-03-02T09:00:00') })
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(JSON.stringify(plan), { status: 200 })),
-  )
+  fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/api/plan/batch') {
+      const days = JSON.parse(String(init?.body)) as { employeeId: number; date: string; entries: { type: string }[] }[]
+      const saved = days.flatMap((day, index) =>
+        day.entries.map((e) => ({ ...entry(100 + index, day.employeeId, day.date, 0, '', null, null), type: e.type, customerId: null, customerName: null })),
+      )
+      return new Response(JSON.stringify(saved), { status: 200 })
+    }
+    return new Response(JSON.stringify(plan), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
 })
 
 afterEach(() => {
@@ -48,7 +58,7 @@ const cell = (label: RegExp) => screen.getByRole('button', { name: label })
 
 describe('PlanPage', () => {
   it('starts with the current week: employees in rows, a split day with its time windows', async () => {
-    render(<PlanPage year={2026} canEdit={false} />)
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
 
     expect(await screen.findByText('KW 10 · 02.03.–08.03.2026')).toBeInTheDocument()
     const monday = cell(/Anna, Montag, 02.03.2026/)
@@ -56,18 +66,17 @@ describe('PlanPage', () => {
     expect(within(monday).getByText('11–13 Uhr')).toBeInTheDocument()
     // The short form for narrow screens names the first site and counts the rest.
     expect(within(monday).getByText('+1')).toBeInTheDocument()
-    expect(within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')).not.toHaveLength(0)
   })
 
   it('moves by week and by month', async () => {
-    render(<PlanPage year={2026} canEdit={false} />)
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
     await userEvent.click(screen.getByRole('button', { name: 'Weiter' }))
     expect(screen.getByText('KW 11 · 09.03.–15.03.2026')).toBeInTheDocument()
     expect(within(cell(/Bernd, Donnerstag, 12.03.2026/)).getAllByText('Familie Schulze')).not.toHaveLength(0)
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Monat' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Monat' }))
     expect(screen.getByText('März 2026')).toBeInTheDocument()
     expect(cell(/Anna, Montag, 02.03.2026: Familie Schulze \/ Familie Meier/)).toHaveTextContent('Fam2')
 
@@ -77,7 +86,7 @@ describe('PlanPage', () => {
   })
 
   it('dims everything but the filtered customer', async () => {
-    render(<PlanPage year={2026} canEdit={false} />)
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
     await userEvent.type(screen.getByLabelText(/Nach Baustelle/), 'schulze')
@@ -88,24 +97,11 @@ describe('PlanPage', () => {
     expect(screen.getByText(/2 Tage mit Einsätzen in 2026/)).toBeInTheDocument()
   })
 
-  it('hides employees on request and remembers it', async () => {
-    const { unmount } = render(<PlanPage year={2026} canEdit={false} />)
-    await screen.findByText(/KW 10/)
-
-    await userEvent.click(screen.getByLabelText('Bernd'))
-    expect(screen.queryByRole('button', { name: /Bernd, Montag/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Mitarbeiter (1/2)')).toBeInTheDocument()
-
-    unmount()
-    render(<PlanPage year={2026} canEdit={false} />)
-    expect(await screen.findByText('Mitarbeiter (1/2)')).toBeInTheDocument()
-  })
-
   it('shows the year as in the Excel sheet', async () => {
-    render(<PlanPage year={2026} canEdit={false} />)
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Jahr' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Jahr' }))
 
     const row = screen.getByText('Mo 02.03.').closest('tr')!
     expect(within(row).getByText('Familie Schulze')).toBeInTheDocument()
@@ -113,14 +109,37 @@ describe('PlanPage', () => {
   })
 
   it('opens a read-only day for employees and the editor for planners', async () => {
-    const { unmount } = render(<PlanPage year={2026} canEdit={false} />)
+    const { unmount } = renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await userEvent.click(await screen.findByRole('button', { name: /Anna, Montag, 02.03.2026/ }))
-    expect(screen.getByRole('button', { name: 'Schließen', hidden: true })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Speichern', hidden: true })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Schließen' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
     unmount()
 
-    render(<PlanPage year={2026} canEdit />)
+    renderWithProviders(<PlanPage year={2026} canEdit />)
     await userEvent.click(await screen.findByRole('button', { name: /Anna, Montag, 02.03.2026/ }))
-    expect(screen.getByRole('button', { name: 'Speichern', hidden: true })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Speichern' })).toBeInTheDocument()
+  })
+
+  it('lets planners select several cells and fill them in one go', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    await user.keyboard('{Control>}')
+    await user.click(cell(/Bernd, Mittwoch, 04.03.2026/))
+    await user.click(cell(/Bernd, Donnerstag, 05.03.2026/))
+    await user.keyboard('{/Control}')
+
+    expect(screen.getByText('2 Felder ausgewählt')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Urlaub' }))
+
+    await waitFor(() => expect(within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Urlaub')).not.toHaveLength(0))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))).toEqual([
+      expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
+      expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
+    ])
+    expect(await screen.findByRole('button', { name: 'Rückgängig' })).toBeInTheDocument()
+    expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
   })
 })

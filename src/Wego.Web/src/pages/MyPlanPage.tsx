@@ -1,8 +1,10 @@
+import { ActionIcon, Badge, Button, Group, Paper, Stack, Text, Title } from '@mantine/core'
 import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
 import { addDays, daysBetween, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
+import { siteStyle, useSwipe } from '../lib/ui'
 
 interface Props {
   year: number
@@ -63,87 +65,111 @@ export function MyPlanPage({ year, user }: Props) {
     return map
   }, [plan])
 
+  const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
+  const swipe = useSwipe(
+    () => go(addDays(anchor, 7)),
+    () => go(addDays(anchor, -7)),
+  )
+
   const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
 
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
 
   const week = weekOf(anchor).filter((day) => inYear(day.iso))
-  const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
   const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
 
   return (
-    <div className="page my-plan">
-      <h1>Mein Plan</h1>
+    <div className="page my-plan" {...swipe}>
+      <Group justify="space-between" align="baseline" mb={4}>
+        <Title order={2}>Mein Plan</Title>
+        {vacation && (
+          <Badge size="lg" variant="light" color={vacation.remaining < 0 ? 'red' : 'green'}>
+            Urlaub: {vacation.remaining} von {vacation.entitlement} Tagen frei
+          </Badge>
+        )}
+      </Group>
 
-      {vacation && (
-        <p className="my-vacation">
-          Urlaub {year}: <strong>{vacation.remaining}</strong> von {vacation.entitlement} Tagen noch verfügbar
-        </p>
-      )}
-
-      <div className="mplan-nav">
-        <button type="button" className="btn" onClick={() => go(addDays(anchor, -7))} aria-label="Vorherige Woche">
+      <Group gap="xs" my="md" wrap="nowrap">
+        <ActionIcon variant="default" size="lg" onClick={() => go(addDays(anchor, -7))} aria-label="Vorherige Woche">
           ‹
-        </button>
-        <span className="my-week">
+        </ActionIcon>
+        <Text fw={700} c="wego.9" ta="center" style={{ flex: 1 }}>
           {short(week[0].iso)} – {short(week[week.length - 1].iso)}
           {year}
-        </span>
-        <button type="button" className="btn" onClick={() => go(addDays(anchor, 7))} aria-label="Nächste Woche">
+        </Text>
+        <ActionIcon variant="default" size="lg" onClick={() => go(addDays(anchor, 7))} aria-label="Nächste Woche">
           ›
-        </button>
+        </ActionIcon>
         {inYear(today) && (
-          <button type="button" className="btn" onClick={() => setAnchor(today)}>
+          <Button variant="default" onClick={() => setAnchor(today)}>
             Heute
-          </button>
+          </Button>
         )}
-      </div>
+      </Group>
 
-      <div className="my-days">
+      <Stack gap="sm">
         {week.map((day) => {
           const entries = ownByDate.get(day.iso) ?? []
-          const className = ['mcard', day.iso === today ? 'highlighted' : '', day.isWeekend ? 'weekend' : '']
-            .filter(Boolean)
-            .join(' ')
           // Empty weekends only take up space.
           if (day.isWeekend && entries.length === 0) return null
 
           return (
-            <section className={className} key={day.iso}>
-              <span className="mcard-title">
-                {formatDateLong(day.iso)}
-                {day.iso === today && <span className="badge-today">Heute</span>}
-                {holidayByDate.has(day.iso) && <span className="badge-holiday">{holidayByDate.get(day.iso)}</span>}
-              </span>
+            <Paper
+              component="section"
+              withBorder
+              radius="md"
+              p="sm"
+              key={day.iso}
+              className={day.iso === today ? 'my-day today' : 'my-day'}
+            >
+              <Group gap="xs" mb={entries.length ? 'xs' : 0}>
+                <Text fw={700} c="wego.9">
+                  {formatDateLong(day.iso)}
+                </Text>
+                {day.iso === today && <Badge color="wego">Heute</Badge>}
+                {holidayByDate.has(day.iso) && (
+                  <Badge color="yellow" variant="light">
+                    {holidayByDate.get(day.iso)}
+                  </Badge>
+                )}
+              </Group>
 
-              {entries.length === 0 && <span className="mcard-empty">nicht eingeplant</span>}
+              {entries.length === 0 && (
+                <Text size="sm" c="dimmed">
+                  nicht eingeplant
+                </Text>
+              )}
 
-              {entries.map((entry) => {
-                if (entry.type !== 'Baustelle') {
+              <Stack gap="xs">
+                {entries.map((entry) => {
+                  if (entry.type !== 'Baustelle') {
+                    return (
+                      <div className={`my-entry my-entry-${entry.type.toLowerCase()}`} key={entry.id}>
+                        <span className="where">{entry.type}</span>
+                      </div>
+                    )
+                  }
+                  const colleagues = colleaguesOf(entry)
+                  const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
                   return (
-                    <div className={`my-entry my-entry-${entry.type.toLowerCase()}`} key={entry.id}>
-                      <span className="where">{entry.type}</span>
+                    <div className="my-entry" key={entry.id} style={siteStyle(entry.customerId)}>
+                      <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
+                      <span className="where">{entry.customerName}</span>
+                      {site?.location && <SiteLocation location={site.location} />}
+                      {site?.description && <span className="detail">{site.description}</span>}
+                      {entry.note && <span className="detail">{entry.note}</span>}
+                      <span className="detail">
+                        {colleagues.length > 0 ? `mit ${colleagues.join(', ')}` : 'allein'}
+                      </span>
                     </div>
                   )
-                }
-                const colleagues = colleaguesOf(entry)
-                const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
-                return (
-                  <div className="my-entry" key={entry.id}>
-                    <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
-                    <span className="where">{entry.customerName}</span>
-                    {site?.location && <SiteLocation location={site.location} />}
-                    {site?.description && <span className="detail">{site.description}</span>}
-                    {entry.note && <span className="detail">{entry.note}</span>}
-                    <span className="detail">{colleagues.length > 0 ? `mit ${colleagues.join(', ')}` : 'allein'}</span>
-                  </div>
-                )
-              })}
-            </section>
+                })}
+              </Stack>
+            </Paper>
           )
         })}
-      </div>
+      </Stack>
     </div>
   )
 }

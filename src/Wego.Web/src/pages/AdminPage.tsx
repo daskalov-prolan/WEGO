@@ -1,16 +1,56 @@
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Checkbox,
+  Code,
+  CopyButton,
+  Group,
+  NumberInput,
+  Paper,
+  PasswordInput,
+  Select,
+  SimpleGrid,
+  Stack,
+  Table,
+  Tabs,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core'
+import { DatePickerInput } from '@mantine/dates'
+import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Access, Customer, Employee, EmployeeInput, Role, SchoolHoliday } from '../api/types'
+import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
+import { siteStyle } from '../lib/ui'
 
-/** Planner-only: employees and their rights, school holidays, customer names. */
+/** Planner-only: employees and their rights, school holidays, construction sites. */
 export function AdminPage({ year }: { year: number }) {
   return (
     <div className="page">
-      <h1>Verwaltung</h1>
-      <EmployeesSection />
-      <SchoolHolidaysSection year={year} />
-      <CustomersSection />
+      <Title order={2} mb="md">
+        Verwaltung
+      </Title>
+      <Tabs defaultValue="employees" keepMounted={false}>
+        <Tabs.List mb="md">
+          <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
+          <Tabs.Tab value="sites">Baustellen</Tabs.Tab>
+          <Tabs.Tab value="holidays">Schulferien</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="employees">
+          <EmployeesSection />
+        </Tabs.Panel>
+        <Tabs.Panel value="sites">
+          <CustomersSection />
+        </Tabs.Panel>
+        <Tabs.Panel value="holidays">
+          <SchoolHolidaysSection year={year} />
+        </Tabs.Panel>
+      </Tabs>
     </div>
   )
 }
@@ -31,25 +71,29 @@ function EmployeesSection() {
   // id 0 = new employee
   const [editing, setEditing] = useState<{ id: number; input: EmployeeInput } | null>(null)
   const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
   // Initial passwords exist only here until the page is left: the server stores hashes.
   const [accesses, setAccesses] = useState<Access[]>([])
+
+  const load = useCallback(() => {
+    api.employees().then(setEmployees, (e) => setError(messageOf(e)))
+  }, [])
+  useEffect(load, [load])
 
   const createAccesses = async (targets: Employee[]) => {
     setError('')
     try {
       const created: Access[] = []
       for (const employee of targets) created.push(await api.createAccess(employee.id))
-      setAccesses((current) => [...created, ...current.filter((a) => !created.some((c) => c.employeeId === a.employeeId))])
+      setAccesses((current) => [
+        ...created,
+        ...current.filter((a) => !created.some((c) => c.employeeId === a.employeeId)),
+      ])
       load()
     } catch (e) {
       setError(messageOf(e))
     }
   }
-
-  const load = useCallback(() => {
-    api.employees().then(setEmployees, (e) => setError(messageOf(e)))
-  }, [])
-  useEffect(load, [load])
 
   const change = (patch: Partial<EmployeeInput>) =>
     setEditing((current) => current && { ...current, input: { ...current.input, ...patch } })
@@ -61,230 +105,252 @@ function EmployeesSection() {
       if (editing.id === 0) await api.createEmployee(editing.input)
       else await api.updateEmployee(editing.id, editing.input)
       setEditing(null)
-      setError('')
+      setFormError('')
+      notifications.show({ message: 'Mitarbeiter gespeichert.', color: 'green' })
       load()
     } catch (e) {
-      setError(messageOf(e))
+      setFormError(messageOf(e))
     }
   }
 
+  const withoutLogin = employees.filter((employee) => employee.isActive && !employee.hasPassword)
+
   return (
-    <>
-      <h2>Mitarbeiter und Zugriffsrechte</h2>
-      <p className="muted">
-        Planer dürfen die Planung ändern und sehen alle Urlaubskonten. Mitarbeiter dürfen den Plan nur lesen und
-        sehen nur ihr eigenes Urlaubskonto.
-      </p>
+    <Stack gap="md">
+      <Text size="sm" c="dimmed">
+        Planer dürfen die Planung ändern und sehen alle Auswertungen. Mitarbeiter sehen „Mein Plan“ und den
+        Gesamtplan nur zum Lesen.
+      </Text>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Benutzername</th>
-            <th>Rolle</th>
-            <th className="num">Urlaubstage</th>
-            <th className="num">Reihenfolge</th>
-            <th>Im Plan</th>
-            <th>Aktiv</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {employees.map((employee) => (
-            <tr key={employee.id}>
-              <td>{employee.name}</td>
-              <td>{employee.userName ?? <span className="muted">keine Anmeldung</span>}</td>
-              <td>{employee.role}</td>
-              <td className="num">{employee.vacationDaysPerYear}</td>
-              <td className="num">{employee.sortOrder}</td>
-              <td>{employee.showInPlan ? 'ja' : 'nein'}</td>
-              <td>{employee.isActive ? 'ja' : 'nein'}</td>
-              <td>
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  onClick={() =>
-                    setEditing({
-                      id: employee.id,
-                      input: {
-                        name: employee.name,
-                        sortOrder: employee.sortOrder,
-                        isActive: employee.isActive,
-                        showInPlan: employee.showInPlan,
-                        vacationDaysPerYear: employee.vacationDaysPerYear,
-                        userName: employee.userName,
-                        role: employee.role,
-                        password: null,
-                      },
-                    })
-                  }
-                >
-                  Bearbeiten
-                </button>{' '}
-                {employee.isActive && (
-                  <button
-                    type="button"
-                    className="btn btn-small"
-                    onClick={() => {
-                      if (
-                        !employee.hasPassword ||
-                        window.confirm(`Neues Startpasswort für ${employee.name} erzeugen? Das bisherige Passwort gilt dann nicht mehr.`)
-                      ) {
-                        void createAccesses([employee])
-                      }
-                    }}
-                  >
-                    {employee.hasPassword ? 'Passwort zurücksetzen' : 'Zugang anlegen'}
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Group gap="xs">
+        <Button onClick={() => setEditing({ id: 0, input: newEmployee })}>+ Mitarbeiter anlegen</Button>
+        {withoutLogin.length > 0 && (
+          <Button variant="light" onClick={() => createAccesses(withoutLogin)}>
+            Zugänge für alle ohne Anmeldung anlegen ({withoutLogin.length})
+          </Button>
+        )}
+      </Group>
 
-      {error && <p className="error">{error}</p>}
-
-      {employees.some((employee) => employee.isActive && !employee.hasPassword) && (
-        <p>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => createAccesses(employees.filter((employee) => employee.isActive && !employee.hasPassword))}
-          >
-            Zugänge für alle ohne Anmeldung anlegen
-          </button>
-        </p>
+      {error && (
+        <Alert color="red" variant="light">
+          {error}
+        </Alert>
       )}
 
       {accesses.length > 0 && (
-        <div className="panel access-panel">
-          <strong>Neue Zugangsdaten – bitte jetzt notieren oder weitergeben.</strong>
-          <p className="muted">
+        <Alert color="green" variant="light" title="Neue Zugangsdaten – bitte jetzt notieren oder weitergeben">
+          <Text size="sm" mb="xs">
             Die Startpasswörter werden nicht gespeichert und nach dem Verlassen dieser Seite nicht wieder angezeigt.
             Bei der ersten Anmeldung wählt jeder sein eigenes Passwort.
-          </p>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Benutzername</th>
-                <th>Startpasswort</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accesses.map((access) => (
-                <tr key={access.employeeId}>
-                  <td>{access.name}</td>
-                  <td>
-                    <code>{access.userName}</code>
-                  </td>
-                  <td>
-                    <code>{access.initialPassword}</code>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          </Text>
+          <Table.ScrollContainer minWidth={420}>
+            <Table withTableBorder bg="white">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>Benutzername</Table.Th>
+                  <Table.Th>Startpasswort</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {accesses.map((access) => (
+                  <Table.Tr key={access.employeeId}>
+                    <Table.Td>{access.name}</Table.Td>
+                    <Table.Td>
+                      <Code fz="sm">{access.userName}</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Code fz="sm">{access.initialPassword}</Code>
+                        <CopyButton value={`${access.userName} / ${access.initialPassword}`}>
+                          {({ copied, copy }) => (
+                            <Button size="compact-xs" variant="subtle" onClick={copy}>
+                              {copied ? 'kopiert' : 'kopieren'}
+                            </Button>
+                          )}
+                        </CopyButton>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Alert>
       )}
 
-      {editing ? (
-        <form className="panel" onSubmit={submit} style={{ marginTop: 12 }}>
-          <div className="toolbar">
-            <label className="field">
-              Name
-              <input value={editing.input.name} onChange={(e) => change({ name: e.target.value })} required />
-            </label>
-            <label className="field">
-              Benutzername (leer = keine Anmeldung)
-              <input
-                value={editing.input.userName ?? ''}
-                onChange={(e) => change({ userName: e.target.value || null })}
-                autoComplete="off"
+      <Table.ScrollContainer minWidth={760}>
+        <Table striped highlightOnHover withTableBorder verticalSpacing="xs">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Benutzername</Table.Th>
+              <Table.Th>Rolle</Table.Th>
+              <Table.Th ta="right">Urlaubstage</Table.Th>
+              <Table.Th ta="right">Reihenfolge</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {employees.map((employee) => (
+              <Table.Tr key={employee.id} opacity={employee.isActive ? 1 : 0.55}>
+                <Table.Td fw={600}>{employee.name}</Table.Td>
+                <Table.Td>
+                  {employee.userName ?? (
+                    <Text size="sm" c="dimmed">
+                      keine Anmeldung
+                    </Text>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  <Badge variant="light" color={employee.role === 'Planer' ? 'wego' : 'gray'}>
+                    {employee.role}
+                  </Badge>
+                </Table.Td>
+                <Table.Td ta="right">{employee.vacationDaysPerYear}</Table.Td>
+                <Table.Td ta="right">{employee.sortOrder}</Table.Td>
+                <Table.Td>
+                  <Group gap={4}>
+                    {!employee.isActive && <Badge color="gray">inaktiv</Badge>}
+                    {!employee.showInPlan && (
+                      <Badge color="gray" variant="outline">
+                        nicht im Plan
+                      </Badge>
+                    )}
+                  </Group>
+                </Table.Td>
+                <Table.Td>
+                  <Group gap={4} justify="flex-end" wrap="nowrap">
+                    <Button
+                      size="compact-sm"
+                      variant="default"
+                      onClick={() =>
+                        setEditing({
+                          id: employee.id,
+                          input: {
+                            name: employee.name,
+                            sortOrder: employee.sortOrder,
+                            isActive: employee.isActive,
+                            showInPlan: employee.showInPlan,
+                            vacationDaysPerYear: employee.vacationDaysPerYear,
+                            userName: employee.userName,
+                            role: employee.role,
+                            password: null,
+                          },
+                        })
+                      }
+                    >
+                      Bearbeiten
+                    </Button>
+                    {employee.isActive && (
+                      <Button
+                        size="compact-sm"
+                        variant="light"
+                        onClick={() =>
+                          (!employee.hasPassword ||
+                            window.confirm(
+                              `Neues Startpasswort für ${employee.name} erzeugen? Das bisherige Passwort gilt dann nicht mehr.`,
+                            )) &&
+                          createAccesses([employee])
+                        }
+                      >
+                        {employee.hasPassword ? 'Passwort zurücksetzen' : 'Zugang anlegen'}
+                      </Button>
+                    )}
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+
+      {editing && (
+        <Sheet
+          onClose={() => setEditing(null)}
+          title={<Text fw={700}>{editing.id === 0 ? 'Mitarbeiter anlegen' : editing.input.name}</Text>}
+        >
+          <form onSubmit={submit}>
+            <Stack gap="sm">
+              <TextInput
+                label="Name"
+                value={editing.input.name}
+                onChange={(e) => change({ name: e.currentTarget.value })}
+                required
+                data-autofocus
               />
-            </label>
-            <label className="field">
-              {editing.id === 0 ? 'Passwort' : 'Neues Passwort (leer = unverändert)'}
-              <input
-                type="password"
-                value={editing.input.password ?? ''}
-                onChange={(e) => change({ password: e.target.value || null })}
-                minLength={8}
-                autoComplete="new-password"
-              />
-            </label>
-            <label className="field">
-              Rolle
-              <select value={editing.input.role} onChange={(e) => change({ role: e.target.value as Role })}>
-                <option>Mitarbeiter</option>
-                <option>Planer</option>
-              </select>
-            </label>
-            <label className="field">
-              Urlaubstage pro Jahr
-              <input
-                type="number"
-                min={0}
-                max={366}
-                value={editing.input.vacationDaysPerYear}
-                onChange={(e) => change({ vacationDaysPerYear: Number(e.target.value) })}
-                style={{ width: 90 }}
-              />
-            </label>
-            <label className="field">
-              Reihenfolge im Plan
-              <input
-                type="number"
-                value={editing.input.sortOrder}
-                onChange={(e) => change({ sortOrder: Number(e.target.value) })}
-                style={{ width: 90 }}
-              />
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                <TextInput
+                  label="Benutzername"
+                  description="leer = keine Anmeldung"
+                  value={editing.input.userName ?? ''}
+                  onChange={(e) => change({ userName: e.currentTarget.value || null })}
+                  autoComplete="off"
+                />
+                <PasswordInput
+                  label={editing.id === 0 ? 'Passwort' : 'Neues Passwort'}
+                  description={editing.id === 0 ? 'oder später „Zugang anlegen“' : 'leer = unverändert'}
+                  value={editing.input.password ?? ''}
+                  onChange={(e) => change({ password: e.currentTarget.value || null })}
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                <Select
+                  label="Rolle"
+                  value={editing.input.role}
+                  onChange={(value) => value && change({ role: value as Role })}
+                  data={['Mitarbeiter', 'Planer']}
+                  allowDeselect={false}
+                />
+                <NumberInput
+                  label="Urlaubstage pro Jahr"
+                  min={0}
+                  max={366}
+                  value={editing.input.vacationDaysPerYear}
+                  onChange={(value) => change({ vacationDaysPerYear: Number(value) || 0 })}
+                />
+                <NumberInput
+                  label="Reihenfolge im Plan"
+                  value={editing.input.sortOrder}
+                  onChange={(value) => change({ sortOrder: Number(value) || 0 })}
+                />
+              </SimpleGrid>
+              <Checkbox
+                label="Spalte im Gesamtplan (wird auf Baustellen eingeplant)"
                 checked={editing.input.showInPlan}
-                onChange={(e) => change({ showInPlan: e.target.checked })}
+                onChange={(e) => change({ showInPlan: e.currentTarget.checked })}
               />
-              Spalte im Einsatzplan
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
+              <Checkbox
+                label="Aktiv"
                 checked={editing.input.isActive}
-                onChange={(e) => change({ isActive: e.target.checked })}
+                onChange={(e) => change({ isActive: e.currentTarget.checked })}
               />
-              Aktiv
-            </label>
-          </div>
-          <div className="dialog-actions">
-            <button type="submit" className="btn btn-primary">
-              Speichern
-            </button>
-            <button type="button" className="btn" onClick={() => setEditing(null)}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
-      ) : (
-        <p>
-          <button type="button" className="btn" onClick={() => setEditing({ id: 0, input: newEmployee })}>
-            + Mitarbeiter anlegen
-          </button>
-        </p>
+              {formError && (
+                <Alert color="red" variant="light">
+                  {formError}
+                </Alert>
+              )}
+              <Group justify="flex-end">
+                <Button variant="default" onClick={() => setEditing(null)}>
+                  Abbrechen
+                </Button>
+                <Button type="submit">Speichern</Button>
+              </Group>
+            </Stack>
+          </form>
+        </Sheet>
       )}
-    </>
+    </Stack>
   )
 }
 
 function SchoolHolidaysSection({ year }: { year: number }) {
   const [holidays, setHolidays] = useState<SchoolHoliday[]>([])
   const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [message, setMessage] = useState('')
+  const [range, setRange] = useState<[string | null, string | null]>([null, null])
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
     api.plan(year).then((plan) => setHolidays(plan.schoolHolidays), (e) => setError(messageOf(e)))
@@ -293,33 +359,35 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 
   const run = async (action: () => Promise<string>) => {
     setError('')
-    setMessage('')
+    setBusy(true)
     try {
-      setMessage(await action())
+      const message = await action()
+      if (message) notifications.show({ message, color: 'green' })
       load()
     } catch (e) {
       setError(messageOf(e))
+    } finally {
+      setBusy(false)
     }
   }
 
   const add = (event: FormEvent) => {
     event.preventDefault()
+    const [start, end] = range
+    if (!start || !end) return
     void run(async () => {
-      await api.addSchoolHoliday(name, startDate, endDate)
+      await api.addSchoolHoliday(name, start, end)
       setName('')
-      setStartDate('')
-      setEndDate('')
-      return ''
+      setRange([null, null])
+      return 'Ferien eingetragen.'
     })
   }
 
   return (
-    <>
-      <h2>Schulferien Berlin {year}</h2>
-      <p>
-        <button
-          type="button"
-          className="btn"
+    <Stack gap="md">
+      <Group gap="xs">
+        <Button
+          loading={busy}
           onClick={() =>
             run(async () => {
               const result = await api.importSchoolHolidays(year)
@@ -327,70 +395,82 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             })
           }
         >
-          Ferien {year} automatisch abrufen
-        </button>{' '}
-        <span className="muted">Quelle: openholidaysapi.org</span>
-      </p>
-      {message && <p>{message}</p>}
-      {error && <p className="error">{error}</p>}
+          Schulferien Berlin {year} automatisch abrufen
+        </Button>
+        <Text size="sm" c="dimmed">
+          Quelle: openholidaysapi.org
+        </Text>
+      </Group>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Bezeichnung</th>
-            <th>Von</th>
-            <th>Bis</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {holidays.map((holiday) => (
-            <tr key={holiday.id}>
-              <td>{holiday.name}</td>
-              <td>{formatDate(holiday.startDate)}</td>
-              <td>{formatDate(holiday.endDate)}</td>
-              <td>
-                <button
-                  type="button"
-                  className="btn btn-small btn-danger"
-                  onClick={() =>
-                    run(async () => {
-                      await api.deleteSchoolHoliday(holiday.id)
-                      return ''
-                    })
-                  }
-                >
-                  Löschen
-                </button>
-              </td>
-            </tr>
-          ))}
-          {holidays.length === 0 && (
-            <tr>
-              <td colSpan={4}>Für {year} sind noch keine Schulferien eingetragen.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      {error && (
+        <Alert color="red" variant="light">
+          {error}
+        </Alert>
+      )}
 
-      <form className="toolbar" onSubmit={add} style={{ marginTop: 12 }}>
-        <label className="field">
-          Bezeichnung
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label className="field">
-          Von
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-        </label>
-        <label className="field">
-          Bis
-          <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
-        </label>
-        <button type="submit" className="btn">
-          Hinzufügen
-        </button>
-      </form>
-    </>
+      <Table.ScrollContainer minWidth={460}>
+        <Table striped withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Bezeichnung</Table.Th>
+              <Table.Th>Von</Table.Th>
+              <Table.Th>Bis</Table.Th>
+              <Table.Th />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {holidays.map((holiday) => (
+              <Table.Tr key={holiday.id}>
+                <Table.Td>{holiday.name}</Table.Td>
+                <Table.Td>{formatDate(holiday.startDate)}</Table.Td>
+                <Table.Td>{formatDate(holiday.endDate)}</Table.Td>
+                <Table.Td ta="right">
+                  <Button
+                    size="compact-sm"
+                    color="red"
+                    variant="subtle"
+                    onClick={() =>
+                      run(async () => {
+                        await api.deleteSchoolHoliday(holiday.id)
+                        return ''
+                      })
+                    }
+                  >
+                    Löschen
+                  </Button>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+            {holidays.length === 0 && (
+              <Table.Tr>
+                <Table.Td colSpan={4}>Für {year} sind noch keine Schulferien eingetragen.</Table.Td>
+              </Table.Tr>
+            )}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+
+      <Paper withBorder p="sm" component="form" onSubmit={add}>
+        <Text fw={600} size="sm" mb="xs">
+          Ferien von Hand eintragen
+        </Text>
+        <Group align="flex-end" gap="sm">
+          <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+          <DatePickerInput
+            type="range"
+            label="Zeitraum"
+            value={range}
+            onChange={(value) => setRange(value as [string | null, string | null])}
+            valueFormat="DD.MM.YYYY"
+            miw={220}
+            required
+          />
+          <Button type="submit" variant="light" disabled={!range[0] || !range[1]}>
+            Hinzufügen
+          </Button>
+        </Group>
+      </Paper>
+    </Stack>
   )
 }
 
@@ -399,6 +479,7 @@ function CustomersSection() {
   const [editing, setEditing] = useState<Customer | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
 
   const load = useCallback(() => {
     api.customers().then(setCustomers, (e) => setError(messageOf(e)))
@@ -415,10 +496,11 @@ function CustomersSection() {
         description: editing.description,
       })
       setEditing(null)
-      setError('')
+      setFormError('')
+      notifications.show({ message: 'Baustelle gespeichert.', color: 'green' })
       load()
     } catch (e) {
-      setError(messageOf(e))
+      setFormError(messageOf(e))
     }
   }
 
@@ -426,93 +508,104 @@ function CustomersSection() {
   const visible = needle ? customers.filter((customer) => customer.name.toLowerCase().includes(needle)) : customers
 
   return (
-    <>
-      <h2>Baustellen (Kunden)</h2>
-      <p className="muted">
+    <Stack gap="md">
+      <Text size="sm" c="dimmed">
         Baustellen entstehen beim Eintragen im Gesamtplan. Ort und Beschreibung sehen die Handwerker in „Mein
         Plan“. Wer einer Baustelle den Namen einer anderen gibt, führt beide zusammen – so lassen sich
         Schreibvarianten bereinigen.
-      </p>
+      </Text>
 
-      <div className="toolbar">
-        <label className="field">
-          Suchen
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kundenname" />
-        </label>
-        <span className="muted">
+      <Group gap="sm" align="flex-end">
+        <TextInput
+          label="Suchen"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          placeholder="Kundenname"
+        />
+        <Text size="sm" c="dimmed">
           {visible.length} von {customers.length} Baustellen
-        </span>
-      </div>
+        </Text>
+      </Group>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <Alert color="red" variant="light">
+          {error}
+        </Alert>
+      )}
+
+      <Table.ScrollContainer minWidth={620}>
+        <Table striped highlightOnHover withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Kunde</Table.Th>
+              <Table.Th>Ort / Adresse</Table.Th>
+              <Table.Th>Beschreibung</Table.Th>
+              <Table.Th />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {visible.map((customer) => (
+              <Table.Tr key={customer.id}>
+                <Table.Td>
+                  <Group gap={8} wrap="nowrap">
+                    <span className="site-dot" style={siteStyle(customer.id)} />
+                    <Anchor href={`#/baustellen/${customer.id}`}>{customer.name}</Anchor>
+                  </Group>
+                </Table.Td>
+                <Table.Td>{customer.location}</Table.Td>
+                <Table.Td>{customer.description}</Table.Td>
+                <Table.Td ta="right">
+                  <Button size="compact-sm" variant="default" onClick={() => setEditing(customer)}>
+                    Bearbeiten
+                  </Button>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
 
       {editing && (
-        <form className="panel" onSubmit={submit}>
-          <div className="toolbar">
-            <label className="field">
-              Kunde
-              <input
+        <Sheet onClose={() => setEditing(null)} title={<Text fw={700}>Baustelle bearbeiten</Text>}>
+          <form onSubmit={submit}>
+            <Stack gap="sm">
+              <TextInput
+                label="Kunde"
                 value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                onChange={(e) => setEditing({ ...editing, name: e.currentTarget.value })}
                 required
                 maxLength={200}
               />
-            </label>
-            <label className="field" style={{ flex: 1, minWidth: 220 }}>
-              Ort / Adresse
-              <input
-                value={editing.location ?? ''}
-                onChange={(e) => setEditing({ ...editing, location: e.target.value || null })}
-                maxLength={200}
+              <TextInput
+                label="Ort / Adresse"
                 placeholder="z. B. Musterstraße 5, 13125 Berlin"
+                value={editing.location ?? ''}
+                onChange={(e) => setEditing({ ...editing, location: e.currentTarget.value || null })}
+                maxLength={200}
               />
-            </label>
-            <label className="field" style={{ flex: 2, minWidth: 260 }}>
-              Beschreibung (Art des Umbaus, Fliesen, Hinweise)
-              <input
+              <TextInput
+                label="Beschreibung"
+                description="Art des Umbaus, Fliesen, Hinweise"
                 value={editing.description ?? ''}
-                onChange={(e) => setEditing({ ...editing, description: e.target.value || null })}
+                onChange={(e) => setEditing({ ...editing, description: e.currentTarget.value || null })}
                 maxLength={1000}
               />
-            </label>
-          </div>
-          <div className="dialog-actions">
-            <button type="submit" className="btn btn-primary">
-              Speichern
-            </button>
-            <button type="button" className="btn" onClick={() => setEditing(null)}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
+              {formError && (
+                <Alert color="red" variant="light">
+                  {formError}
+                </Alert>
+              )}
+              <Group justify="flex-end">
+                <Button variant="default" onClick={() => setEditing(null)}>
+                  Abbrechen
+                </Button>
+                <Button type="submit">Speichern</Button>
+              </Group>
+            </Stack>
+          </form>
+        </Sheet>
       )}
-
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Kunde</th>
-            <th>Ort / Adresse</th>
-            <th>Beschreibung</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((customer) => (
-            <tr key={customer.id}>
-              <td>
-                <a href={`#/baustellen/${customer.id}`}>{customer.name}</a>
-              </td>
-              <td>{customer.location}</td>
-              <td>{customer.description}</td>
-              <td>
-                <button type="button" className="btn btn-small" onClick={() => setEditing(customer)}>
-                  Bearbeiten
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
+    </Stack>
   )
 }

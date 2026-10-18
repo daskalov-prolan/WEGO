@@ -1,7 +1,21 @@
-import { useState, type FormEvent } from 'react'
+import { Alert, Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { api, ApiError, messageOf } from '../api/client'
 import type { User } from '../api/types'
 import logo from '../assets/logo.svg'
+
+function LoginFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="login">
+      <Paper className="login-card" shadow="xl" radius="md">
+        <div className="login-logo">
+          <img src={logo} alt="WEGO Badcenter" />
+        </div>
+        {children}
+      </Paper>
+    </div>
+  )
+}
 
 export function LoginPage({ onLogin }: { onLogin: (user: User, password: string) => void }) {
   const [userName, setUserName] = useState('')
@@ -27,32 +41,39 @@ export function LoginPage({ onLogin }: { onLogin: (user: User, password: string)
   }
 
   return (
-    <div className="login">
+    <LoginFrame>
       <form onSubmit={submit}>
-        <div className="login-logo">
-          <img src={logo} alt="WEGO Badcenter" />
-        </div>
-        <h1>Personaleinsatzplanung</h1>
-        <label className="field">
-          Benutzername
-          <input value={userName} onChange={(e) => setUserName(e.target.value)} autoComplete="username" required />
-        </label>
-        <label className="field">
-          Passwort
-          <input
-            type="password"
+        <Stack gap="md" p="lg">
+          <Title order={2} c="wego.9">
+            Personaleinsatzplanung
+          </Title>
+          <TextInput
+            label="Benutzername"
+            value={userName}
+            onChange={(e) => setUserName(e.currentTarget.value)}
+            autoComplete="username"
+            required
+            size="md"
+          />
+          <PasswordInput
+            label="Passwort"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.currentTarget.value)}
             autoComplete="current-password"
             required
+            size="md"
           />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          Anmelden
-        </button>
+          {error && (
+            <Alert color="red" variant="light">
+              {error}
+            </Alert>
+          )}
+          <Button type="submit" loading={busy} size="md">
+            Anmelden
+          </Button>
+        </Stack>
       </form>
-    </div>
+    </LoginFrame>
   )
 }
 
@@ -86,51 +107,51 @@ export function NewPasswordPage({ user, knownPassword, onDone, onLogout }: NewPa
   }
 
   return (
-    <div className="login">
+    <LoginFrame>
       <form onSubmit={submit}>
-        <div className="login-logo">
-          <img src={logo} alt="WEGO Badcenter" />
-        </div>
-        <h1>Eigenes Passwort wählen</h1>
-        <p className="muted" style={{ margin: 0 }}>
-          Hallo {user.name}, bitte ersetzen Sie das Startpasswort durch ein eigenes, das nur Sie kennen.
-        </p>
-        {!knownPassword && (
-          <label className="field">
-            Startpasswort
-            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
-          </label>
-        )}
-        <label className="field">
-          Neues Passwort (mindestens 8 Zeichen)
-          <input
-            type="password"
+        <Stack gap="md" p="lg">
+          <Title order={2} c="wego.9">
+            Eigenes Passwort wählen
+          </Title>
+          <Text c="dimmed" size="sm">
+            Hallo {user.name}, bitte ersetzen Sie das Startpasswort durch ein eigenes, das nur Sie kennen.
+          </Text>
+          {!knownPassword && (
+            <PasswordInput
+              label="Startpasswort"
+              value={current}
+              onChange={(e) => setCurrent(e.currentTarget.value)}
+              required
+            />
+          )}
+          <PasswordInput
+            label="Neues Passwort"
+            description="Mindestens 8 Zeichen"
             value={next}
-            onChange={(e) => setNext(e.target.value)}
+            onChange={(e) => setNext(e.currentTarget.value)}
             autoComplete="new-password"
             minLength={8}
             required
           />
-        </label>
-        <label className="field">
-          Neues Passwort wiederholen
-          <input
-            type="password"
+          <PasswordInput
+            label="Neues Passwort wiederholen"
             value={repeat}
-            onChange={(e) => setRepeat(e.target.value)}
+            onChange={(e) => setRepeat(e.currentTarget.value)}
             autoComplete="new-password"
             minLength={8}
             required
           />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" className="btn btn-primary">
-          Speichern
-        </button>
-        <button type="button" className="btn" onClick={onLogout}>
-          Abmelden
-        </button>
+          {error && (
+            <Alert color="red" variant="light">
+              {error}
+            </Alert>
+          )}
+          <Button type="submit">Speichern</Button>
+          <Button variant="subtle" color="gray" onClick={onLogout}>
+            Abmelden
+          </Button>
+        </Stack>
       </form>
-    </div>
+    </LoginFrame>
   )
 }

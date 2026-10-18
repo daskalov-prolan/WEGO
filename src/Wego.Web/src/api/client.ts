@@ -71,6 +71,9 @@ export const api = {
   plan: (year: number) => request<Plan>('GET', `/api/plan?year=${year}`),
   saveDay: (employeeId: number, date: string, entries: DayEntryInput[]) =>
     request<Entry[]>('PUT', `/api/plan/${employeeId}/${date}`, entries),
+  /** Replaces the entries of several employee days in one transaction. */
+  saveDays: (days: { employeeId: number; date: string; entries: DayEntryInput[] }[]) =>
+    request<Entry[]>('PUT', '/api/plan/batch', days),
 
   customers: () => request<Customer[]>('GET', '/api/customers'),
   updateCustomer: (id: number, input: Omit<Customer, 'id'>) =>

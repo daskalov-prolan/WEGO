@@ -1,45 +1,46 @@
-import { useEffect, useRef } from 'react'
-import type { Entry, NamedItem } from '../api/types'
+import { Badge, Button, Group, Stack, Text } from '@mantine/core'
+import type { Customer, Entry, NamedItem } from '../api/types'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
+import { Sheet } from './Sheet'
+import { SiteLocation } from './SiteLocation'
 
 interface Props {
   employee: NamedItem
   date: string
   entries: Entry[]
   holiday?: string
+  siteById: Map<number, Customer>
   onClose: () => void
 }
 
 /** Read-only view of one employee's day, for everybody who may not change the plan. */
-export function DayDetails({ employee, date, entries, holiday, onClose }: Props) {
-  const dialog = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    dialog.current?.showModal?.()
-  }, [])
-
+export function DayDetails({ employee, date, entries, holiday, siteById, onClose }: Props) {
   return (
-    <dialog ref={dialog} onClose={onClose} className="day-details">
-      <h2>{employee.name}</h2>
-      <p className="muted">
-        {formatDateLong(date)}
-        {holiday && <span className="badge-holiday">{holiday}</span>}
-      </p>
-      {entries.length === 0 ? (
-        <p>Nicht eingeplant.</p>
-      ) : (
-        <div className="day-details-entries">
-          {entries.map((entry) => (
-            <Chip key={entry.id} entry={entry} />
-          ))}
-        </div>
-      )}
-      <div className="dialog-actions">
-        <button type="button" className="btn btn-primary" onClick={onClose}>
-          Schließen
-        </button>
-      </div>
-    </dialog>
+    <Sheet onClose={onClose} title={<Text fw={700}>{employee.name}</Text>} size="md">
+      <Stack gap="sm">
+        <Group gap="xs">
+          <Text c="dimmed">{formatDateLong(date)}</Text>
+          {holiday && (
+            <Badge color="yellow" variant="light">
+              {holiday}
+            </Badge>
+          )}
+        </Group>
+        {entries.length === 0 && <Text>Nicht eingeplant.</Text>}
+        {entries.map((entry) => {
+          const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
+          return (
+            <div key={entry.id} className="day-details-entry">
+              <Chip entry={entry} />
+              {site?.location && <SiteLocation location={site.location} />}
+            </div>
+          )
+        })}
+        <Group justify="flex-end">
+          <Button onClick={onClose}>Schließen</Button>
+        </Group>
+      </Stack>
+    </Sheet>
   )
 }

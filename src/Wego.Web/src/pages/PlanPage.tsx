@@ -1,8 +1,24 @@
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  Group,
+  Menu,
+  Paper,
+  SegmentedControl,
+  Text,
+  TextInput,
+  Tooltip,
+} from '@mantine/core'
+import { DatePickerInput } from '@mantine/dates'
+import { useWindowEvent } from '@mantine/hooks'
+import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Entry, NamedItem, Plan } from '../api/types'
+import type { Customer, DayEntryInput, Entry, NamedItem, Plan } from '../api/types'
+import { AssignSite } from '../components/AssignSite'
 import { DayDetails } from '../components/DayDetails'
-import { DayDialog } from '../components/DayDialog'
+import { DayEditor } from '../components/DayEditor'
 import { MonthMatrix, WeekMatrix } from '../components/PlanMatrix'
 import { YearGrid } from '../components/YearGrid'
 import {
@@ -16,6 +32,7 @@ import {
   todayIso,
   weekOf,
 } from '../lib/dates'
+import { cellKey, toInput, useSwipe } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -24,15 +41,9 @@ interface Props {
 }
 
 type View = 'week' | 'month' | 'year'
-
-const VIEWS: { view: View; label: string }[] = [
-  { view: 'week', label: 'Woche' },
-  { view: 'month', label: 'Monat' },
-  { view: 'year', label: 'Jahr' },
-]
+type DayChange = { employeeId: number; date: string; entries: DayEntryInput[] }
 
 const HIDDEN_KEY = 'wego.plan.hiddenEmployees'
-const cellKey = (employeeId: number, date: string) => `${employeeId}|${date}`
 
 function loadHidden(): number[] {
   try {
@@ -43,10 +54,15 @@ function loadHidden(): number[] {
   }
 }
 
+const parseKey = (key: string) => {
+  const [employeeId, date] = key.split('|')
+  return { employeeId: Number(employeeId), date }
+}
+
 /**
  * The plan of everybody. The week is the working unit: employees in rows, weekdays in columns, which
  * fits from phone to desktop. Month and year are overviews; the year grid (as in the Excel sheet)
- * is offered on wide screens only.
+ * is offered on wide screens only. Planners select cells to fill many days at once.
  */
 export function PlanPage({ year, canEdit }: Props) {
   const first = `${year}-01-01`
@@ -61,18 +77,17 @@ export function PlanPage({ year, canEdit }: Props) {
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
   const [open, setOpen] = useState<{ employee: NamedItem; date: string } | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [assigning, setAssigning] = useState(false)
+  const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[] } | null>(null)
 
-  const load = useCallback(() => {
-    api.plan(year).then(
-      (data) => {
-        setPlan(data)
-        setError('')
-      },
-      (e) => setError(messageOf(e)),
-    )
+  useEffect(() => {
+    api.plan(year).then(setPlan, (e) => setError(messageOf(e)))
   }, [year])
 
-  useEffect(load, [load])
+  useWindowEvent('keydown', (event) => {
+    if (event.key === 'Escape' && selected.size > 0) setSelected(new Set())
+  })
 
   const entriesByCell = useMemo(() => {
     const map = new Map<string, Entry[]>()
@@ -93,7 +108,25 @@ export function PlanPage({ year, canEdit }: Props) {
     return map
   }, [plan])
 
+  const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
+  const customerNames = useMemo(() => (plan?.customers ?? []).map((site) => site.name), [plan])
   const yearDays = useMemo(() => daysOfYear(year), [year])
+
+  // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
+  const recentSites = useMemo(() => {
+    const from = addDays(weekOf(anchor)[0].iso, -7)
+    const to = addDays(from, 20)
+    const counts = new Map<number, number>()
+    for (const entry of plan?.entries ?? []) {
+      if (entry.customerId === null || entry.date < from || entry.date > to) continue
+      counts.set(entry.customerId, (counts.get(entry.customerId) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([id]) => siteById.get(id))
+      .filter((site): site is Customer => site !== undefined)
+  }, [plan, anchor, siteById])
 
   const needle = filter.trim().toLowerCase()
   const matches = useCallback(
@@ -105,16 +138,23 @@ export function PlanPage({ year, canEdit }: Props) {
     return new Set(plan.entries.filter(matches).map((entry) => entry.date))
   }, [plan, needle, matches])
 
-  if (error) return <p className="error page">{error}</p>
-  if (!plan || plan.year !== year) return null
-
   const view: View = isPhone && chosenView === 'year' ? 'week' : chosenView
   const inYear = (iso: string) => iso >= first && iso <= last
   const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
   const step = (direction: 1 | -1) =>
     go(view === 'month' ? addMonths(anchor, direction) : addDays(anchor, 7 * direction))
+  const swipe = useSwipe(
+    () => step(1),
+    () => step(-1),
+  )
 
+  if (error) return <p className="error page">{error}</p>
+  if (!plan || plan.year !== year) return null
+
+  const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
+  const isDimmed = (entry: Entry) => needle !== '' && !matches(entry)
   const employees = plan.employees.filter((employee) => !hidden.includes(employee.id))
+
   const toggleEmployee = (id: number) => {
     const next = hidden.includes(id) ? hidden.filter((other) => other !== id) : [...hidden, id]
     setHidden(next)
@@ -125,8 +165,100 @@ export function PlanPage({ year, canEdit }: Props) {
     }
   }
 
-  const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
-  const isDimmed = (entry: Entry) => needle !== '' && !matches(entry)
+  /** Puts what the server stored into the plan, without loading the whole year again. */
+  const merge = (changes: DayChange[], saved: Entry[]) => {
+    const keys = new Set(changes.map((change) => cellKey(change.employeeId, change.date)))
+    setPlan((current) => {
+      if (!current) return current
+      const known = new Set(current.customers.map((site) => site.id))
+      const added = saved
+        .filter((entry) => entry.customerId !== null && !known.has(entry.customerId))
+        .map((entry) => ({ id: entry.customerId!, name: entry.customerName!, location: null, description: null }))
+      return {
+        ...current,
+        entries: [...current.entries.filter((e) => !keys.has(cellKey(e.employeeId, e.date))), ...saved],
+        customers: added.length
+          ? [...current.customers, ...new Map(added.map((site) => [site.id, site])).values()].sort((a, b) =>
+              a.name.localeCompare(b.name, 'de'),
+            )
+          : current.customers,
+      }
+    })
+  }
+
+  /** Saves days and offers to take the change back. Rejects with the server's message. */
+  const save = async (changes: DayChange[], message: string) => {
+    const previous = changes.map((change) => ({
+      ...change,
+      entries: entriesOf(change.employeeId, change.date).map(toInput),
+    }))
+    merge(changes, await api.saveDays(changes))
+
+    const id = `saved-${Date.now()}`
+    notifications.show({
+      id,
+      autoClose: 7000,
+      message: (
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm">{message}</Text>
+          <Button
+            size="compact-sm"
+            variant="light"
+            onClick={async () => {
+              notifications.hide(id)
+              try {
+                merge(previous, await api.saveDays(previous))
+                notifications.show({ message: 'Rückgängig gemacht.', autoClose: 3000 })
+              } catch (e) {
+                notifications.show({ color: 'red', message: messageOf(e) })
+              }
+            }}
+          >
+            Rückgängig
+          </Button>
+        </Group>
+      ),
+    })
+  }
+
+  const applyToSelection = async (build: (employeeId: number, date: string) => DayEntryInput[], message: string) => {
+    const changes = [...selected].map(parseKey).map(({ employeeId, date }) => ({
+      employeeId,
+      date,
+      entries: build(employeeId, date),
+    }))
+    try {
+      await save(changes, message)
+      setSelected(new Set())
+    } catch (e) {
+      notifications.show({ color: 'red', message: messageOf(e) })
+    }
+  }
+
+  const copyWeekForward = async () => {
+    const changes: DayChange[] = []
+    for (const day of weekOf(anchor)) {
+      const target = addDays(day.iso, 7)
+      if (!inYear(day.iso) || !inYear(target)) continue
+      for (const employee of employees) {
+        const entries = entriesOf(employee.id, day.iso).filter((entry) => entry.type === 'Baustelle')
+        // Only empty days of the next week are filled, nothing planned there is overwritten.
+        if (entries.length > 0 && entriesOf(employee.id, target).length === 0) {
+          changes.push({ employeeId: employee.id, date: target, entries: entries.map(toInput) })
+        }
+      }
+    }
+    if (changes.length === 0) {
+      notifications.show({ message: 'Nichts zu übernehmen: die nächste Woche ist schon belegt oder diese leer.' })
+      return
+    }
+    try {
+      await save(changes, `${changes.length} Tage in die nächste Woche übernommen.`)
+      go(addDays(anchor, 7))
+    } catch (e) {
+      notifications.show({ color: 'red', message: messageOf(e) })
+    }
+  }
 
   const week = weekOf(anchor).filter((day) => inYear(day.iso))
   const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
@@ -146,99 +278,103 @@ export function PlanPage({ year, canEdit }: Props) {
     isDimmed,
     linkNames: canEdit,
     onOpen: (employee: NamedItem, date: string) => setOpen({ employee, date }),
+    selectable: canEdit,
+    selected,
+    onSelectedChange: setSelected,
   }
+  const singleSelected = selected.size === 1 ? parseKey([...selected][0]) : null
+  const singleEntries = singleSelected ? entriesOf(singleSelected.employeeId, singleSelected.date) : []
 
   return (
     <div className="plan">
       <div className="plan-toolbar">
-        <div className="plan-toolbar-row">
-          <div className="segmented" role="tablist" aria-label="Zeitraum">
-            {VIEWS.map((item) => (
-              <button
-                type="button"
-                role="tab"
-                key={item.view}
-                className={item.view === 'year' ? 'wide-only' : undefined}
-                aria-selected={view === item.view}
-                onClick={() => setChosenView(item.view)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
+        <Group gap="xs" wrap="wrap">
+          <SegmentedControl
+            value={view}
+            onChange={(value) => setChosenView(value as View)}
+            data={[
+              { value: 'week', label: 'Woche' },
+              { value: 'month', label: 'Monat' },
+              ...(isPhone ? [] : [{ value: 'year', label: 'Jahr' }]),
+            ]}
+          />
           {view !== 'year' && (
-            <div className="plan-stepper">
-              <button type="button" className="btn" onClick={() => step(-1)} aria-label="Zurück">
+            <Group gap={4}>
+              <ActionIcon variant="default" size="lg" onClick={() => step(-1)} aria-label="Zurück">
                 ‹
-              </button>
-              <button type="button" className="btn" onClick={() => step(1)} aria-label="Weiter">
+              </ActionIcon>
+              <ActionIcon variant="default" size="lg" onClick={() => step(1)} aria-label="Weiter">
                 ›
-              </button>
-            </div>
+              </ActionIcon>
+            </Group>
           )}
           {inYear(today) && (
-            <button
-              type="button"
-              className="btn"
+            <Button
+              variant="default"
               onClick={() => {
                 setAnchor(today)
                 if (view === 'year') document.getElementById(`d-${today}`)?.scrollIntoView({ block: 'start' })
               }}
             >
               Heute
-            </button>
+            </Button>
           )}
-          <strong className="plan-title">{title}</strong>
-        </div>
+          <Text fw={700} c="wego.9" className="plan-title">
+            {title}
+          </Text>
+        </Group>
 
-        <div className="plan-toolbar-row">
-          <input
+        <Group gap="xs" wrap="wrap">
+          <TextInput
             className="plan-filter"
-            list="plan-customers"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Baustelle (Kunde) hervorheben"
+            onChange={(e) => setFilter(e.currentTarget.value)}
+            placeholder="Baustelle hervorheben"
             type="search"
             aria-label="Nach Baustelle (Kunde) filtern"
           />
-          <datalist id="plan-customers">
-            {plan.customers.map((customer) => (
-              <option key={customer.id} value={customer.name} />
-            ))}
-          </datalist>
-
           {view !== 'year' && (
-            <input
-              type="date"
+            <DatePickerInput
               value={anchor}
-              min={first}
-              max={last}
-              onChange={(e) => e.target.value && go(e.target.value)}
+              onChange={(value) => value && go(value)}
+              minDate={first}
+              maxDate={last}
+              valueFormat="DD.MM.YYYY"
               aria-label="Datum"
+              w={130}
             />
           )}
 
-          <details className="employee-picker">
-            <summary>
-              Mitarbeiter ({employees.length}/{plan.employees.length})
-            </summary>
-            <div className="employee-picker-list">
+          <Menu closeOnItemClick={false} position="bottom-start" withinPortal>
+            <Menu.Target>
+              <Button variant="default">
+                Mitarbeiter ({employees.length}/{plan.employees.length})
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
               {plan.employees.map((employee) => (
-                <label className="check" key={employee.id}>
-                  <input
-                    type="checkbox"
+                <Menu.Item key={employee.id} onClick={() => toggleEmployee(employee.id)}>
+                  <Checkbox
+                    label={employee.name}
                     checked={!hidden.includes(employee.id)}
                     onChange={() => toggleEmployee(employee.id)}
+                    onClick={(event) => event.stopPropagation()}
                   />
-                  {employee.name}
-                </label>
+                </Menu.Item>
               ))}
-            </div>
-          </details>
+            </Menu.Dropdown>
+          </Menu>
+
+          {canEdit && view === 'week' && (
+            <Tooltip label="Baustellen dieser Woche auf freie Tage der nächsten Woche übertragen">
+              <Button variant="light" onClick={copyWeekForward}>
+                Woche fortsetzen
+              </Button>
+            </Tooltip>
+          )}
 
           {matchingDates && (
-            <span className="muted">
+            <Text size="sm" c="dimmed">
               {matchingDates.size} {matchingDates.size === 1 ? 'Tag' : 'Tage'} mit Einsätzen in {year}
               {filteredCustomer && canEdit && (
                 <>
@@ -246,12 +382,23 @@ export function PlanPage({ year, canEdit }: Props) {
                   <a href={`#/baustellen/${filteredCustomer.id}`}>Auswertung öffnen</a>
                 </>
               )}
-            </span>
+            </Text>
           )}
-        </div>
+        </Group>
+        {canEdit && view !== 'year' && selected.size === 0 && !isPhone && (
+          <Text size="xs" c="dimmed">
+            Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage
+            auf einmal zu belegen.
+          </Text>
+        )}
+        {canEdit && isPhone && selected.size === 0 && (
+          <Text size="xs" c="dimmed">
+            Tipp: Feld lange drücken, um mehrere Tage auszuwählen. Wischen wechselt die Woche.
+          </Text>
+        )}
       </div>
 
-      <div className="plan-scroll">
+      <div className="plan-scroll" {...(view === 'week' ? swipe : {})}>
         {plan.employees.length === 0 ? (
           <p className="page">
             Noch keine Mitarbeiter angelegt.
@@ -276,18 +423,129 @@ export function PlanPage({ year, canEdit }: Props) {
         )}
       </div>
 
+      {selected.size > 0 && (
+        <Paper className="selection-bar" shadow="lg" p="sm" withBorder>
+          <Group gap="xs" justify="space-between" wrap="wrap">
+            <Text fw={700} size="sm">
+              {selected.size} {selected.size === 1 ? 'Feld' : 'Felder'} ausgewählt
+            </Text>
+            <Group gap={6} wrap="wrap">
+              <Button size="xs" onClick={() => setAssigning(true)}>
+                Baustelle …
+              </Button>
+              <Button
+                size="xs"
+                color="green"
+                variant="light"
+                onClick={() =>
+                  applyToSelection(
+                    () => [{ type: 'Urlaub', customerName: null, startTime: null, endTime: null, note: null }],
+                    `${selected.size} Tage als Urlaub eingetragen.`,
+                  )
+                }
+              >
+                Urlaub
+              </Button>
+              <Button
+                size="xs"
+                color="red"
+                variant="light"
+                onClick={() =>
+                  applyToSelection(
+                    () => [{ type: 'Krank', customerName: null, startTime: null, endTime: null, note: null }],
+                    `${selected.size} Tage als krank eingetragen.`,
+                  )
+                }
+              >
+                Krank
+              </Button>
+              {singleEntries.length > 0 && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => {
+                    setClipboard({
+                      label: singleEntries.map((e) => e.customerName ?? e.type).join(' / '),
+                      entries: singleEntries.map(toInput),
+                    })
+                    notifications.show({ message: 'Kopiert. Felder auswählen und „Einfügen“ wählen.', autoClose: 3000 })
+                  }}
+                >
+                  Kopieren
+                </Button>
+              )}
+              {clipboard && (
+                <Tooltip label={clipboard.label}>
+                  <Button
+                    size="xs"
+                    variant="default"
+                    onClick={() =>
+                      applyToSelection(() => clipboard.entries, `In ${selected.size} Felder eingefügt.`)
+                    }
+                  >
+                    Einfügen
+                  </Button>
+                </Tooltip>
+              )}
+              <Button
+                size="xs"
+                variant="subtle"
+                color="gray"
+                onClick={() => applyToSelection(() => [], `${selected.size} Felder geleert.`)}
+              >
+                Leeren
+              </Button>
+              <Button size="xs" variant="subtle" color="gray" onClick={() => setSelected(new Set())}>
+                Abbrechen
+              </Button>
+            </Group>
+          </Group>
+        </Paper>
+      )}
+
+      {assigning && (
+        <AssignSite
+          cellCount={selected.size}
+          customerNames={customerNames}
+          recentSites={recentSites}
+          onClose={() => setAssigning(false)}
+          onApply={async (entry, add) => {
+            const changes = [...selected].map(parseKey).map(({ employeeId, date }) => ({
+              employeeId,
+              date,
+              entries: add ? [...entriesOf(employeeId, date).map(toInput), entry] : [entry],
+            }))
+            await save(changes, `${entry.customerName} in ${changes.length} Felder eingetragen.`)
+            setAssigning(false)
+            setSelected(new Set())
+          }}
+        />
+      )}
+
       {open &&
         (canEdit ? (
-          <DayDialog
+          <DayEditor
             key={cellKey(open.employee.id, open.date)}
             employee={open.employee}
             date={open.date}
             entries={entriesOf(open.employee.id, open.date)}
-            customers={plan.customers}
+            customerNames={customerNames}
+            recentSites={recentSites}
             onClose={() => setOpen(null)}
-            onSaved={() => {
+            onSave={async (entries) => {
+              await save(
+                [{ employeeId: open.employee.id, date: open.date, entries }],
+                `${open.employee.name}: Tag gespeichert.`,
+              )
               setOpen(null)
-              load()
+            }}
+            onCopy={(entries) => {
+              setClipboard({
+                label: entries.map((e) => e.customerName || e.type).join(' / ') || 'leerer Tag',
+                entries,
+              })
+              setOpen(null)
+              notifications.show({ message: 'Kopiert. Felder auswählen und „Einfügen“ wählen.', autoClose: 3000 })
             }}
           />
         ) : (
@@ -297,6 +555,7 @@ export function PlanPage({ year, canEdit }: Props) {
             date={open.date}
             entries={entriesOf(open.employee.id, open.date)}
             holiday={holidayByDate.get(open.date)}
+            siteById={siteById}
             onClose={() => setOpen(null)}
           />
         ))}

@@ -1,7 +1,20 @@
-@import './tokens.css';
+/* Layout and the plan views. Buttons, inputs, dialogs and tables come from Mantine (see theme.ts). */
 
-* {
-  box-sizing: border-box;
+:root {
+  /* Colours taken from www.wego-badcenter.de (theme stylesheet and logo). */
+  --wego-teal: #007c87;
+  --wego-teal-dark: #004b50;
+  --wego-aqua: #39bbcf;
+  --wego-green: #009748;
+  --wego-red: #d71f27;
+
+  --surface: #ffffff;
+  --surface-muted: #f3f7f8;
+  --surface-weekend: #eaf0f2;
+  --surface-holiday: #fff6d6;
+  --border: #d5e1e4;
+  --text: #17292b;
+  --text-muted: #5c7275;
 }
 
 html,
@@ -12,22 +25,8 @@ body,
 
 body {
   margin: 0;
-  font-family: var(--font);
-  font-size: 15px;
-  color: var(--text);
   background: var(--surface-muted);
-}
-
-h1 {
-  font-size: 1.5rem;
-  margin: 0 0 16px;
-  color: var(--wego-teal-dark);
-}
-
-h2 {
-  font-size: 1.15rem;
-  margin: 28px 0 10px;
-  color: var(--wego-teal-dark);
+  color: var(--text);
 }
 
 a {
@@ -39,92 +38,14 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ---------- form controls: square corners as on the website ---------- */
-
-button,
-input,
-select {
-  font: inherit;
-  border-radius: 0;
-}
-
-input,
-select {
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-
-input:focus-visible,
-select:focus-visible,
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--wego-aqua);
-  outline-offset: 1px;
-}
-
-.btn {
-  padding: 7px 14px;
-  border: 1px solid var(--wego-teal);
-  background: var(--surface);
-  color: var(--wego-teal);
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: var(--wego-aqua);
-  border-color: var(--wego-aqua);
-  color: #fff;
-}
-
-.btn-primary {
-  background: var(--wego-teal);
-  color: #fff;
-}
-
-.btn-danger {
-  border-color: var(--wego-red);
-  color: var(--wego-red);
-}
-
-.btn-danger:hover {
-  background: var(--wego-red);
-  border-color: var(--wego-red);
-}
-
-.btn-small {
-  padding: 3px 8px;
-  font-size: 0.85rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-label.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-label.check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .error {
   color: var(--wego-red);
-  margin: 8px 0;
 }
 
-.muted {
-  color: var(--text-muted);
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
 }
 
 /* ---------- shell ---------- */
@@ -136,68 +57,81 @@ label.check {
 }
 
 .shell-header {
-  background: linear-gradient(to bottom, var(--wego-teal-dark) 0%, #007b86 100%);
-  color: #fff;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 20px;
+  padding: 10px 20px;
+  background: linear-gradient(to bottom, var(--wego-teal-dark) 0%, #007b86 100%);
+  color: #fff;
 }
 
 .shell-header img {
-  height: 30px;
   display: block;
+  height: 28px;
 }
 
 .shell-title {
-  font-weight: bold;
+  font-weight: 700;
   font-size: 1.05rem;
 }
 
-.shell-user {
-  margin-left: auto;
+.year-select select {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+
+.year-select option {
+  color: var(--text);
+}
+
+.user-button {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 0.9rem;
-}
-
-.shell-user button {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  gap: 8px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
   color: #fff;
-  padding: 4px 10px;
-  cursor: pointer;
 }
 
-.shell-user button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.user-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.user-initials {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--wego-aqua);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .shell-nav {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: stretch;
-  padding: 0 10px;
 }
 
 .shell-nav a {
-  padding: 10px 16px;
-  font-weight: bold;
-  color: var(--wego-teal);
+  padding: 7px 14px;
+  border-radius: 999px;
+  color: var(--wego-teal-dark);
+  font-weight: 600;
 }
 
-.shell-nav a:hover,
-.shell-nav a[aria-current='page'] {
-  background: var(--wego-aqua);
-  color: #fff;
+.shell-nav a:hover {
+  background: #e3f6f7;
   text-decoration: none;
 }
 
-.shell-user select {
-  padding: 3px 6px;
-  border-color: rgba(255, 255, 255, 0.6);
+.shell-nav a[aria-current='page'] {
+  background: var(--wego-teal);
+  color: #fff;
 }
 
 .shell-main {
@@ -206,54 +140,40 @@ label.check {
   overflow: auto;
 }
 
-.page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px 20px 48px;
-}
-
 /* ---------- login ---------- */
 
 .login {
-  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(to bottom, var(--wego-teal-dark) 0%, #007b86 100%);
+  min-height: 100%;
+  padding: 16px;
+  background: linear-gradient(160deg, var(--wego-teal-dark) 0%, #007b86 70%, var(--wego-aqua) 100%);
 }
 
-.login form {
-  background: var(--surface);
-  padding: 28px;
-  width: 340px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  overflow: hidden;
 }
 
 .login-logo {
+  padding: 18px 24px;
   background: var(--wego-teal-dark);
-  padding: 14px;
-  margin: -28px -28px 6px;
 }
 
 .login-logo img {
-  height: 32px;
   display: block;
+  height: 30px;
 }
 
-/* ---------- toolbar ---------- */
-
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 14px;
-}
+/* ---------- plan page ---------- */
 
 .plan {
   container: plan / inline-size;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .plan-toolbar {
@@ -265,67 +185,13 @@ label.check {
   border-bottom: 1px solid var(--border);
 }
 
-.plan-toolbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-
-.plan-toolbar .segmented button {
-  flex: none;
-  padding: 7px 16px;
-}
-
-.plan-stepper {
-  display: flex;
-  gap: 4px;
-}
-
 .plan-title {
-  color: var(--wego-teal-dark);
-  font-size: 1.05rem;
+  white-space: nowrap;
 }
 
 .plan-filter {
-  flex: 1 1 220px;
-  max-width: 320px;
-}
-
-.employee-picker {
-  position: relative;
-}
-
-.employee-picker summary {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  cursor: pointer;
-}
-
-.employee-picker-list {
-  position: absolute;
-  z-index: 10;
-  top: 100%;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 190px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 16px rgba(0, 75, 80, 0.18);
-}
-
-/* ---------- plan grid: days in rows, employees in columns ---------- */
-
-.plan {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex: 1 1 200px;
+  max-width: 300px;
 }
 
 .plan-scroll {
@@ -335,91 +201,87 @@ label.check {
   background: var(--surface);
 }
 
-.plan-table {
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 100%;
+.selection-bar {
+  position: fixed;
+  z-index: 150;
+  left: 50%;
+  bottom: 16px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  border-radius: 12px;
 }
 
-.plan-table th,
-.plan-table td {
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 0;
-  vertical-align: top;
-  text-align: left;
+/* ---------- entries: one colour per construction site ---------- */
+
+.chip {
+  --site-h: 186;
+  display: block;
+  padding: 3px 7px;
+  border-left: 3px solid hsl(var(--site-h) 55% 36%);
+  border-radius: 4px;
+  background: hsl(var(--site-h) 60% 92%);
+  font-size: 0.85rem;
+  line-height: 1.3;
 }
 
-.plan-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: var(--wego-teal);
-  color: #fff;
-  padding: 8px;
-  min-width: 150px;
-  white-space: nowrap;
-}
-
-.plan-table .col-date {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  width: 86px;
-  min-width: 86px;
-  padding: 5px 8px;
-  white-space: nowrap;
-  background: var(--surface);
-  font-weight: normal;
-}
-
-.plan-table thead .col-date {
-  z-index: 4;
-  background: var(--wego-teal);
-}
-
-.plan-table .col-holiday {
-  width: 120px;
-  min-width: 120px;
-  padding: 5px 8px;
-  font-size: 0.8rem;
+.chip .time {
+  margin-right: 5px;
   color: var(--text-muted);
-  font-weight: normal;
+  font-size: 0.75rem;
 }
 
-.plan-table thead .col-holiday {
-  color: #fff;
-  font-weight: bold;
+.chip .note {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 
-.plan-table tr.month th {
-  position: sticky;
-  left: 0;
-  background: var(--wego-teal-dark);
-  color: #fff;
-  padding: 5px 8px;
-  scroll-margin-top: 40px;
+.chip-urlaub {
+  border-left-color: var(--wego-green);
+  background: #d8f0e2;
 }
 
-.plan-table tr.day {
-  scroll-margin-top: 40px;
+.chip-krank {
+  border-left-color: var(--wego-red);
+  background: #fbdcde;
 }
 
-.plan-table tr.weekend td,
-.plan-table tr.weekend .col-date {
-  background: var(--surface-weekend);
+.chip.dimmed,
+.dimmed {
+  opacity: 0.3;
 }
 
-.plan-table tr.holiday .col-holiday {
-  background: var(--surface-holiday);
-  color: var(--text);
+.site-pick {
+  --site-h: 186;
+  padding: 5px 10px;
+  border: 1px solid hsl(var(--site-h) 45% 70%);
+  border-radius: 999px;
+  background: hsl(var(--site-h) 60% 93%);
+  color: hsl(var(--site-h) 55% 22%);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
-.plan-table tr.today .col-date {
-  background: var(--wego-aqua);
-  color: #fff;
-  font-weight: bold;
+.site-pick:hover {
+  background: hsl(var(--site-h) 60% 86%);
 }
+
+.site-dot {
+  --site-h: 186;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: hsl(var(--site-h) 55% 45%);
+}
+
+.site-card {
+  --site-h: 186;
+  border-left: 4px solid hsl(var(--site-h) 55% 40%);
+}
+
+/* ---------- cells shared by all plan views ---------- */
 
 .cell {
   display: flex;
@@ -431,67 +293,37 @@ label.check {
   border: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
   text-align: left;
-}
-
-button.cell {
   cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
-button.cell:hover {
-  background: rgba(57, 187, 207, 0.22);
+.cell:hover {
+  background: rgba(57, 187, 207, 0.16);
 }
 
-.chip {
-  display: block;
-  padding: 2px 6px;
-  font-size: 0.85rem;
-  line-height: 1.3;
-  background: #d9eef1;
-  border-left: 3px solid var(--wego-teal);
+.cell.selected {
+  background: rgba(57, 187, 207, 0.28);
+  box-shadow: inset 0 0 0 2px var(--wego-aqua);
 }
 
-.chip .time {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-right: 5px;
-}
-
-.chip .note {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.chip-urlaub {
-  background: #d8f0e2;
-  border-left-color: var(--wego-green);
-}
-
-.chip-krank {
-  background: #fbdcde;
-  border-left-color: var(--wego-red);
-}
-
-.chip.dimmed {
-  opacity: 0.3;
-}
-
-/* ---------- plan matrix: employees in rows, days in columns ---------- */
+/* ---------- matrix: employees in rows, days in columns ---------- */
 
 .matrix {
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  width: 100%;
 }
 
 .matrix th,
 .matrix td {
+  padding: 0;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  padding: 0;
-  vertical-align: top;
   text-align: left;
+  vertical-align: top;
 }
 
 .matrix thead th {
@@ -501,11 +333,11 @@ button.cell:hover {
   padding: 7px 8px;
   background: var(--wego-teal);
   color: #fff;
-  font-weight: normal;
+  font-weight: 400;
 }
 
 .matrix thead th .wd {
-  font-weight: bold;
+  font-weight: 700;
 }
 
 .matrix thead th.weekend {
@@ -532,11 +364,11 @@ button.cell:hover {
   z-index: 2;
   padding: 8px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   background: var(--surface);
   color: var(--wego-teal-dark);
-  font-weight: bold;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .matrix thead th.name {
@@ -549,7 +381,7 @@ button.cell:hover {
 }
 
 .matrix td.today {
-  background: rgba(57, 187, 207, 0.14);
+  background: rgba(57, 187, 207, 0.1);
 }
 
 .week-matrix {
@@ -565,26 +397,28 @@ button.cell:hover {
 }
 
 .week-matrix .cell {
-  min-height: 56px;
+  min-height: 58px;
   padding: 4px;
 }
 
 .cell-full {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 /* The short form of a cell, used when the plan has little room (see the container query below). */
 .cell-compact {
+  --site-h: 186;
   display: none;
   align-items: center;
   gap: 3px;
   min-width: 0;
   padding: 5px 4px;
+  border-left: 3px solid hsl(var(--site-h) 55% 36%);
+  border-radius: 3px;
+  background: hsl(var(--site-h) 60% 92%);
   font-size: 0.78rem;
-  background: #d9eef1;
-  border-left: 3px solid var(--wego-teal);
 }
 
 .compact-name {
@@ -597,22 +431,18 @@ button.cell:hover {
 
 .compact-more {
   flex: none;
-  font-weight: bold;
   color: var(--wego-teal-dark);
+  font-weight: 700;
 }
 
 .compact-urlaub {
-  background: #d8f0e2;
   border-left-color: var(--wego-green);
+  background: #d8f0e2;
 }
 
 .compact-krank {
-  background: #fbdcde;
   border-left-color: var(--wego-red);
-}
-
-.cell-compact.dimmed {
-  opacity: 0.3;
+  background: #fbdcde;
 }
 
 .month-matrix th.name {
@@ -628,11 +458,11 @@ button.cell:hover {
 .month-matrix thead th .wd {
   display: block;
   font-size: 0.68rem;
-  font-weight: normal;
+  font-weight: 400;
 }
 
 .month-matrix thead th .num {
-  font-weight: bold;
+  font-weight: 700;
 }
 
 .month-matrix .cell {
@@ -644,8 +474,9 @@ button.cell:hover {
   font-size: 0.72rem;
 }
 
-.month-matrix .code-baustelle {
-  background: #d9eef1;
+.month-matrix .cell-code {
+  --site-h: 186;
+  background: hsl(var(--site-h) 60% 88%);
 }
 
 .month-matrix .code-urlaub {
@@ -656,14 +487,10 @@ button.cell:hover {
   background: #f6c3c6;
 }
 
-.month-matrix .cell.dimmed {
-  opacity: 0.3;
-}
-
 .month-matrix sup {
   margin-left: 1px;
-  font-size: 0.6rem;
   color: var(--wego-teal-dark);
+  font-size: 0.6rem;
 }
 
 /* Little room for the plan (phone, or half a browser window): short cells, narrow name column. */
@@ -703,7 +530,7 @@ button.cell:hover {
 
   .week-matrix .cell {
     justify-content: center;
-    min-height: 46px;
+    min-height: 48px;
     padding: 3px 2px;
   }
 
@@ -712,320 +539,195 @@ button.cell:hover {
   }
 }
 
-.day-details-entries {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* ---------- year grid: days in rows, employees in columns (as in the Excel sheet) ---------- */
+
+.plan-table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.day-details .chip {
-  padding: 6px 8px;
-  font-size: 1rem;
-}
-/* ---------- tables in reports and administration ---------- */
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--surface);
-}
-
-.table th,
-.table td {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
+.plan-table th,
+.plan-table td {
+  padding: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   text-align: left;
+  vertical-align: top;
 }
 
-.table th {
+.plan-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  min-width: 150px;
+  padding: 8px;
   background: var(--wego-teal);
   color: #fff;
-}
-
-.table .num {
-  text-align: right;
   white-space: nowrap;
 }
 
-.table tfoot td {
-  font-weight: bold;
-  background: var(--surface-muted);
-}
-
-.stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 12px 0;
-}
-
-.stat {
+.plan-table .col-date {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 86px;
+  min-width: 86px;
+  padding: 5px 8px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-top: 3px solid var(--wego-teal);
-  padding: 10px 16px;
-  min-width: 150px;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
-.stat .value {
-  font-size: 1.6rem;
-  font-weight: bold;
-  color: var(--wego-teal-dark);
-}
-
-.stat .label {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.stat.negative .value {
-  color: var(--wego-red);
-}
-
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-/* ---------- dialog ---------- */
-
-dialog {
-  border: 0;
-  border-top: 4px solid var(--wego-teal);
-  padding: 20px;
-  width: min(900px, calc(100vw - 32px));
-  color: var(--text);
-}
-
-dialog::backdrop {
-  background: rgba(0, 75, 80, 0.55);
-}
-
-dialog h2 {
-  margin-top: 0;
-}
-
-.entry-row {
-  display: grid;
-  grid-template-columns: 110px 1.2fr 95px 95px 1fr auto;
-  gap: 8px;
-  align-items: end;
-  margin-bottom: 8px;
-}
-
-.dialog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.dialog-actions .spacer {
-  flex: 1;
-}
-
-/* ---------- shared pieces of the plan and of "Mein Plan" ---------- */
-
-.segmented {
-  display: flex;
-  border: 1px solid var(--wego-teal);
-}
-
-.segmented button {
-  flex: 1;
-  padding: 9px 0;
-  border: 0;
-  background: var(--surface);
-  color: var(--wego-teal);
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.segmented button[aria-selected='true'] {
+.plan-table thead .col-date {
+  z-index: 4;
   background: var(--wego-teal);
+}
+
+.plan-table .col-holiday {
+  width: 120px;
+  min-width: 120px;
+  padding: 5px 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.plan-table thead .col-holiday {
   color: #fff;
+  font-weight: 700;
 }
 
-.mplan-nav {
-  display: flex;
-  gap: 6px;
+.plan-table tr.month th {
+  position: sticky;
+  left: 0;
+  padding: 5px 8px;
+  background: var(--wego-teal-dark);
+  color: #fff;
+  scroll-margin-top: 40px;
 }
 
-.mplan-nav input {
-  flex: 1;
-  min-width: 0;
+.plan-table tr.day {
+  scroll-margin-top: 40px;
 }
 
-.mplan-nav .btn {
-  padding: 7px 12px;
-}
-
-.badge-holiday {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 6px;
-  font-size: 0.72rem;
-  font-weight: normal;
-  background: var(--surface-holiday);
-  color: var(--text);
-  border: 1px solid #e6d58a;
-}
-
-.mcard {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--wego-teal);
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-}
-
-button.mcard {
-  cursor: pointer;
-}
-
-.mcard.weekend {
-  border-left-color: var(--border);
+.plan-table tr.weekend td,
+.plan-table tr.weekend .col-date {
   background: var(--surface-weekend);
 }
 
-.mcard.highlighted {
-  border-color: var(--wego-aqua);
-  border-left-color: var(--wego-aqua);
+.plan-table tr.holiday .col-holiday {
+  background: var(--surface-holiday);
+  color: var(--text);
 }
 
-.mcard-title {
-  font-weight: bold;
-  color: var(--wego-teal-dark);
+.plan-table tr.today .col-date {
+  background: var(--wego-aqua);
+  color: #fff;
+  font-weight: 700;
 }
 
-.mcard-empty {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.mcard .chip {
-  font-size: 0.95rem;
-  padding: 5px 8px;
-}
-
-.mcard .chip .time {
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: var(--wego-teal-dark);
-}
-
-/* ---------- own plan of a craftsman ---------- */
+/* ---------- "Mein Plan" and day details ---------- */
 
 .my-plan {
   max-width: 640px;
 }
 
-.my-vacation {
-  margin: -6px 0 14px;
-  color: var(--text-muted);
-}
-
-.my-plan .mplan-nav {
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.my-week {
-  flex: 1;
-  text-align: center;
-  font-weight: bold;
-  color: var(--wego-teal-dark);
-}
-
-.my-days {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.badge-today {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 6px;
-  font-size: 0.72rem;
-  background: var(--wego-aqua);
-  color: #fff;
+.my-day.today {
+  border-color: var(--wego-aqua);
+  box-shadow: 0 0 0 1px var(--wego-aqua);
 }
 
 .my-entry {
+  --site-h: 186;
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 8px 10px;
-  background: #e6f4f6;
-  border-left: 3px solid var(--wego-teal);
+  border-left: 4px solid hsl(var(--site-h) 55% 36%);
+  border-radius: 6px;
+  background: hsl(var(--site-h) 60% 94%);
 }
 
 .my-entry .when {
-  font-size: 0.85rem;
-  font-weight: bold;
   color: var(--wego-teal-dark);
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .my-entry .where {
   font-size: 1.1rem;
-  font-weight: bold;
+  font-weight: 700;
 }
 
 .my-entry .detail {
-  font-size: 0.9rem;
   color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .my-entry-urlaub {
-  background: #d8f0e2;
   border-left-color: var(--wego-green);
+  background: #d8f0e2;
 }
 
 .my-entry-krank {
-  background: #fbdcde;
   border-left-color: var(--wego-red);
+  background: #fbdcde;
 }
 
-.site-location {
-  font-size: 0.95rem;
-}
-
-.site-location a {
-  margin-left: 4px;
-  font-weight: bold;
-}
-
-.site-details {
+.day-details-entry {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  background: var(--surface);
-  border-left: 3px solid var(--wego-teal);
 }
 
-.access-panel {
-  border-top: 3px solid var(--wego-green);
-  margin-top: 12px;
-}
-
-.access-panel code {
+.day-details-entry .chip {
+  padding: 6px 8px;
   font-size: 1rem;
-  user-select: all;
 }
 
-/* ---------- phones: shell, pages, dialog ---------- */
+.sheet-body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------- phones ---------- */
 
 @media (max-width: 720px) {
+  .shell-title,
+  .shell-user-name {
+    display: none;
+  }
+
+  .shell-header {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .shell-header img {
+    height: 22px;
+  }
+
+  /* Navigation as a tab bar at the bottom, within reach of the thumb. */
+  .shell-nav {
+    order: 3;
+    gap: 0;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+  }
+
+  .shell-nav a {
+    flex: 1;
+    padding: 10px 2px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .page {
+    padding: 16px 12px 32px;
+  }
+
   .plan-toolbar {
     padding: 8px 10px;
   }
@@ -1035,109 +737,7 @@ button.mcard {
     max-width: none;
   }
 
-  .wide-only,
-  .shell-title,
-  .shell-user-name {
-    display: none;
-  }
-
-  .shell-header {
-    gap: 10px;
-    padding: 10px 12px;
-  }
-
-  .shell-header img {
-    height: 22px;
-  }
-
-  .shell-user {
-    gap: 6px;
-    font-size: 0.8rem;
-  }
-
-  .shell-user button {
-    padding: 4px 8px;
-  }
-
-  /* Navigation as a tab bar at the bottom, within reach of the thumb. */
-  .shell-nav {
-    order: 3;
-    padding: 0;
-    border-bottom: 0;
-    border-top: 1px solid var(--border);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .shell-nav a {
-    flex: 1;
-    padding: 13px 2px;
-    text-align: center;
-    font-size: 0.82rem;
-  }
-
-  .page {
-    padding: 16px 12px 32px;
-  }
-
-  h1 {
-    font-size: 1.25rem;
-  }
-
-  .toolbar .field,
-  .toolbar .field input,
-  .toolbar .field select {
-    width: 100%;
-  }
-
-  /* Wide tables scroll inside the page instead of widening it. */
-  .table {
-    display: block;
-    overflow-x: auto;
-  }
-
-  .stat {
-    min-width: 0;
-    flex: 1 1 40%;
-    padding: 8px 12px;
-  }
-
-  .stat .value {
-    font-size: 1.3rem;
-  }
-
-  /* The day editor slides up from the bottom and uses the full width. */
-  dialog {
-    width: 100vw;
-    max-width: 100vw;
-    max-height: 92vh;
-    margin: auto 0 0;
-    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
-    overflow-y: auto;
-  }
-
-  .entry-row {
-    grid-template-columns: 1fr auto;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  /* Order on a phone: type and remove button, customer, from / to, note. */
-  .entry-row > :nth-child(1) { order: 1; }
-  .entry-row > :nth-child(6) { order: 2; align-self: end; }
-  .entry-row > :nth-child(2) { order: 3; grid-column: 1 / -1; }
-  .entry-row > :nth-child(3) { order: 4; grid-column: 1 / -1; }
-  .entry-row > :nth-child(4) { order: 5; grid-column: 1 / -1; }
-  .entry-row > :nth-child(5) { order: 6; grid-column: 1 / -1; }
-
-  .entry-row input,
-  .entry-row select {
-    width: 100%;
-    padding: 9px 8px;
-  }
-
-  .dialog-actions .btn {
-    flex: 1;
-    padding: 10px 8px;
+  .selection-bar {
+    bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }
