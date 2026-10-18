@@ -60,7 +60,7 @@ function DayHead({ day, today, mark, markTitle }: { day: Day; today: string; mar
       {!day.isWeekend && (
         <span className="num">
           {' '}
-          {pad(day.dayOfMonth)}.{pad(day.month + 1)}.
+          {pad(day.dayOfMonth)}.{pad(day.month + 1)}
         </span>
       )}
     </div>

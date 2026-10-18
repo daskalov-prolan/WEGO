@@ -248,7 +248,7 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
               >
                 <span className="wd">{day.weekday}</span>
                 <span className="num">
-                  {zoom === 'week' ? `${pad(day.dayOfMonth)}.${pad(day.month + 1)}.` : day.dayOfMonth}
+                  {zoom === 'week' ? ` ${pad(day.dayOfMonth)}.${pad(day.month + 1)}` : day.dayOfMonth}
                 </span>
               </th>
             )

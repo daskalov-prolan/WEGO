@@ -89,7 +89,7 @@ describe('PlanPage', () => {
     expect(within(monday).getByText('+1')).toBeInTheDocument()
 
     expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd'])
-    expect(document.getElementById('col-2026-03-02')).toHaveTextContent('Mo02.03.')
+    expect(document.getElementById('col-2026-03-02')).toHaveTextContent('Mo 02.03')
   })
 
   it('moves by week and by month', async () => {

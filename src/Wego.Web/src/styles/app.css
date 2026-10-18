@@ -646,6 +646,17 @@ a:hover {
   font-weight: 700;
 }
 
+/* Week: the day on one line, "Di 07.10". */
+.timeline.zoom-week .day-row .wd,
+.timeline.zoom-week .day-row .num {
+  display: inline;
+  white-space: nowrap;
+}
+
+.timeline.zoom-week .day-row .wd {
+  font-size: inherit;
+}
+
 .timeline th.corner {
   top: 0;
   left: 0;
