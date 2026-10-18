@@ -275,7 +275,8 @@ describe('PlanPage', () => {
       expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
       expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
     ])
-    expect(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 })).toBeInTheDocument()
+    // The notification offers to take it back (it closes itself after a few seconds, so only its appearance counts).
+    await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 })
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
   })
 })

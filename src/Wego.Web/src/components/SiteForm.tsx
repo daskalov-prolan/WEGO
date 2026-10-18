@@ -22,8 +22,11 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
 
   const field = (key: keyof SiteInput) => ({
     value: site[key] ?? '',
-    onChange: (event: { currentTarget: { value: string } }) =>
-      setSite((current) => ({ ...current, [key]: event.currentTarget.value || null })),
+    onChange: (event: { currentTarget: { value: string } }) => {
+      // Read the value now: React clears the event before the state update below runs.
+      const value = event.currentTarget.value || null
+      setSite((current) => ({ ...current, [key]: value }))
+    },
   })
 
   const submit = async (event: FormEvent) => {
