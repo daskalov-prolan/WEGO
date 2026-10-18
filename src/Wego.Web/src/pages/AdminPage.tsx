@@ -23,7 +23,7 @@ import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Access, Customer, Employee, EmployeeInput, Role, SchoolHoliday } from '../api/types'
+import type { Access, Customer, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
 import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
 
@@ -38,7 +38,7 @@ export function AdminPage({ year }: { year: number }) {
         <Tabs.List mb="md">
           <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
           <Tabs.Tab value="sites">Baustellen</Tabs.Tab>
-          <Tabs.Tab value="holidays">Schulferien</Tabs.Tab>
+          <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
           <EmployeesSection />
@@ -348,6 +348,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
   const [holidays, setHolidays] = useState<SchoolHoliday[]>([])
   const [name, setName] = useState('')
   const [range, setRange] = useState<[string | null, string | null]>([null, null])
+  const [kind, setKind] = useState<HolidayKind>('Feiertag')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -375,7 +376,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
     const [start, end] = range
     if (!start || !end) return
     void run(async () => {
-      await api.addSchoolHoliday(name, start, end)
+      await api.addSchoolHoliday(name, start, end, kind)
       setName('')
       setRange([null, null])
       return 'Ferien eingetragen.'
@@ -390,11 +391,11 @@ function SchoolHolidaysSection({ year }: { year: number }) {
           onClick={() =>
             run(async () => {
               const result = await api.importSchoolHolidays(year)
-              return `${result.imported} von ${result.total} Ferienzeiträumen neu übernommen.`
+              return `${result.imported} von ${result.total} Ferien und Feiertagen neu übernommen.`
             })
           }
         >
-          Schulferien Berlin {year} automatisch abrufen
+          Schulferien und Feiertage Berlin {year} abrufen
         </Button>
         <Text size="sm" c="dimmed">
           Quelle: openholidaysapi.org
@@ -412,6 +413,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Bezeichnung</Table.Th>
+              <Table.Th>Art</Table.Th>
               <Table.Th>Von</Table.Th>
               <Table.Th>Bis</Table.Th>
               <Table.Th />
@@ -421,6 +423,11 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             {holidays.map((holiday) => (
               <Table.Tr key={holiday.id}>
                 <Table.Td>{holiday.name}</Table.Td>
+                <Table.Td>
+                  <Badge color="green" variant={holiday.kind === 'Feiertag' ? 'filled' : 'light'}>
+                    {holiday.kind}
+                  </Badge>
+                </Table.Td>
                 <Table.Td>{formatDate(holiday.startDate)}</Table.Td>
                 <Table.Td>{formatDate(holiday.endDate)}</Table.Td>
                 <Table.Td ta="right">
@@ -442,7 +449,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             ))}
             {holidays.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={4}>Für {year} sind noch keine Schulferien eingetragen.</Table.Td>
+                <Table.Td colSpan={5}>Für {year} sind noch keine Ferien oder Feiertage eingetragen.</Table.Td>
               </Table.Tr>
             )}
           </Table.Tbody>
@@ -451,10 +458,18 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 
       <Paper withBorder p="sm" component="form" onSubmit={add}>
         <Text fw={600} size="sm" mb="xs">
-          Ferien von Hand eintragen
+          Von Hand eintragen (z. B. Brückentag, Betriebsferien)
         </Text>
         <Group align="flex-end" gap="sm">
           <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+          <Select
+            label="Art"
+            value={kind}
+            onChange={(value) => value && setKind(value as HolidayKind)}
+            data={['Feiertag', 'Schulferien']}
+            allowDeselect={false}
+            w={150}
+          />
           <DatePickerInput
             type="range"
             label="Zeitraum"

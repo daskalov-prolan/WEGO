@@ -42,6 +42,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         modelBuilder.Entity<SchoolHoliday>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
         });
     }
 }

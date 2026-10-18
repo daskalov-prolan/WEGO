@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import type { Entry, NamedItem } from '../api/types'
+import type { Entry, NamedItem, SchoolHoliday } from '../api/types'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
 import { entryStyle, entryTitle } from '../lib/activities'
@@ -10,7 +10,7 @@ export interface MatrixProps {
   days: Day[]
   employees: NamedItem[]
   entriesOf: (employeeId: number, date: string) => Entry[]
-  holidayByDate: Map<string, string>
+  holidayByDate: Map<string, SchoolHoliday>
   today: string
   /** With a customer filter: entries of other customers are dimmed. */
   isDimmed: (entry: Entry) => boolean
@@ -178,7 +178,7 @@ export function DayMatrix(props: MatrixProps) {
           const isFolded = folded.has(day.iso)
           const rowClass = [
             day.isWeekend ? 'weekend' : '',
-            holiday ? 'holiday' : '',
+            holiday ? (holiday.kind === 'Feiertag' ? 'public-holiday' : 'holiday') : '',
             day.iso === today ? 'today' : '',
             isFolded ? 'folded' : '',
           ]
@@ -194,12 +194,12 @@ export function DayMatrix(props: MatrixProps) {
               </tr>
             ),
             <tr className={rowClass} key={day.iso} id={`d-${day.iso}`}>
-              <th className="day" scope="row" title={holiday}>
+              <th className="day" scope="row" title={holiday?.name}>
                 <span className="wd">{day.weekday}</span>{' '}
                 <span className="num">
                   {pad(day.dayOfMonth)}.{pad(day.month + 1)}.
                 </span>
-                {holiday && !isFolded && <span className="holiday-name">{holiday}</span>}
+                {holiday && !isFolded && <span className="holiday-name">{holiday.name}</span>}
               </th>
               {employees.map((employee, employeeIndex) => {
                 if (isFolded) return <td key={employee.id} />

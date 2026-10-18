@@ -139,7 +139,7 @@ export function CustomerReportPage({ year, customerId }: Props) {
                       <Table.Tr key={row.value}>
                         <Table.Td>
                           <Group gap="xs" wrap="nowrap">
-                            <ColorSwatch color={row.color} size={12} withShadow={false} />
+                            <ColorSwatch color={row.background} size={12} withShadow={false} />
                             {row.label}
                           </Group>
                         </Table.Td>

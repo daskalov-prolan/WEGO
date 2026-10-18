@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core'
-import type { Customer, Entry, NamedItem } from '../api/types'
+import type { Customer, Entry, NamedItem, SchoolHoliday } from '../api/types'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
 import { Sheet } from './Sheet'
@@ -9,7 +9,7 @@ interface Props {
   employee: NamedItem
   date: string
   entries: Entry[]
-  holiday?: string
+  holiday?: SchoolHoliday
   siteById: Map<number, Customer>
   onClose: () => void
 }
@@ -22,8 +22,8 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
         <Group gap="xs">
           <Text c="dimmed">{formatDateLong(date)}</Text>
           {holiday && (
-            <Badge color="yellow" variant="light">
-              {holiday}
+            <Badge color="green" variant={holiday.kind === 'Feiertag' ? 'filled' : 'light'}>
+              {holiday.name}
             </Badge>
           )}
         </Group>

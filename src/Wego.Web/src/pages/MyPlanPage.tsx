@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
-import { addDays, daysBetween, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
+import { addDays, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
 import { activityLabel, entryStyle } from '../lib/activities'
-import { useSwipe } from '../lib/ui'
+import { holidaysByDate, useSwipe } from '../lib/ui'
 
 interface Props {
   year: number
@@ -58,13 +58,7 @@ export function MyPlanPage({ year, user }: Props) {
         return time ? `${other.employeeName} (${time})` : other.employeeName
       })
 
-  const holidayByDate = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const holiday of plan?.schoolHolidays ?? []) {
-      for (const day of daysBetween(holiday.startDate, holiday.endDate)) map.set(day.iso, holiday.name)
-    }
-    return map
-  }, [plan])
+  const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
 
   const go = (iso: string) => setAnchor(iso < first ? first : iso > last ? last : iso)
   const swipe = useSwipe(
@@ -130,8 +124,8 @@ export function MyPlanPage({ year, user }: Props) {
                 </Text>
                 {day.iso === today && <Badge color="wego">Heute</Badge>}
                 {holidayByDate.has(day.iso) && (
-                  <Badge color="yellow" variant="light">
-                    {holidayByDate.get(day.iso)}
+                  <Badge color="green" variant={holidayByDate.get(day.iso)!.kind === 'Feiertag' ? 'filled' : 'light'}>
+                    {holidayByDate.get(day.iso)!.name}
                   </Badge>
                 )}
               </Group>

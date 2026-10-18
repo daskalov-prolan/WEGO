@@ -15,7 +15,10 @@ const plan: Plan = {
     { id: 10, name: 'Familie Schulze', location: null, description: null },
     { id: 11, name: 'Familie Meier', location: null, description: null },
   ],
-  schoolHolidays: [{ id: 5, name: 'Winterferien', startDate: '2026-02-02', endDate: '2026-02-07' }],
+  schoolHolidays: [
+    { id: 5, name: 'Winterferien', kind: 'Schulferien', startDate: '2026-02-02', endDate: '2026-02-07' },
+    { id: 6, name: 'Frauentag', kind: 'Feiertag', startDate: '2026-03-08', endDate: '2026-03-08' },
+  ],
   entries: [
     entry(1, 1, '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
     entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
@@ -111,6 +114,8 @@ describe('PlanPage', () => {
     const row = document.getElementById('d-2026-03-02')!
     expect(within(row).getAllByText('Familie Schulze')).not.toHaveLength(0)
     expect(screen.getAllByText('Winterferien')).toHaveLength(6)
+    expect(document.getElementById('d-2026-03-08')).toHaveClass('public-holiday')
+    expect(document.getElementById('d-2026-02-03')).toHaveClass('holiday')
   })
 
   it('opens a read-only day for employees and the editor for planners', async () => {

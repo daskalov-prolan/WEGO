@@ -7,6 +7,7 @@ import type {
   EmployeeInput,
   EmployeeReport,
   Entry,
+  HolidayKind,
   NamedItem,
   Plan,
   SchoolHoliday,
@@ -92,8 +93,8 @@ export const api = {
 
   createAccess: (id: number) => request<Access>('POST', `/api/employees/${id}/access`),
 
-  addSchoolHoliday: (name: string, startDate: string, endDate: string) =>
-    request<SchoolHoliday>('POST', '/api/schoolholidays', { name, startDate, endDate }),
+  addSchoolHoliday: (name: string, startDate: string, endDate: string, kind: HolidayKind) =>
+    request<SchoolHoliday>('POST', '/api/schoolholidays', { name, startDate, endDate, kind }),
   deleteSchoolHoliday: (id: number) => request<void>('DELETE', `/api/schoolholidays/${id}`),
   importSchoolHolidays: (year: number) =>
     request<{ imported: number; total: number }>('POST', `/api/schoolholidays/import?year=${year}`),

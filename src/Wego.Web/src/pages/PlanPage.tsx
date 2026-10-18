@@ -24,7 +24,6 @@ import { DayMatrix } from '../components/PlanMatrix'
 import {
   addDays,
   addMonths,
-  daysBetween,
   daysOfYear,
   isoWeek,
   MONTHS,
@@ -32,7 +31,7 @@ import {
   todayIso,
   weekOf,
 } from '../lib/dates'
-import { cellKey, toInput } from '../lib/ui'
+import { cellKey, holidaysByDate, toInput } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -100,13 +99,8 @@ export function PlanPage({ year, canEdit }: Props) {
     return map
   }, [plan])
 
-  const holidayByDate = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const holiday of plan?.schoolHolidays ?? []) {
-      for (const day of daysBetween(holiday.startDate, holiday.endDate)) map.set(day.iso, holiday.name)
-    }
-    return map
-  }, [plan])
+  const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
+
 
   const siteById = useMemo(() => new Map((plan?.customers ?? []).map((site) => [site.id, site])), [plan])
   const customerNames = useMemo(() => (plan?.customers ?? []).map((site) => site.name), [plan])

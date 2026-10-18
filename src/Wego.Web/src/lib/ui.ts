@@ -1,6 +1,7 @@
 import type { TouchEvent } from 'react'
 import { useRef } from 'react'
-import type { DayEntryInput, Entry } from '../api/types'
+import type { DayEntryInput, Entry, SchoolHoliday } from '../api/types'
+import { daysBetween } from './dates'
 
 /** Identifies one employee's day, e.g. in a selection of cells. */
 export const cellKey = (employeeId: number, date: string) => `${employeeId}|${date}`
@@ -36,4 +37,14 @@ export function useSwipe(onLeft: () => void, onRight: () => void) {
       else onRight()
     },
   }
+}
+
+/** Holiday per day. A Feiertag wins over school holidays on the same day. */
+export function holidaysByDate(holidays: SchoolHoliday[]): Map<string, SchoolHoliday> {
+  const map = new Map<string, SchoolHoliday>()
+  const ordered = [...holidays].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'Feiertag' ? 1 : -1))
+  for (const holiday of ordered) {
+    for (const day of daysBetween(holiday.startDate, holiday.endDate)) map.set(day.iso, holiday)
+  }
+  return map
 }

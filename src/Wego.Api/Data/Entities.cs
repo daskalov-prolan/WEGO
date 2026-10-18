@@ -85,10 +85,18 @@ public class PlanEntry
     public string? Note { get; set; }
 }
 
+public enum HolidayKind
+{
+    Schulferien,
+    Feiertag,
+}
+
+/// <summary>Berlin school holidays and public holidays (Feiertage), shown in the plan.</summary>
 public class SchoolHoliday
 {
     public int Id { get; set; }
     public required string Name { get; set; }
+    public HolidayKind Kind { get; set; } = HolidayKind.Schulferien;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
 }

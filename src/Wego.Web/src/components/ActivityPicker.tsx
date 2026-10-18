@@ -1,6 +1,6 @@
 import { ColorSwatch, Group, Select, Text } from '@mantine/core'
 import type { Activity } from '../api/types'
-import { ACTIVITIES } from '../lib/activities'
+import { ABSENCE, ACTIVITIES, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY } from '../lib/activities'
 
 const byValue = new Map(ACTIVITIES.map((activity) => [activity.value, activity]))
 
@@ -21,10 +21,10 @@ export function ActivitySelect({
       value={value}
       onChange={(next) => onChange(next as Activity | null)}
       data={ACTIVITIES.map((activity) => ({ value: activity.value, label: activity.label }))}
-      leftSection={selected ? <ColorSwatch color={selected.color} size={14} /> : undefined}
+      leftSection={selected ? <ColorSwatch color={selected.background} size={14} /> : undefined}
       renderOption={({ option }) => (
         <Group gap="xs" wrap="nowrap">
-          <ColorSwatch color={byValue.get(option.value as Activity)?.color ?? '#ccc'} size={14} />
+          <ColorSwatch color={byValue.get(option.value as Activity)?.background ?? '#ccc'} size={14} />
           <span>{option.label}</span>
         </Group>
       )}
@@ -33,18 +33,27 @@ export function ActivitySelect({
   )
 }
 
-/** The colours of the plan with their meaning, in the order of the job. */
+function Item({ color, label }: { color: string; label: string }) {
+  return (
+    <Group gap={5} wrap="nowrap">
+      <ColorSwatch color={color} size={12} withShadow={false} />
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+    </Group>
+  )
+}
+
+/** The colours of the plan with their meaning: activities in the order of the job, then absences and holidays. */
 export function ActivityLegend() {
   return (
     <Group gap="sm" className="activity-legend" wrap="wrap">
       {ACTIVITIES.map((activity, index) => (
-        <Group gap={5} key={activity.value} wrap="nowrap">
-          <ColorSwatch color={activity.color} size={12} withShadow={false} />
-          <Text size="xs" c="dimmed">
-            {index + 1}. {activity.label}
-          </Text>
-        </Group>
+        <Item key={activity.value} color={activity.background} label={`${index + 1}. ${activity.label}`} />
       ))}
+      <Item color={ABSENCE.background} label="Urlaub / Krank" />
+      <Item color={PUBLIC_HOLIDAY.background} label="Feiertag" />
+      <Item color={SCHOOL_HOLIDAY.background} label="Schulferien" />
     </Group>
   )
 }

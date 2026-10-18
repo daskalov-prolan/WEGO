@@ -9,7 +9,7 @@ public static class PlanEndpoints
 
     public record PlanEmployeeDto(int Id, string Name);
     public record CustomerDto(int Id, string Name, string? Location, string? Description);
-    public record SchoolHolidayDto(int Id, string Name, DateOnly StartDate, DateOnly EndDate);
+    public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? CustomerId, string? CustomerName, Activity? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
         string? Note);
@@ -46,7 +46,7 @@ public static class PlanEndpoints
             var holidays = await db.SchoolHolidays
                 .Where(h => h.StartDate <= to && h.EndDate >= from)
                 .OrderBy(h => h.StartDate)
-                .Select(h => new SchoolHolidayDto(h.Id, h.Name, h.StartDate, h.EndDate))
+                .Select(h => new SchoolHolidayDto(h.Id, h.Name, h.Kind, h.StartDate, h.EndDate))
                 .ToListAsync();
 
             var customers = await db.Customers

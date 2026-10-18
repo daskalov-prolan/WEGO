@@ -31,9 +31,13 @@ export interface Customer extends NamedItem {
   description: string | null
 }
 
+export type HolidayKind = 'Schulferien' | 'Feiertag'
+
+/** A school holiday period or a public holiday (Feiertag) in Berlin. */
 export interface SchoolHoliday {
   id: number
   name: string
+  kind: HolidayKind
   startDate: string
   endDate: string
 }
