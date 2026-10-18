@@ -1,5 +1,7 @@
 export type Role = 'Planer' | 'Mitarbeiter'
 export type EntryType = 'Baustelle' | 'Urlaub' | 'Krank'
+/** What is done on a site that day, in the order of the job. */
+export type Activity = 'Besichtigung' | 'Abriss' | 'Trockenbau' | 'Sanitaer' | 'RenoDeco' | 'Fliesen' | 'Endmontage'
 
 export interface User {
   id: number
@@ -45,6 +47,7 @@ export interface Entry {
   type: EntryType
   customerId: number | null
   customerName: string | null
+  activity: Activity | null
   startTime: string | null
   endTime: string | null
   note: string | null
@@ -61,6 +64,7 @@ export interface Plan {
 export interface DayEntryInput {
   type: EntryType
   customerName: string | null
+  activity: Activity | null
   startTime: string | null
   endTime: string | null
   note: string | null

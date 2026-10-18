@@ -26,7 +26,7 @@ const plan: Plan = {
 
 function entry(id: number, employeeId: number, date: string, customerId: number, customerName: string, start: string | null, end: string | null): Entry {
   return {
-    id, employeeId, employeeName: '', date, type: 'Baustelle', customerId, customerName,
+    id, employeeId, employeeName: '', date, type: 'Baustelle', customerId, customerName, activity: null,
     startTime: start, endTime: end, note: null,
   }
 }
@@ -38,7 +38,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-03-02T09:00:00') })
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/plan/batch') {
-      const days = JSON.parse(String(init?.body)) as { employeeId: number; date: string; entries: { type: string }[] }[]
+      const days = JSON.parse(String(init?.body)) as { employeeId: number; date: string; entries: { type: string; activity: string | null }[] }[]
       const saved = days.flatMap((day, index) =>
         day.entries.map((e) => ({ ...entry(100 + index, day.employeeId, day.date, 0, '', null, null), type: e.type, customerId: null, customerName: null })),
       )
@@ -125,6 +125,24 @@ describe('PlanPage', () => {
     expect(await screen.findByRole('button', { name: 'Speichern' })).toBeInTheDocument()
   })
 
+  it('saves the activity chosen for a site', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await user.click(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
+
+    const input = (label: RegExp) => screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT')!
+    await screen.findAllByLabelText(/^Kunde/)
+    await user.type(input(/^Kunde/), 'Familie Schulze')
+    await user.click(input(/^Tätigkeit/))
+    await user.click(await screen.findByRole('option', { name: 'Fliesenarbeiten', hidden: true }))
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
+      expect.objectContaining({ type: 'Baustelle', customerName: 'Familie Schulze', activity: 'Fliesen' }),
+    ])
+  })
   it('lets planners select several cells and fill them in one go', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)

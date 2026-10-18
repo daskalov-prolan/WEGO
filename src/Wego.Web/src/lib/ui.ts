@@ -1,24 +1,15 @@
-import type { CSSProperties, TouchEvent } from 'react'
+import type { TouchEvent } from 'react'
 import { useRef } from 'react'
 import type { DayEntryInput, Entry } from '../api/types'
 
 /** Identifies one employee's day, e.g. in a selection of cells. */
 export const cellKey = (employeeId: number, date: string) => `${employeeId}|${date}`
 
-/** A stable hue per construction site, spread around the colour wheel by the golden angle. */
-export function siteHue(customerId: number): number {
-  return Math.round((customerId * 137.508) % 360)
-}
-
-/** Inline style that hands the hue of a site to the CSS (see .chip and .cell-code in app.css). */
-export function siteStyle(customerId: number | null | undefined): CSSProperties | undefined {
-  return customerId == null ? undefined : ({ '--site-h': siteHue(customerId) } as CSSProperties)
-}
-
 export function toInput(entry: Entry): DayEntryInput {
   return {
     type: entry.type,
     customerName: entry.customerName,
+    activity: entry.activity,
     startTime: entry.startTime,
     endTime: entry.endTime,
     note: entry.note,

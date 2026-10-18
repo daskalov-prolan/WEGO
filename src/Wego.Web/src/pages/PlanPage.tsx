@@ -16,6 +16,7 @@ import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Customer, DayEntryInput, Entry, NamedItem, Plan } from '../api/types'
+import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
@@ -380,6 +381,7 @@ export function PlanPage({ year, canEdit }: Props) {
             </Text>
           )}
         </Group>
+        <ActivityLegend />
         {canEdit && selected.size === 0 && !isPhone && (
           <Text size="xs" c="dimmed">
             Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage
@@ -434,7 +436,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Urlaub', customerName: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Urlaub', customerName: null, activity: null, startTime: null, endTime: null, note: null }],
                     `${selected.size} Tage als Urlaub eingetragen.`,
                   )
                 }
@@ -447,7 +449,7 @@ export function PlanPage({ year, canEdit }: Props) {
                 variant="light"
                 onClick={() =>
                   applyToSelection(
-                    () => [{ type: 'Krank', customerName: null, startTime: null, endTime: null, note: null }],
+                    () => [{ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note: null }],
                     `${selected.size} Tage als krank eingetragen.`,
                   )
                 }

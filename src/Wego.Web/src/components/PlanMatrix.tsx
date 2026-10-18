@@ -2,7 +2,8 @@ import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEve
 import type { Entry, NamedItem } from '../api/types'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { cellKey, siteStyle } from '../lib/ui'
+import { entryStyle, entryTitle } from '../lib/activities'
+import { cellKey } from '../lib/ui'
 import { Chip } from './Chip'
 
 export interface MatrixProps {
@@ -226,7 +227,8 @@ export function DayMatrix(props: MatrixProps) {
                             `compact-${first.type.toLowerCase()}`,
                             entries.every(isDimmed) ? 'dimmed' : '',
                           ].join(' ')}
-                          style={first.type === 'Baustelle' ? siteStyle(first.customerId) : undefined}
+                          style={entryStyle(first)}
+                          title={entries.map(entryTitle).join(' / ')}
                         >
                           <span className="compact-name">
                             {first.type === 'Baustelle' ? first.customerName : first.type}

@@ -11,12 +11,13 @@ public static class PlanEndpoints
     public record CustomerDto(int Id, string Name, string? Location, string? Description);
     public record SchoolHolidayDto(int Id, string Name, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
-        int? CustomerId, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime, string? Note);
+        int? CustomerId, string? CustomerName, Activity? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
+        string? Note);
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<CustomerDto> Customers);
 
     public record DayEntryInput(EntryType Type, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime,
-        string? Note);
+        string? Note, Activity? Activity = null);
     public record UpdateCustomerRequest(string Name, string? Location, string? Description);
     public record DayInput(int EmployeeId, DateOnly Date, DayEntryInput[] Entries);
 
@@ -153,6 +154,8 @@ public static class PlanEndpoints
                     Date = day.Date,
                     Type = input.Type,
                     Customer = customer,
+                    // The activity belongs to work on a site; vacation and sick days have none.
+                    Activity = input.Type == EntryType.Baustelle ? input.Activity : null,
                     StartTime = input.StartTime,
                     EndTime = input.EndTime,
                     Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
@@ -184,7 +187,7 @@ public static class PlanEndpoints
         db.PlanEntries.AsNoTracking().Include(e => e.Customer).Include(e => e.Employee);
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
-        e.CustomerId, e.Customer?.Name, e.StartTime, e.EndTime, e.Note);
+        e.CustomerId, e.Customer?.Name, e.Activity, e.StartTime, e.EndTime, e.Note);
 
     public static List<EntryDto> Sort(IEnumerable<EntryDto> entries) => entries
         .OrderBy(e => e.Date)
@@ -200,6 +203,7 @@ public static class PlanEndpoints
         foreach (var input in inputs)
         {
             if (!Enum.IsDefined(input.Type)) return "Unbekannte Art des Eintrags.";
+            if (input.Activity is { } activity && !Enum.IsDefined(activity)) return "Unbekannte Tätigkeit.";
 
             if (input.Type == EntryType.Baustelle)
             {

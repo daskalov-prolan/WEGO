@@ -13,6 +13,21 @@ public enum EntryType
     Krank = 2,
 }
 
+/// <summary>
+/// What an employee does on a construction site that day, in the order of the job:
+/// Besichtigung, Abriss/Baubeginn, Trockenbau, Sanitär, RenoDeco-Platten, Fliesenarbeiten, Endmontage.
+/// </summary>
+public enum Activity
+{
+    Besichtigung,
+    Abriss,
+    Trockenbau,
+    Sanitaer,
+    RenoDeco,
+    Fliesen,
+    Endmontage,
+}
+
 public class Employee
 {
     public int Id { get; set; }
@@ -64,6 +79,7 @@ public class PlanEntry
     public EntryType Type { get; set; }
     public int? CustomerId { get; set; }
     public Customer? Customer { get; set; }
+    public Activity? Activity { get; set; }
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
     public string? Note { get; set; }

@@ -76,7 +76,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var a = await CreateEmployeeAsync(planer, "Batch A", null, null);
         var b = await CreateEmployeeAsync(planer, "Batch B", null, null);
 
-        var site = new object[] { new { type = "Baustelle", customerName = "Familie Batch" } };
+        var site = new object[] { new { type = "Baustelle", customerName = "Familie Batch", activity = "Fliesen" } };
         var saved = await planer.PutAsJsonAsync("/api/plan/batch", new object[]
         {
             new { employeeId = a, date = $"{Year}-07-06", entries = site },
@@ -84,7 +84,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             new { employeeId = b, date = $"{Year}-07-06", entries = new object[] { new { type = "Urlaub" } } },
         });
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        Assert.Equal(3, (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength());
+        var savedEntries = await saved.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(3, savedEntries.GetArrayLength());
+        Assert.All(savedEntries.EnumerateArray().Where(e => e.GetProperty("employeeId").GetInt32() == a),
+            e => Assert.Equal("Fliesen", e.GetProperty("activity").GetString()));
+        // A vacation day has no activity.
+        Assert.Equal(JsonValueKind.Null, savedEntries.EnumerateArray()
+            .Single(e => e.GetProperty("type").GetString() == "Urlaub").GetProperty("activity").ValueKind);
 
         // One invalid day rejects the whole batch, the earlier days stay as they were.
         var rejected = await planer.PutAsJsonAsync("/api/plan/batch", new object[]

@@ -1,8 +1,8 @@
 import { Alert, Autocomplete, Button, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { DayEntryInput, NamedItem } from '../api/types'
-import { siteStyle } from '../lib/ui'
+import type { Activity, DayEntryInput, NamedItem } from '../api/types'
+import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
 /** Puts one construction site on all selected cells at once. */
 export function AssignSite({ cellCount, customerNames, recentSites, onClose, onApply }: Props) {
   const [name, setName] = useState('')
+  const [activity, setActivity] = useState<Activity | null>(null)
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [note, setNote] = useState('')
@@ -32,6 +33,7 @@ export function AssignSite({ cellCount, customerNames, recentSites, onClose, onA
         {
           type: 'Baustelle',
           customerName: customerName.trim(),
+          activity,
           startTime: start ? `${start}:00` : null,
           endTime: end ? `${end}:00` : null,
           note: note.trim() || null,
@@ -53,6 +55,7 @@ export function AssignSite({ cellCount, customerNames, recentSites, onClose, onA
     <Sheet onClose={onClose} title={<Text fw={700}>Baustelle für {cellCount} Felder</Text>} size="md">
       <form onSubmit={submit}>
         <Stack gap="sm">
+          <ActivitySelect value={activity} onChange={setActivity} />
           {recentSites.length > 0 && (
             <div>
               <Text size="xs" c="dimmed" mb={4}>
@@ -64,7 +67,6 @@ export function AssignSite({ cellCount, customerNames, recentSites, onClose, onA
                     type="button"
                     key={site.id}
                     className="site-pick"
-                    style={siteStyle(site.id)}
                     disabled={busy}
                     onClick={() => apply(site.name)}
                   >

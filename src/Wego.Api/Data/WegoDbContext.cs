@@ -30,6 +30,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         modelBuilder.Entity<PlanEntry>(e =>
         {
             e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.Activity).HasConversion<string>().HasMaxLength(30);
             e.HasIndex(x => new { x.EmployeeId, x.Date });
             e.HasIndex(x => new { x.CustomerId, x.Date });
             e.HasOne(x => x.Employee).WithMany(x => x.Entries).HasForeignKey(x => x.EmployeeId)

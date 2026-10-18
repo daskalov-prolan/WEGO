@@ -4,7 +4,8 @@ import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
 import { addDays, daysBetween, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
-import { siteStyle, useSwipe } from '../lib/ui'
+import { activityLabel, entryStyle } from '../lib/activities'
+import { useSwipe } from '../lib/ui'
 
 interface Props {
   year: number
@@ -145,7 +146,7 @@ export function MyPlanPage({ year, user }: Props) {
                 {entries.map((entry) => {
                   if (entry.type !== 'Baustelle') {
                     return (
-                      <div className={`my-entry my-entry-${entry.type.toLowerCase()}`} key={entry.id}>
+                      <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
                         <span className="where">{entry.type}</span>
                       </div>
                     )
@@ -153,9 +154,10 @@ export function MyPlanPage({ year, user }: Props) {
                   const colleagues = colleaguesOf(entry)
                   const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
                   return (
-                    <div className="my-entry" key={entry.id} style={siteStyle(entry.customerId)}>
+                    <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
                       <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
                       <span className="where">{entry.customerName}</span>
+                      {entry.activity && <span className="what">{activityLabel(entry.activity)}</span>}
                       {site?.location && <SiteLocation location={site.location} />}
                       {site?.description && <span className="detail">{site.description}</span>}
                       {entry.note && <span className="detail">{entry.note}</span>}

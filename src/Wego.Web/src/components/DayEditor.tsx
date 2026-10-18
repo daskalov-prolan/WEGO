@@ -12,9 +12,9 @@ import {
 } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { DayEntryInput, Entry, EntryType, NamedItem } from '../api/types'
+import type { Activity, DayEntryInput, Entry, EntryType, NamedItem } from '../api/types'
 import { formatDateLong } from '../lib/dates'
-import { siteStyle } from '../lib/ui'
+import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
 
 interface Props {
@@ -33,17 +33,26 @@ interface Props {
 interface Row {
   type: EntryType
   customerName: string
+  activity: Activity | null
   start: string
   end: string
   note: string
 }
 
-const emptyRow = (type: EntryType, customerName = ''): Row => ({ type, customerName, start: '', end: '', note: '' })
+const emptyRow = (type: EntryType, customerName = ''): Row => ({
+  type,
+  customerName,
+  activity: null,
+  start: '',
+  end: '',
+  note: '',
+})
 
 function toInputs(rows: Row[]): DayEntryInput[] {
   return rows.map((row) => ({
     type: row.type,
     customerName: row.type === 'Baustelle' ? row.customerName.trim() : null,
+    activity: row.type === 'Baustelle' ? row.activity : null,
     startTime: row.start ? `${row.start}:00` : null,
     endTime: row.end ? `${row.end}:00` : null,
     note: row.note.trim() || null,
@@ -58,6 +67,7 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
       : entries.map((e) => ({
           type: e.type,
           customerName: e.customerName ?? '',
+          activity: e.activity,
           start: e.startTime?.slice(0, 5) ?? '',
           end: e.endTime?.slice(0, 5) ?? '',
           note: e.note ?? '',
@@ -111,7 +121,6 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                     type="button"
                     key={site.id}
                     className="site-pick"
-                    style={siteStyle(site.id)}
                     onClick={() => pick(site.name)}
                   >
                     {site.name}
@@ -153,6 +162,9 @@ export function DayEditor({ employee, date, entries, customerNames, recentSites,
                     maxLength={200}
                     data-autofocus={index === 0 && entries.length === 0 ? true : undefined}
                   />
+                )}
+                {row.type === 'Baustelle' && (
+                  <ActivitySelect value={row.activity} onChange={(activity) => update(index, { activity })} />
                 )}
                 <Group grow gap="xs">
                   <TextInput

@@ -32,7 +32,7 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
           const site = entry.customerId === null ? undefined : siteById.get(entry.customerId)
           return (
             <div key={entry.id} className="day-details-entry">
-              <Chip entry={entry} />
+              <Chip entry={entry} withActivity />
               {site?.location && <SiteLocation location={site.location} />}
             </div>
           )

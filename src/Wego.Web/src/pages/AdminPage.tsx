@@ -26,7 +26,6 @@ import { api, messageOf } from '../api/client'
 import type { Access, Customer, Employee, EmployeeInput, Role, SchoolHoliday } from '../api/types'
 import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
-import { siteStyle } from '../lib/ui'
 
 /** Planner-only: employees and their rights, school holidays, construction sites. */
 export function AdminPage({ year }: { year: number }) {
@@ -548,10 +547,7 @@ function CustomersSection() {
             {visible.map((customer) => (
               <Table.Tr key={customer.id}>
                 <Table.Td>
-                  <Group gap={8} wrap="nowrap">
-                    <span className="site-dot" style={siteStyle(customer.id)} />
-                    <Anchor href={`#/baustellen/${customer.id}`}>{customer.name}</Anchor>
-                  </Group>
+                  <Anchor href={`#/baustellen/${customer.id}`}>{customer.name}</Anchor>
                 </Table.Td>
                 <Table.Td>{customer.location}</Table.Td>
                 <Table.Td>{customer.description}</Table.Td>

@@ -211,15 +211,14 @@ a:hover {
   border-radius: 12px;
 }
 
-/* ---------- entries: one colour per construction site ---------- */
+/* ---------- entries: the colour shows the activity (see lib/activities.ts) ---------- */
 
 .chip {
-  --site-h: 186;
   display: block;
   padding: 3px 7px;
-  border-left: 3px solid hsl(var(--site-h) 55% 36%);
+  border-left: 4px solid var(--entry-color, #8fa3a8);
   border-radius: 4px;
-  background: hsl(var(--site-h) 60% 92%);
+  background: var(--entry-bg, #edf2f3);
   font-size: 0.85rem;
   line-height: 1.3;
 }
@@ -230,20 +229,17 @@ a:hover {
   font-size: 0.75rem;
 }
 
+.chip .activity {
+  display: block;
+  color: var(--entry-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .chip .note {
   display: block;
   color: var(--text-muted);
   font-size: 0.75rem;
-}
-
-.chip-urlaub {
-  border-left-color: var(--wego-green);
-  background: #d8f0e2;
-}
-
-.chip-krank {
-  border-left-color: var(--wego-red);
-  background: #fbdcde;
 }
 
 .chip.dimmed,
@@ -252,35 +248,28 @@ a:hover {
 }
 
 .site-pick {
-  --site-h: 186;
   padding: 5px 10px;
-  border: 1px solid hsl(var(--site-h) 45% 70%);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: hsl(var(--site-h) 60% 93%);
-  color: hsl(var(--site-h) 55% 22%);
+  background: var(--surface);
+  color: var(--wego-teal-dark);
   font: inherit;
   font-size: 0.85rem;
   cursor: pointer;
 }
 
 .site-pick:hover {
-  background: hsl(var(--site-h) 60% 86%);
-}
-
-.site-dot {
-  --site-h: 186;
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: hsl(var(--site-h) 55% 45%);
+  border-color: var(--wego-teal);
+  background: #e3f6f7;
 }
 
 .site-card {
-  --site-h: 186;
-  border-left: 4px solid hsl(var(--site-h) 55% 40%);
+  border-left: 4px solid var(--wego-teal);
 }
 
+.activity-legend {
+  row-gap: 2px;
+}
 /* ---------- cells shared by all plan views ---------- */
 
 .cell {
@@ -433,15 +422,14 @@ a:hover {
 
 /* The short form of a cell, used when the plan has little room (see the container query below). */
 .cell-compact {
-  --site-h: 186;
   display: none;
   align-items: center;
   gap: 3px;
   min-width: 0;
   padding: 5px 4px;
-  border-left: 3px solid hsl(var(--site-h) 55% 36%);
+  border-left: 4px solid var(--entry-color, #8fa3a8);
   border-radius: 3px;
-  background: hsl(var(--site-h) 60% 92%);
+  background: var(--entry-bg, #edf2f3);
   font-size: 0.78rem;
 }
 
@@ -458,17 +446,6 @@ a:hover {
   color: var(--wego-teal-dark);
   font-weight: 700;
 }
-
-.compact-urlaub {
-  border-left-color: var(--wego-green);
-  background: #d8f0e2;
-}
-
-.compact-krank {
-  border-left-color: var(--wego-red);
-  background: #fbdcde;
-}
-
 /* Little room for the plan (phone, or half a browser window): short cells, narrow columns. */
 @container plan (max-width: 760px) {
   .matrix {
@@ -519,14 +496,13 @@ a:hover {
 }
 
 .my-entry {
-  --site-h: 186;
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 8px 10px;
-  border-left: 4px solid hsl(var(--site-h) 55% 36%);
+  border-left: 5px solid var(--entry-color, #8fa3a8);
   border-radius: 6px;
-  background: hsl(var(--site-h) 60% 94%);
+  background: var(--entry-bg, #edf2f3);
 }
 
 .my-entry .when {
@@ -540,21 +516,15 @@ a:hover {
   font-weight: 700;
 }
 
+.my-entry .what {
+  color: var(--entry-color);
+  font-weight: 700;
+}
+
 .my-entry .detail {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
-
-.my-entry-urlaub {
-  border-left-color: var(--wego-green);
-  background: #d8f0e2;
-}
-
-.my-entry-krank {
-  border-left-color: var(--wego-red);
-  background: #fbdcde;
-}
-
 .day-details-entry {
   display: flex;
   flex-direction: column;

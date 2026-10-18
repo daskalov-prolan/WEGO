@@ -1,11 +1,11 @@
-import { Alert, Anchor, Paper, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core'
+import { Alert, Anchor, ColorSwatch, Group, Paper, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Customer, CustomerReport } from '../api/types'
 import { SiteLocation } from '../components/SiteLocation'
 import { Stat } from '../components/Stat'
+import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
-import { siteStyle } from '../lib/ui'
 
 interface Props {
   year: number
@@ -29,6 +29,13 @@ export function CustomerReportPage({ year, customerId }: Props) {
 
   const site = customers.find((customer) => customer.id === customerId)
   const current = report && report.customerId === customerId && report.year === year ? report : null
+
+  // How far the job has come: employee days per activity, in the order of the job.
+  const byActivity = ACTIVITIES.map((activity) => ({
+    ...activity,
+    days: current?.entries.filter((entry) => entry.activity === activity.value).length ?? 0,
+    last: current?.entries.filter((entry) => entry.activity === activity.value).at(-1)?.date,
+  })).filter((row) => row.days > 0)
 
   return (
     <div className="page">
@@ -55,7 +62,7 @@ export function CustomerReportPage({ year, customerId }: Props) {
       )}
 
       {site && (site.location || site.description) && (
-        <Paper withBorder p="sm" mb="md" className="site-card" style={siteStyle(site.id)}>
+        <Paper withBorder p="sm" mb="md" className="site-card">
           <Stack gap={2}>
             {site.location && <SiteLocation location={site.location} />}
             {site.description && <Text size="sm">{site.description}</Text>}
@@ -113,6 +120,39 @@ export function CustomerReportPage({ year, customerId }: Props) {
             </Table>
           </Table.ScrollContainer>
 
+          {byActivity.length > 0 && (
+            <>
+              <Title order={4} mb="xs">
+                Nach Tätigkeit
+              </Title>
+              <Table.ScrollContainer minWidth={380} mb="lg">
+                <Table withTableBorder>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Tätigkeit</Table.Th>
+                      <Table.Th ta="right">Einsatztage</Table.Th>
+                      <Table.Th>Zuletzt</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {byActivity.map((row) => (
+                      <Table.Tr key={row.value}>
+                        <Table.Td>
+                          <Group gap="xs" wrap="nowrap">
+                            <ColorSwatch color={row.color} size={12} withShadow={false} />
+                            {row.label}
+                          </Group>
+                        </Table.Td>
+                        <Table.Td ta="right">{row.days}</Table.Td>
+                        <Table.Td>{row.last && formatDate(row.last)}</Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            </>
+          )}
+
           <Title order={4} mb="xs">
             Alle Einsätze
           </Title>
@@ -122,6 +162,7 @@ export function CustomerReportPage({ year, customerId }: Props) {
                 <Table.Tr>
                   <Table.Th>Tag</Table.Th>
                   <Table.Th>Mitarbeiter</Table.Th>
+                  <Table.Th>Tätigkeit</Table.Th>
                   <Table.Th>Zeitfenster</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -130,6 +171,7 @@ export function CustomerReportPage({ year, customerId }: Props) {
                   <Table.Tr key={entry.id}>
                     <Table.Td>{formatDate(entry.date)}</Table.Td>
                     <Table.Td>{entry.employeeName}</Table.Td>
+                    <Table.Td>{activityLabel(entry.activity)}</Table.Td>
                     <Table.Td>{formatTimeRange(entry) || 'ganztägig'}</Table.Td>
                   </Table.Tr>
                 ))}
