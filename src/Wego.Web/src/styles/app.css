@@ -332,8 +332,8 @@ a:hover {
   font-weight: 700;
   white-space: nowrap;
 }
-/* Head of a site's page: one narrow line that stays at the top while the page scrolls. */
-.site-head {
+/* Head of a site's page (not .site-head, the row heads of the plan by site): one narrow line that stays at the top while the page scrolls. */
+.site-page-head {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -349,11 +349,11 @@ a:hover {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-.site-head-back {
+.site-page-head-back {
   flex: none;
 }
 
-.site-head-name.mantine-Title-root {
+.site-page-head-name.mantine-Title-root {
   max-width: 28ch;
   overflow: hidden;
   font-size: 1.15rem;
@@ -362,7 +362,7 @@ a:hover {
   white-space: nowrap;
 }
 
-.site-head-facts {
+.site-page-head-facts {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
@@ -381,14 +381,14 @@ a:hover {
   font-size: 0.72rem;
 }
 
-.site-head-description {
+.site-page-head-description {
   max-width: 40ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.site-head-actions {
+.site-page-head-actions {
   margin-left: auto;
 }
 
@@ -954,7 +954,7 @@ a:hover {
     padding: 16px 12px 32px;
   }
 
-  .site-head {
+  .site-page-head {
     margin: -16px -12px 10px;
     padding: 6px 12px;
   }

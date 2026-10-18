@@ -98,11 +98,11 @@ export function SitePage({ year, siteId }: Props) {
   return (
     <div className="page">
       {/* A narrow head that stays at the top while the plan below is scrolled. */}
-      <div className="site-head">
-        <Anchor size="sm" className="site-head-back" onClick={() => window.history.back()}>
+      <div className="site-page-head">
+        <Anchor size="sm" className="site-page-head-back" onClick={() => window.history.back()}>
           ‹ Zurück
         </Anchor>
-        <Title order={3} className="site-head-name" title={site?.name}>
+        <Title order={3} className="site-page-head-name" title={site?.name}>
           {site?.name ?? report?.siteName ?? 'Baustelle'}
         </Title>
         {site && (
@@ -112,7 +112,7 @@ export function SitePage({ year, siteId }: Props) {
               canEdit
               onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
             />
-            <span className="site-head-facts">
+            <span className="site-page-head-facts">
               {site.client && site.client !== site.name && <Fact label="Auftraggeber">{site.client}</Fact>}
               {address && (
                 <Fact label="Adresse">
@@ -126,12 +126,12 @@ export function SitePage({ year, siteId }: Props) {
               )}
               {site.labelProjectNumber && <Fact label="Label">{site.labelProjectNumber}</Fact>}
               {site.description && (
-                <Text size="xs" c="dimmed" className="site-head-description" title={site.description}>
+                <Text size="xs" c="dimmed" className="site-page-head-description" title={site.description}>
                   {site.description}
                 </Text>
               )}
             </span>
-            <Group gap={4} wrap="nowrap" className="site-head-actions">
+            <Group gap={4} wrap="nowrap" className="site-page-head-actions">
               <Button size="compact-sm" variant="light" onClick={() => setEditing(true)}>
                 Bearbeiten
               </Button>

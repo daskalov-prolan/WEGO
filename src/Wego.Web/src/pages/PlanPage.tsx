@@ -123,6 +123,8 @@ export function PlanPage({ year, canEdit }: Props) {
   const notificationCount = useRef(0)
   // A scroll that has to wait until the table is drawn (first load, other zoom, weekends shown or folded).
   const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: anchor, smooth: false })
+  // The first day next to the names, as last scrolled to or by: kept there when the table changes its size.
+  const pinned = useRef(anchor)
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
   // Plan by site: by default only sites that are not done or cancelled.
@@ -328,6 +330,7 @@ export function PlanPage({ year, canEdit }: Props) {
   const scrollNow = (iso: string, smooth: boolean) => {
     const column = document.getElementById(`col-${iso}`)
     if (!scroller.current || !column) return false
+    pinned.current = iso
     scroller.current.scrollTo?.({ left: column.offsetLeft - nameWidth(), behavior: smooth ? 'smooth' : 'auto' })
     return true
   }
@@ -341,6 +344,7 @@ export function PlanPage({ year, canEdit }: Props) {
 
   const onScroll = () => {
     const next = readVisible()
+    if (next) pinned.current = next.from
     if (next && (next.from !== visible.from || next.to !== visible.to)) {
       setVisible(next)
     }
@@ -351,6 +355,23 @@ export function PlanPage({ year, canEdit }: Props) {
     const pending = pendingScroll.current
     if (pending && scrollNow(pending.iso, pending.smooth)) pendingScroll.current = null
   })
+
+  // Columns can still grow after the table is drawn (fonts, the column of open activities). The scroll position
+  // in pixels then stays while the days move, without a scroll event: keep the same day next to the names.
+  useEffect(() => {
+    const element = scroller.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const keep = () => {
+      const column = document.getElementById(`col-${pinned.current}`)
+      const corner = element.querySelector<HTMLElement>('th.corner')
+      if (!column || pendingScroll.current) return
+      const left = column.offsetLeft - (corner?.offsetWidth ?? 0)
+      if (Math.abs(element.scrollLeft - left) > 1) element.scrollLeft = left
+    }
+    const observer = new ResizeObserver(keep)
+    for (const child of element.querySelectorAll('table, th.corner')) observer.observe(child)
+    return () => observer.disconnect()
+  }, [plan, perspective, chosenView, foldWeekends])
 
   const changePerspective = (next: Perspective) => {
     pendingScroll.current = { iso: anchor, smooth: false }
