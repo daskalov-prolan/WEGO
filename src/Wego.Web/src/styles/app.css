@@ -332,8 +332,64 @@ a:hover {
   font-weight: 700;
   white-space: nowrap;
 }
-.site-card {
+/* Head of a site's page: one narrow line that stays at the top while the page scrolls. */
+.site-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: -24px -20px 12px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--border);
   border-left: 4px solid var(--wego-teal);
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.site-head-back {
+  flex: none;
+}
+
+.site-head-name.mantine-Title-root {
+  max-width: 28ch;
+  overflow: hidden;
+  font-size: 1.15rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-head-facts {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.site-fact {
+  white-space: nowrap;
+}
+
+.site-fact-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.site-head-description {
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-head-actions {
+  margin-left: auto;
 }
 
 /* Legend: the course of a job as a process diagram, absences and holidays as dots beside it. */
@@ -896,6 +952,11 @@ a:hover {
 
   .page {
     padding: 16px 12px 32px;
+  }
+
+  .site-head {
+    margin: -16px -12px 10px;
+    padding: 6px 12px;
   }
 
   .plan-toolbar {

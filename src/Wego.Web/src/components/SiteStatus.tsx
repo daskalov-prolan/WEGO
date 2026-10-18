@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Table, Text } from '@mantine/core'
+import { Badge, Button, Group, Popover, Table, Text } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Site, SiteStatus, StatusChange } from '../api/types'
@@ -26,7 +26,7 @@ interface Props {
   onChanged: (site: Site) => void
 }
 
-/** Status of a site with the allowed next steps, and the log of all changes with date. */
+/** Status of a site with the allowed next steps in one line; the log of all changes with date behind "Verlauf". */
 export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
   const [history, setHistory] = useState<StatusChange[]>([])
   const [error, setError] = useState('')
@@ -47,7 +47,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
 
   return (
     <div>
-      <Group gap="xs" align="center">
+      <Group gap={6} align="center" wrap="nowrap">
         <StatusBadge status={site.status} />
         {canEdit &&
           nextStatuses(site.status).map((status) => (
@@ -61,14 +61,33 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
               {ACTION[status]}
             </Button>
           ))}
+        {canEdit && history.length > 0 && (
+          <Popover position="bottom-start" withArrow shadow="md">
+            <Popover.Target>
+              <Button size="compact-sm" variant="subtle" color="gray">
+                Verlauf
+              </Button>
+            </Popover.Target>
+            <Popover.Dropdown>
+              <StatusHistory history={history} />
+            </Popover.Dropdown>
+          </Popover>
+        )}
       </Group>
       {error && (
         <Text c="red" size="sm" mt={4}>
           {error}
         </Text>
       )}
-      {canEdit && history.length > 0 && (
-        <Table mt="xs" withRowBorders={false} verticalSpacing={2} fz="sm" className="status-history">
+    </div>
+  )
+}
+
+function StatusHistory({ history }: { history: StatusChange[] }) {
+  return (
+    <>
+      {history.length > 0 && (
+        <Table withRowBorders={false} verticalSpacing={2} fz="sm" className="status-history">
           <Table.Tbody>
             {history.map((entry, index) => (
               <Table.Tr key={index}>
@@ -84,6 +103,6 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
           </Table.Tbody>
         </Table>
       )}
-    </div>
+    </>
   )
 }

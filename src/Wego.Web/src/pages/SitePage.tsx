@@ -1,10 +1,11 @@
 import {
+  ActionIcon,
   Alert,
   Anchor,
   Button,
   ColorSwatch,
   Group,
-  Paper,
+  Menu,
   Select,
   SimpleGrid,
   Table,
@@ -12,13 +13,14 @@ import {
   Title,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Site, SiteReport } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteLocation } from '../components/SiteLocation'
 import { SiteMiniPlan } from '../components/SiteMiniPlan'
 import { SiteStatusPanel } from '../components/SiteStatus'
+import { Sheet } from '../components/Sheet'
 import { Stat } from '../components/Stat'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
@@ -29,6 +31,15 @@ interface Props {
   siteId: number
 }
 
+/** One fact of the site in the head: a small label and its value. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="site-fact">
+      <span className="site-fact-label">{label}</span> {children}
+    </span>
+  )
+}
+
 /** Planner-only: the record of one construction site, and who worked there how many days. */
 export function SitePage({ year, siteId }: Props) {
   const [sites, setSites] = useState<Site[]>([])
@@ -36,6 +47,7 @@ export function SitePage({ year, siteId }: Props) {
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
   const [mergeTarget, setMergeTarget] = useState<string | null>(null)
+  const [merging, setMerging] = useState(false)
 
   useEffect(() => {
     api.sites().then(setSites, (e) => setError(messageOf(e)))
@@ -66,6 +78,7 @@ export function SitePage({ year, siteId }: Props) {
       window.location.hash = `#/baustellen/${target.id}`
       setSites((list) => list.filter((candidate) => candidate.id !== site.id))
       setMergeTarget(null)
+      setMerging(false)
     } catch (e) {
       setError(messageOf(e))
     }
@@ -84,102 +97,99 @@ export function SitePage({ year, siteId }: Props) {
 
   return (
     <div className="page">
-      <Group gap="md">
-        <Anchor size="sm" onClick={() => window.history.back()}>
+      {/* A narrow head that stays at the top while the plan below is scrolled. */}
+      <div className="site-head">
+        <Anchor size="sm" className="site-head-back" onClick={() => window.history.back()}>
           ‹ Zurück
         </Anchor>
-        <Anchor href="#/baustellen" size="sm">
-          Alle Baustellen
-        </Anchor>
-      </Group>
-      <Title order={2} mt={4} mb="md">
-        {site?.name ?? report?.siteName ?? 'Baustelle'}
-      </Title>
-
-      {error && (
-        <Alert color="red" variant="light" mb="md">
-          {error}
-        </Alert>
-      )}
-
-      {site && (
-        <Paper withBorder p="md" mb="lg" className="site-card">
-          <div className="site-status">
-            <Text size="xs" c="dimmed" mb={4}>
-              Status
-            </Text>
+        <Title order={3} className="site-head-name" title={site?.name}>
+          {site?.name ?? report?.siteName ?? 'Baustelle'}
+        </Title>
+        {site && (
+          <>
             <SiteStatusPanel
               site={site}
               canEdit
               onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
             />
-          </div>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-            <div>
-              <Text size="xs" c="dimmed">
-                Auftraggeber
-              </Text>
-              <Text>{site.client ?? '–'}</Text>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed">
-                Adresse
-              </Text>
-              {address ? <SiteLocation location={address} /> : <Text>–</Text>}
-            </div>
-            <div>
-              <Text size="xs" c="dimmed">
-                Geplant
-              </Text>
-              <Text>
-                {site.plannedStart ? formatDate(site.plannedStart) : '?'} –{' '}
-                {site.plannedEnd ? formatDate(site.plannedEnd) : '?'}
-              </Text>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed">
-                Projektnummer in Label
-              </Text>
-              <Text>{site.labelProjectNumber ?? '–'}</Text>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed">
-                Name im Plan aus
-              </Text>
-              <Text>{site.nameSource === 'Strasse' ? 'Straße' : 'Auftraggeber'}</Text>
-            </div>
-          </SimpleGrid>
-          {site.description && (
-            <Text size="sm" mt="sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {site.description}
-            </Text>
-          )}
-          <Group mt="md" gap="xs" align="flex-end">
-            <Button variant="light" onClick={() => setEditing(true)}>
-              Bearbeiten
-            </Button>
+            <span className="site-head-facts">
+              {site.client && site.client !== site.name && <Fact label="Auftraggeber">{site.client}</Fact>}
+              {address && (
+                <Fact label="Adresse">
+                  <SiteLocation location={address} />
+                </Fact>
+              )}
+              {(site.plannedStart || site.plannedEnd) && (
+                <Fact label="Geplant">
+                  {site.plannedStart ? formatDate(site.plannedStart) : '?'} – {site.plannedEnd ? formatDate(site.plannedEnd) : '?'}
+                </Fact>
+              )}
+              {site.labelProjectNumber && <Fact label="Label">{site.labelProjectNumber}</Fact>}
+              {site.description && (
+                <Text size="xs" c="dimmed" className="site-head-description" title={site.description}>
+                  {site.description}
+                </Text>
+              )}
+            </span>
+            <Group gap={4} wrap="nowrap" className="site-head-actions">
+              <Button size="compact-sm" variant="light" onClick={() => setEditing(true)}>
+                Bearbeiten
+              </Button>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <ActionIcon variant="subtle" color="gray" aria-label="Weitere Aktionen">
+                    ⋯
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item component="a" href="#/baustellen">
+                    Alle Baustellen
+                  </Menu.Item>
+                  <Menu.Item onClick={() => setMerging(true)}>Zusammenführen …</Menu.Item>
+                  {current && current.entries.length === 0 && (
+                    <Menu.Item color="red" onClick={remove}>
+                      Löschen
+                    </Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
+          </>
+        )}
+      </div>
+
+      {error && (
+        <Alert color="red" variant="light" my="sm">
+          {error}
+        </Alert>
+      )}
+
+      {merging && site && (
+        <Sheet title="Doppelt angelegt? Zusammenführen" onClose={() => setMerging(false)} size="md">
+          <Text size="sm" mb="sm">
+            Alle Einsätze von „{site.name}“ wandern zur gewählten Baustelle, „{site.name}“ wird danach gelöscht.
+          </Text>
+          <Group gap="xs" align="flex-end">
             <Select
-              placeholder="Doppelt angelegt? Zusammenführen mit …"
+              label="Zusammenführen mit"
+              placeholder="Baustelle wählen"
               searchable
               clearable
               limit={30}
-              w={300}
+              style={{ flex: 1 }}
               value={mergeTarget}
               onChange={setMergeTarget}
               data={sites
                 .filter((candidate) => candidate.id !== site.id)
                 .map((candidate) => ({ value: String(candidate.id), label: candidate.name }))}
+              comboboxProps={{ withinPortal: false }}
+              data-autofocus
             />
-            <Button variant="default" disabled={!mergeTarget} onClick={merge}>
+            <Button disabled={!mergeTarget} onClick={merge}>
               Zusammenführen
             </Button>
-            {current && current.entries.length === 0 && (
-              <Button variant="subtle" color="red" onClick={remove}>
-                Löschen
-              </Button>
-            )}
           </Group>
-        </Paper>
+        </Sheet>
       )}
 
       {editing && site && (
