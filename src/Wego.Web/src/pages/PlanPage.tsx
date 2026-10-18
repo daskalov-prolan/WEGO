@@ -84,7 +84,7 @@ export function PlanPage({ year, canEdit }: Props) {
   const [chosenView, setChosenView] = useState<View>('week')
   // The days that are currently in view; follows the scrolling.
   const start = weekOf(today >= first && today <= last ? today : first)[0].iso
-  const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 6) })
+  const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 13) })
   const anchor = visible.from
   const scroller = useRef<HTMLDivElement>(null)
   const notificationCount = useRef(0)
@@ -183,7 +183,7 @@ export function PlanPage({ year, canEdit }: Props) {
   /** Scrolls so that the given day is the first one next to the employee names. */
   const scrollToDate = (iso: string, smooth = false) => {
     const from = clamp(iso)
-    setVisible({ from, to: clamp(addDays(from, view === 'week' ? 6 : 30)) })
+    setVisible({ from, to: clamp(addDays(from, view === 'week' ? 13 : 30)) })
     if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
   }
 
@@ -222,8 +222,10 @@ export function PlanPage({ year, canEdit }: Props) {
   const isDimmed = (entry: Entry) => needle !== '' && !matches(entry)
   const employees = plan.employees.filter((employee) => !hidden.includes(employee.id))
 
-  const toggleEmployee = (id: number) => {
-    const next = hidden.includes(id) ? hidden.filter((other) => other !== id) : [...hidden, id]
+  const toggleEmployee = (id: number) =>
+    storeHidden(hidden.includes(id) ? hidden.filter((other) => other !== id) : [...hidden, id])
+
+  const storeHidden = (next: number[]) => {
     setHidden(next)
     try {
       localStorage.setItem(HIDDEN_KEY, JSON.stringify(next))
@@ -331,7 +333,7 @@ export function PlanPage({ year, canEdit }: Props) {
   const middle = addDays(visible.from, Math.floor((Date.parse(visible.to) - Date.parse(visible.from)) / 172800000))
   const title =
     view === 'week'
-      ? `KW ${isoWeek(visible.from)} · ${short(visible.from)}–${short(visible.to)}${year}`
+      ? `KW ${[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')} · ${short(visible.from)}–${short(visible.to)}${year}`
       : `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
 
   const filteredCustomer = plan.customers.find((customer) => customer.name.toLowerCase() === needle)
@@ -416,6 +418,20 @@ export function PlanPage({ year, canEdit }: Props) {
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
+              <Group gap={4} px="xs" py={4}>
+                <Button size="compact-xs" variant="subtle" onClick={() => storeHidden([])}>
+                  Alle auswählen
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="gray"
+                  onClick={() => storeHidden(plan.employees.map((employee) => employee.id))}
+                >
+                  Alle abwählen
+                </Button>
+              </Group>
+              <Menu.Divider />
               {plan.employees.map((employee) => (
                 <Menu.Item key={employee.id} onClick={() => toggleEmployee(employee.id)}>
                   <Checkbox

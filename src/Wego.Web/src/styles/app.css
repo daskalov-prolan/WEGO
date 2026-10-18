@@ -306,8 +306,8 @@ a:hover {
 .timeline {
   --name-col: 150px;
   --month-row: 26px;
-  /* Zoom: how wide a day is. Week and month fill the screen, but never get narrower than readable. */
-  --day-w: max(118px, calc((100cqw - var(--name-col)) / 7));
+  /* Zoom: how wide a day is. The week shows about two weeks at a time, the month a whole month. */
+  --day-w: max(59px, calc((100cqw - var(--name-col)) / 14));
   --weekend-w: var(--day-w);
   width: calc(var(--name-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
   table-layout: fixed;
@@ -510,8 +510,23 @@ a:hover {
 }
 
 .timeline .cell {
-  min-height: 60px;
-  padding: 4px;
+  min-height: 46px;
+  padding: 3px;
+}
+
+/* Week: every entry on one line, shortened with "…"; time, activity name and note are in the tooltip. */
+.timeline.zoom-week .chip {
+  padding: 3px 5px;
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline.zoom-week .chip .time,
+.timeline.zoom-week .chip .activity,
+.timeline.zoom-week .chip .note {
+  display: none;
 }
 
 .cell-full {
@@ -593,7 +608,7 @@ a:hover {
 @container (max-width: 760px) {
   .timeline {
     --name-col: 86px;
-    --day-w: max(70px, calc((100cqw - var(--name-col)) / 7));
+    --day-w: max(46px, calc((100cqw - var(--name-col)) / 7));
   }
 
   .timeline.zoom-month {
@@ -605,18 +620,13 @@ a:hover {
     font-size: 0.82rem;
   }
 
-  .timeline.zoom-week .cell-full {
-    display: none;
-  }
-
-  .timeline.zoom-week .cell-compact {
-    display: flex;
+  .timeline.zoom-week .chip {
+    padding: 3px 3px;
+    font-size: 0.72rem;
   }
 
   .timeline.zoom-week .cell {
-    justify-content: center;
-    min-height: 46px;
-    padding: 3px 2px;
+    padding: 2px;
   }
 }
 /* ---------- "Mein Plan" and day details ---------- */

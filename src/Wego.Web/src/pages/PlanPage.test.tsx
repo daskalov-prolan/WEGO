@@ -63,7 +63,7 @@ describe('PlanPage', () => {
   it('starts with the current week: employees in rows, days from left to right, a split day with its time windows', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
 
-    expect(await screen.findByText('KW 10 · 02.03.–08.03.2026')).toBeInTheDocument()
+    expect(await screen.findByText('KW 10–11 · 02.03.–15.03.2026')).toBeInTheDocument()
     const monday = cell(/Anna, Montag, 02.03.2026/)
     expect(within(monday).getByText('8–10 Uhr')).toBeInTheDocument()
     expect(within(monday).getByText('11–13 Uhr')).toBeInTheDocument()
@@ -79,7 +79,7 @@ describe('PlanPage', () => {
     await screen.findByText(/KW 10/)
 
     await userEvent.click(screen.getByRole('button', { name: 'Weiter' }))
-    expect(screen.getByText('KW 11 · 09.03.–15.03.2026')).toBeInTheDocument()
+    expect(screen.getByText('KW 11–12 · 09.03.–22.03.2026')).toBeInTheDocument()
     expect(within(cell(/Bernd, Donnerstag, 12.03.2026/)).getAllByText('Familie Schulze')).not.toHaveLength(0)
 
     await userEvent.click(screen.getByRole('radio', { name: 'Monat' }))
@@ -99,6 +99,20 @@ describe('PlanPage', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Wochenenden ausblenden' }))
     expect(table()).not.toHaveClass('fold-weekends')
     expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
+  })
+
+  it('selects and deselects all employees at once', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+
+    await user.click(screen.getByRole('button', { name: 'Mitarbeiter (2/2)' }))
+    await user.click(await screen.findByRole('button', { name: 'Alle abwählen', hidden: true }))
+    expect(screen.queryAllByRole('rowheader')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Mitarbeiter (0/2)', hidden: true })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Alle auswählen', hidden: true }))
+    expect(screen.getAllByRole('rowheader')).toHaveLength(2)
   })
 
   it('marks a cell with a note', async () => {
