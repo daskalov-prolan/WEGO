@@ -69,7 +69,7 @@ describe('SiteMiniPlan', () => {
     expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
   })
 
-  it('moves by week and jumps to the next week planned to less than half', async () => {
+  it('moves by week and jumps to the next week in which someone who can do open work is free', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
@@ -81,12 +81,43 @@ describe('SiteMiniPlan', () => {
     await user.click(screen.getByRole('button', { name: 'Heute' }))
     expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
-    // KW 10 itself is at 20 %, but the jump looks for the next week after the first one shown.
-    await user.click(screen.getByRole('button', { name: /Nächste Woche unter 50 %/ }))
+    // Bernd is free in KW 10 too, but the jump looks for the next week after the first one shown.
+    await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
   })
 
-  it('shows two calendar weeks from the planned start, the work here and elsewhere, and the open activities', async () => {
+  it('counts additional activities for the free week, and any entry makes the week taken', async () => {
+    const user = userEvent.setup()
+    const busier: Plan = {
+      ...plan,
+      employees: [
+        ...plan.employees,
+        // Carla lays tiles as well (additional activity); Dora does not.
+        { id: 3, name: 'Carla', mainActivity: 'Sanitaer', additionalActivities: ['Fliesen'] },
+        { id: 4, name: 'Dora', mainActivity: 'Sanitaer', additionalActivities: [] },
+      ],
+      entries: [
+        ...plan.entries,
+        entry(3, 2, 'Bernd', '2026-03-09', 11, 'Familie Meier', 'Fliesen'),
+        entry(4, 2, 'Bernd', '2026-03-16', 11, 'Familie Meier', 'Fliesen'),
+        entry(5, 3, 'Carla', '2026-03-10', 11, 'Familie Meier', 'Sanitaer'),
+      ],
+    }
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/plan/batch' ? new Response('[]', { status: 200 }) : new Response(JSON.stringify(busier), { status: 200 }),
+    )
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+
+    // KW 11: Bernd and Carla have an entry, Dora is free but cannot lay tiles. KW 12: Carla is free.
+    await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
+    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
+    // The lanes stay with the main activity: Bernd only.
+    expect(screen.getByRole('button', { name: 'Bernd, 2026-03-16' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Carla, 2026-03-16' })).not.toBeInTheDocument()
+  })
+
+  it('shows a lane per employee with an open main activity, the weekly load and the open activities', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
 
@@ -95,9 +126,10 @@ describe('SiteMiniPlan', () => {
     expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
     expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()
 
-    const thursday = screen.getByRole('button', { name: 'Familie Schulze, 2026-03-05' })
-    expect(within(thursday).getAllByText('Anna').length).toBeGreaterThan(0)
-    expect(within(thursday).getAllByText('Bernd: Familie Meier').length).toBeGreaterThan(0)
+    // One lane per employee whose main activity is still open here: Bernd (Fliesen), not Anna (Abriss is planned).
+    expect(screen.queryByRole('button', { name: 'Anna, 2026-03-05' })).not.toBeInTheDocument()
+    const thursday = screen.getByRole('button', { name: 'Bernd, 2026-03-05' })
+    expect(within(thursday).getAllByText('Familie Meier').length).toBeGreaterThan(0)
 
     // Abriss is planned already, Fliesen is still open.
     const open = screen.getAllByRole('button').filter((button) => button.classList.contains('task-box'))

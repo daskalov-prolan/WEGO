@@ -1032,41 +1032,84 @@ a:hover {
 
 /* About one week in view, one and a half when there is room; Saturday and Sunday as narrow strips. */
 .mini-scroll {
+  position: relative;
   container-type: inline-size;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
 
-.mini-strip {
+/* One lane per employee, the days as columns; the names stay at the left edge. */
+.mini-lanes {
+  --lane-name: 110px;
   --weekend: 19px;
-  --day: max(96px, calc((100cqw - 2 * var(--weekend)) / 5));
-  display: flex;
+  --day: max(96px, calc((100cqw - var(--lane-name) - 2 * var(--weekend)) / 5));
+  display: grid;
   width: max-content;
 }
 
 @container (min-width: 1150px) {
-  .mini-strip {
-    --day: calc((100cqw - 3 * var(--weekend)) / 7.5);
+  .mini-lanes {
+    --lane-name: 140px;
+    --day: calc((100cqw - var(--lane-name) - 3 * var(--weekend)) / 7.5);
   }
 }
 
-.mini-day {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  width: var(--day);
-  border-left: 1px solid var(--border);
+.mini-corner,
+.mini-lane-name {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  border-right: 1px solid var(--border);
 }
 
-.mini-day.weekend {
-  width: var(--weekend);
-  background: var(--surface-weekend);
+.mini-corner {
+  display: flex;
+  align-items: flex-end;
+  padding: 3px 6px;
+  background: var(--wego-teal-dark);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mini-lane-name {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+  background: var(--surface, #fff);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.mini-lane-name .name,
+.mini-lane-name .main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-lane-name .main {
+  color: var(--text-dimmed, #6b7280);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.mini-no-lanes {
+  grid-column: 1 / -1;
+  position: sticky;
+  left: 0;
+  width: min(100cqw, max-content);
+  padding: 10px;
 }
 
 .mini-day-head {
   padding: 3px 6px;
   overflow: hidden;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
   background: var(--wego-teal);
   color: #fff;
   font-size: 0.75rem;
@@ -1097,12 +1140,43 @@ a:hover {
   opacity: 0.9;
 }
 
-.mini-day.weekend .mini-day-body {
+.mini-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mini-cell.weekend {
   padding: 1px;
+  background: var(--surface-weekend);
+}
+
+.mini-cell:hover {
+  background: rgba(57, 187, 207, 0.12);
+}
+
+.mini-cell .chip {
+  font-size: 0.74rem;
+}
+
+.mini-cell .chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* On the narrow weekend only the colours of what is planned there. */
-.mini-day.weekend .chip {
+.mini-cell.weekend .chip {
   min-height: 10px;
   padding: 0;
   border-left: 0;
@@ -1110,45 +1184,22 @@ a:hover {
   font-size: 0;
 }
 
-.mini-day.weekend .mini-elsewhere {
-  border-top: 0;
-}
-.mini-day-body {
+/* The work at this site stands out from the work elsewhere. */
+.mini-here {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  gap: 3px;
-  min-height: 70px;
-  padding: 4px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  padding: 1px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--wego-aqua);
 }
 
-.mini-day-body:hover {
-  background: rgba(57, 187, 207, 0.12);
+.mini-here .chip {
+  font-weight: 700;
 }
 
-.mini-day-body .chip {
-  font-size: 0.74rem;
-}
-
-.mini-day-body .chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Work elsewhere: smaller and quieter than the work at this site. */
 .mini-elsewhere {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 2px;
-  padding-top: 3px;
-  border-top: 1px dashed var(--border);
 }
 
 .mini-elsewhere .chip {
@@ -1157,23 +1208,7 @@ a:hover {
   font-weight: 500;
 }
 
-
-/* The work at this site stands out from the work elsewhere. */
-.mini-here {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 4px;
-  background: rgba(57, 187, 207, 0.16);
-  box-shadow: inset 0 0 0 1.5px var(--wego-aqua);
-}
-
-.mini-here .chip {
-  font-weight: 700;
-}
-
-.mini-day.weekend .mini-here {
+.mini-cell.weekend .mini-here {
   padding: 0;
   box-shadow: none;
 }

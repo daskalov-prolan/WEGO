@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Paper, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Plan, PlanEmployee, Site } from '../api/types'
 import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
@@ -32,9 +32,9 @@ function firstWeek(all: Entry[], activities: Set<Activity>, siteId: number, fall
 }
 
 /**
- * Planning on the page of a site: the activities still to plan as boxes in a row, below them the days in one
- * row that scrolls sideways (about a week in view, one and a half when there is room; weekends narrow).
- * Each day shows the work at this site and, below it, where the employees are elsewhere.
+ * Planning on the page of a site: the activities still to plan as boxes in a row, below them one lane per
+ * employee whose main activity is still to plan here, with the days as columns that scroll sideways (about a
+ * week in view, one and a half when there is room; weekends narrow). The work at this site stands out.
  */
 export function SiteMiniPlan({ site, canEdit }: Props) {
   const today = todayIso()
@@ -92,19 +92,17 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     return set
   }, [plans])
 
-  // Work at this site and elsewhere, per day of the two weeks.
-  const byDay = (() => {
-    const map = new Map<string, { here: Entry[]; elsewhere: Entry[] }>()
-    for (const day of days) map.set(day.iso, { here: [], elsewhere: [] })
+  // What each employee does on each day, at this site first.
+  const byLaneDay = (() => {
+    const map = new Map<string, Entry[]>()
     for (const entry of entries) {
-      const slot = map.get(entry.date)
-      if (!slot) continue
-      if (entry.siteId === site.id) slot.here.push(entry)
-      else slot.elsewhere.push(entry)
+      const key = `${entry.employeeId}|${entry.date}`
+      map.set(key, [...(map.get(key) ?? []), entry])
     }
-    for (const slot of map.values()) slot.elsewhere.sort((a, b) => a.employeeName.localeCompare(b.employeeName, 'de'))
+    for (const list of map.values()) list.sort((a, b) => Number(b.siteId === site.id) - Number(a.siteId === site.id))
     return map
   })()
+  const hereOn = (date: string) => entries.filter((entry) => entry.date === date && entry.siteId === site.id)
 
   // Activities of the current status that have no entry at this site yet (in the loaded years).
   const openTasks: OpenTask[] = (() => {
@@ -122,6 +120,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
 
   // Who counts for how full a week is: everybody whose main activity is still to plan at this site.
   const openActivities = new Set(openTasks.map((task) => task.activity))
+  // They are also the lanes of the calendar.
   const relevant = employees.filter((employee) => employee.mainActivity && openActivities.has(employee.mainActivity))
   const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
 
@@ -141,12 +140,24 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     return capacity === 0 ? 1 : taken / capacity
   }
 
-  /** The next week after the first one in view that is planned to less than half; within the loaded years. */
-  const nextWithRoom = (() => {
+  // Who can take one of the open activities, as main or as additional activity.
+  const capable = employees.filter((employee) =>
+    [employee.mainActivity, ...employee.additionalActivities].some((activity) => activity !== null && openActivities.has(activity)),
+  )
+
+  /** Of these, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
+  const freeIn = (monday: string): PlanEmployee[] => {
+    const workdays = [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset)).filter((iso) => !publicHolidays.has(iso))
+    if (workdays.length === 0) return []
+    return capable.filter((employee) => workdays.every((iso) => !busy.has(`${employee.id}|${iso}`)))
+  }
+
+  /** The next week after the first one in view in which one of them is still completely free; within the loaded years. */
+  const nextFree = (() => {
     const lastDay = `${years[years.length - 1]}-12-31`
     for (let monday = addDays(visible, 7); monday <= lastDay; monday = addDays(monday, 7)) {
-      const share = load(monday)
-      if (share !== null && share < 0.5) return monday
+      const free = freeIn(monday)
+      if (free.length > 0) return { monday, free }
     }
     return null
   })()
@@ -193,12 +204,15 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     if (monday < range.from || addDays(monday, 13) > range.to) setRange({ from: addDays(monday, -14), to: addDays(monday, 41) })
   }
 
+  // The names stay at the left edge and cover the start of the scrolled days.
+  const nameWidth = () => scroller.current?.querySelector<HTMLElement>('.mini-corner')?.offsetWidth ?? 0
+
   // Bring the chosen week to the left edge as soon as it is drawn.
   useLayoutEffect(() => {
     const target = scrollTarget.current
     const column = target && document.getElementById(`mini-${target}`)
     if (!scroller.current || !column || plans.length === 0) return
-    scroller.current.scrollTo?.({ left: column.offsetLeft - scroller.current.offsetLeft })
+    scroller.current.scrollTo?.({ left: column.offsetLeft - nameWidth() })
     scrollTarget.current = null
   })
 
@@ -222,7 +236,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
       setRange((current) => ({ ...current, to: addDays(current.to, 28) }))
     }
     const first = [...element.querySelectorAll<HTMLElement>('.mini-day')].find(
-      (column) => column.offsetLeft - element.offsetLeft + column.offsetWidth > left + 1,
+      (column) => column.offsetLeft + column.offsetWidth > left + nameWidth() + 1,
     )
     const monday = first ? weekOf(first.id.slice(5))[0].iso : visible
     if (monday !== visible) setVisible(monday)
@@ -231,7 +245,11 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   const isDimmed = (entry: Entry) => filter.size > 0 && !(entry.activity && filter.has(entry.activity))
 
   const dayHead = (day: Day) => (
-    <div className={['mini-day-head', day.isWeekend ? 'weekend' : '', day.iso === today ? 'today' : ''].join(' ')}>
+    <div
+      key={day.iso}
+      id={`mini-${day.iso}`}
+      className={['mini-day', 'mini-day-head', day.isWeekend ? 'weekend' : '', day.iso === today ? 'today' : ''].join(' ')}
+    >
       {/* Mondays carry the calendar week and how full it is. */}
       <span className="mini-week-mark" title="Auslastung der Mitarbeiter mit offener Haupttätigkeit">
         {day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)} · ${percent(load(day.iso))}` : '\u00a0'}
@@ -270,9 +288,11 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
           </Button>
           <Tooltip
             label={
-              relevant.length === 0
-                ? 'Niemand hat eine der offenen Tätigkeiten als Haupttätigkeit.'
-                : `Gezählt: ${relevant.map((employee) => employee.name).join(', ')} (Haupttätigkeit offen auf dieser Baustelle)`
+              capable.length === 0
+                ? 'Niemand kann eine der offenen Tätigkeiten.'
+                : nextFree
+                  ? `KW ${isoWeek(nextFree.monday)}: noch ganz frei sind ${nextFree.free.map((employee) => employee.name).join(', ')}`
+                  : `In den geladenen Jahren ist niemand mehr eine ganze Woche frei, der eine offene Tätigkeit kann.`
             }
             multiline
             w={260}
@@ -280,10 +300,10 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
             <Button
               size="compact-sm"
               variant="light"
-              disabled={!nextWithRoom}
-              onClick={() => nextWithRoom && go(nextWithRoom)}
+              disabled={!nextFree}
+              onClick={() => nextFree && go(nextFree.monday)}
             >
-              Nächste Woche unter 50 % ›
+              Nächste freie Woche ›
             </Button>
           </Tooltip>
         </Group>
@@ -333,48 +353,64 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
       </div>
 
       <div className="mini-scroll" ref={scroller} onScroll={onScroll}>
-        <div className="mini-strip">
-          {days.map((day) => {
-            const slot = byDay.get(day.iso)!
-            return (
-              <div key={day.iso} id={`mini-${day.iso}`} className={day.isWeekend ? 'mini-day weekend' : 'mini-day'}>
-                {dayHead(day)}
-                <button
-                  type="button"
-                  className="mini-day-body"
-                  aria-label={`${site.name}, ${day.iso}`}
-                  onClick={() => setOpenDay(day.iso)}
-                >
-                  {slot.here.length > 0 && (
-                    <span className="mini-here">
-                      {slot.here.map((entry) => (
-                        <Chip key={entry.id} entry={entry} label={entry.employeeName} dimmed={isDimmed(entry)} />
-                      ))}
-                    </span>
-                  )}
-                  {slot.elsewhere.length > 0 && (
-                    <span className="mini-elsewhere">
-                      {slot.elsewhere.map((entry) => (
-                        <Chip
-                          key={entry.id}
-                          entry={entry}
-                          label={`${entry.employeeName}: ${entry.type === 'Baustelle' ? entry.siteName : entry.type}`}
-                          dimmed={isDimmed(entry)}
-                        />
-                      ))}
-                    </span>
-                  )}
-                </button>
+        <div
+          className="mini-lanes"
+          style={{
+            gridTemplateColumns: `var(--lane-name) ${days.map((day) => (day.isWeekend ? 'var(--weekend)' : 'var(--day)')).join(' ')}`,
+          }}
+        >
+          <div className="mini-corner">Mitarbeiter</div>
+          {days.map(dayHead)}
+          {plans.length > 0 && relevant.length === 0 && (
+            <Text size="sm" c="dimmed" className="mini-no-lanes">
+              {openTasks.length === 0
+                ? 'Alles eingeplant: keine offene Tätigkeit, für die Mitarbeiter gezeigt werden.'
+                : 'Niemand hat eine der offenen Tätigkeiten als Haupttätigkeit.'}
+            </Text>
+          )}
+          {relevant.map((employee) => (
+            <Fragment key={employee.id}>
+              <div className="mini-lane-name">
+                <span className="name">{employee.name}</span>
+                {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
               </div>
-            )
-          })}
+              {days.map((day) => {
+                const list = byLaneDay.get(`${employee.id}|${day.iso}`) ?? []
+                return (
+                  <button
+                    key={day.iso}
+                    type="button"
+                    className={day.isWeekend ? 'mini-cell weekend' : 'mini-cell'}
+                    aria-label={`${employee.name}, ${day.iso}`}
+                    onClick={() => setOpenDay(day.iso)}
+                  >
+                    {list.map((entry) =>
+                      entry.siteId === site.id ? (
+                        <span key={entry.id} className="mini-here">
+                          <Chip
+                            entry={entry}
+                            label={(entry.activity && activityLabel(entry.activity)) || undefined}
+                            dimmed={isDimmed(entry)}
+                          />
+                        </span>
+                      ) : (
+                        <span key={entry.id} className="mini-elsewhere">
+                          <Chip entry={entry} dimmed={isDimmed(entry)} />
+                        </span>
+                      ),
+                    )}
+                  </button>
+                )
+              })}
+            </Fragment>
+          ))}
         </div>
       </div>
       {openDay && (
         <SiteDayDialog
           site={site}
           date={openDay}
-          entries={byDay.get(openDay)?.here ?? []}
+          entries={hereOn(openDay)}
           employees={employees}
           canEdit={canEdit && isOpen(site.status)}
           onClose={() => setOpenDay(null)}
