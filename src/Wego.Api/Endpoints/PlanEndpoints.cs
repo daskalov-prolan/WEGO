@@ -18,6 +18,9 @@ public static class PlanEndpoints
     public record DayEntryInput(EntryType Type, string? CustomerName, TimeOnly? StartTime, TimeOnly? EndTime,
         string? Note);
     public record UpdateCustomerRequest(string Name, string? Location, string? Description);
+    public record DayInput(int EmployeeId, DateOnly Date, DayEntryInput[] Entries);
+
+    public const int MaxDaysPerBatch = 400;
 
     public static void MapPlanEndpoints(this IEndpointRouteBuilder app)
     {
@@ -58,44 +61,23 @@ public static class PlanEndpoints
             DayEntryInput[] inputs, WegoDbContext db) =>
         {
             if (!await db.Employees.AnyAsync(e => e.Id == employeeId)) return Results.NotFound();
-
-            var error = Validate(inputs);
-            if (error is not null) return ApiErrors.BadRequest(error);
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-
-            var existing = await db.PlanEntries
-                .Where(e => e.EmployeeId == employeeId && e.Date == date)
-                .ToListAsync();
-            db.PlanEntries.RemoveRange(existing);
-
-            foreach (var input in inputs)
-            {
-                Customer? customer = null;
-                if (input.Type == EntryType.Baustelle)
-                    customer = await FindOrCreateCustomer(db, input.CustomerName!.Trim());
-
-                db.PlanEntries.Add(new PlanEntry
-                {
-                    EmployeeId = employeeId,
-                    Date = date,
-                    Type = input.Type,
-                    Customer = customer,
-                    StartTime = input.StartTime,
-                    EndTime = input.EndTime,
-                    Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
-                });
-            }
-
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            var saved = await EntriesQuery(db)
-                .Where(e => e.EmployeeId == employeeId && e.Date == date)
-                .ToListAsync();
-            return Results.Ok(Sort(saved.Select(ToDto)));
+            return await SaveDays(db, [new DayInput(employeeId, date, inputs)]);
         }).RequireAuthorization(Roles.Planer);
 
+        // Several days at once (a selection in the plan, pasting, copying a week, undo), all or nothing.
+        app.MapPut("/api/plan/batch", async (DayInput[] days, WegoDbContext db) =>
+        {
+            if (days.Length > MaxDaysPerBatch)
+                return ApiErrors.BadRequest($"Es können höchstens {MaxDaysPerBatch} Tage auf einmal gespeichert werden.");
+            if (days.GroupBy(d => (d.EmployeeId, d.Date)).Any(g => g.Count() > 1))
+                return ApiErrors.BadRequest("Jeder Tag eines Mitarbeiters darf nur einmal vorkommen.");
+
+            var employeeIds = days.Select(d => d.EmployeeId).Distinct().ToList();
+            if (await db.Employees.CountAsync(e => employeeIds.Contains(e.Id)) != employeeIds.Count)
+                return Results.NotFound();
+
+            return await SaveDays(db, days);
+        }).RequireAuthorization(Roles.Planer);
         app.MapGet("/api/customers", async (WegoDbContext db) =>
             await db.Customers
                 .OrderBy(c => c.Name)
@@ -139,6 +121,56 @@ public static class PlanEndpoints
             await transaction.CommitAsync();
             return Results.Ok(ToDto(target));
         }).RequireAuthorization(Roles.Planer);
+    }
+
+    /// <summary>Replaces the entries of the given days in one transaction and returns what is stored now.</summary>
+    private static async Task<IResult> SaveDays(WegoDbContext db, IReadOnlyList<DayInput> days)
+    {
+        foreach (var day in days)
+        {
+            var error = Validate(day.Entries ?? []);
+            if (error is not null) return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: {error}");
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        foreach (var day in days)
+        {
+            var existing = await db.PlanEntries
+                .Where(e => e.EmployeeId == day.EmployeeId && e.Date == day.Date)
+                .ToListAsync();
+            db.PlanEntries.RemoveRange(existing);
+
+            foreach (var input in day.Entries ?? [])
+            {
+                Customer? customer = null;
+                if (input.Type == EntryType.Baustelle)
+                    customer = await FindOrCreateCustomer(db, input.CustomerName!.Trim());
+
+                db.PlanEntries.Add(new PlanEntry
+                {
+                    EmployeeId = day.EmployeeId,
+                    Date = day.Date,
+                    Type = input.Type,
+                    Customer = customer,
+                    StartTime = input.StartTime,
+                    EndTime = input.EndTime,
+                    Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var employeeIds = days.Select(d => d.EmployeeId).Distinct().ToList();
+        var dates = days.Select(d => d.Date).Distinct().ToList();
+        var keys = days.Select(d => (d.EmployeeId, d.Date)).ToHashSet();
+        var saved = (await EntriesQuery(db)
+                .Where(e => employeeIds.Contains(e.EmployeeId) && dates.Contains(e.Date))
+                .ToListAsync())
+            .Where(e => keys.Contains((e.EmployeeId, e.Date)));
+        return Results.Ok(Sort(saved.Select(ToDto)));
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

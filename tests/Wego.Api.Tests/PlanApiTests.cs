@@ -70,6 +70,35 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Batch_saves_several_days_at_once_or_none_of_them()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var a = await CreateEmployeeAsync(planer, "Batch A", null, null);
+        var b = await CreateEmployeeAsync(planer, "Batch B", null, null);
+
+        var site = new object[] { new { type = "Baustelle", customerName = "Familie Batch" } };
+        var saved = await planer.PutAsJsonAsync("/api/plan/batch", new object[]
+        {
+            new { employeeId = a, date = $"{Year}-07-06", entries = site },
+            new { employeeId = a, date = $"{Year}-07-07", entries = site },
+            new { employeeId = b, date = $"{Year}-07-06", entries = new object[] { new { type = "Urlaub" } } },
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal(3, (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength());
+
+        // One invalid day rejects the whole batch, the earlier days stay as they were.
+        var rejected = await planer.PutAsJsonAsync("/api/plan/batch", new object[]
+        {
+            new { employeeId = a, date = $"{Year}-07-06", entries = Array.Empty<object>() },
+            new { employeeId = b, date = $"{Year}-07-07", entries = new object[] { new { type = "Baustelle" } } },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+        var plan = await planer.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        var ofA = plan.GetProperty("entries").EnumerateArray().Count(e => e.GetProperty("employeeId").GetInt32() == a);
+        Assert.Equal(2, ofA);
+    }
+    [Fact]
     public async Task Overlapping_time_windows_are_rejected()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
