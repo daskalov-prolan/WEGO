@@ -9,11 +9,16 @@ public static class SiteEndpoints
 {
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
-        DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status);
+        DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
+        string? LabelProjectNumber);
+
+    public record TaskDto(Activity Activity, int EstimatedDays, bool NotNeeded);
+    public record TaskInput(int EstimatedDays, bool NotNeeded);
 
     public record SiteInput(string? Client, string? Street, string? HouseNumber, string? AddressAddition,
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
-        DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null);
+        DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
+        string? LabelProjectNumber = null);
 
     public record StatusRequest(SiteStatus Status);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
@@ -26,10 +31,12 @@ public static class SiteEndpoints
 
         // Everybody may read sites: the craftsmen need the addresses.
         group.MapGet("/", async (WegoDbContext db) =>
-            (await db.Sites.AsNoTracking().OrderBy(s => s.Name).ToListAsync()).Select(ToDto));
+            (await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync()).Select(ToDto));
 
         group.MapGet("/{id:int}", async (int id, WegoDbContext db) =>
-            await db.Sites.FindAsync(id) is { } site ? Results.Ok(ToDto(site)) : Results.NotFound());
+            await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id) is { } site
+                ? Results.Ok(ToDto(site))
+                : Results.NotFound());
 
         // A new site starts as offer (Angebot), or directly in construction when the offer was made elsewhere.
         group.MapPost("/", async (SiteInput input, ClaimsPrincipal user, WegoDbContext db) =>
@@ -44,6 +51,7 @@ public static class SiteEndpoints
             {
                 To = site.Status, ChangedAt = DateTime.UtcNow, ChangedBy = user.Identity?.Name,
             });
+            site.GenerateTasks();
             db.Sites.Add(site);
             await db.SaveChangesAsync();
             return Results.Created($"/api/sites/{site.Id}", ToDto(site));
@@ -51,7 +59,7 @@ public static class SiteEndpoints
 
         group.MapPut("/{id:int}", async (int id, SiteInput input, WegoDbContext db) =>
         {
-            var site = await db.Sites.FindAsync(id);
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
 
             var error = Apply(site, input);
@@ -63,7 +71,7 @@ public static class SiteEndpoints
 
         group.MapPost("/{id:int}/status", async (int id, StatusRequest request, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var site = await db.Sites.FindAsync(id);
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
             if (!Enum.IsDefined(request.Status)) return ApiErrors.BadRequest("Unbekannter Status.");
             if (!ActivityPhases.CanChange(site.Status, request.Status))
@@ -75,6 +83,21 @@ public static class SiteEndpoints
                 ChangedBy = user.Identity?.Name,
             });
             site.Status = request.Status;
+            // Entering a status brings its activities along.
+            site.GenerateTasks();
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(site));
+        }).RequireAuthorization(Roles.Planer);
+
+        group.MapPut("/{id:int}/tasks/{activity}", async (int id, Activity activity, TaskInput input, WegoDbContext db) =>
+        {
+            if (input.EstimatedDays is < 1 or > 365) return ApiErrors.BadRequest("Bitte zwischen 1 und 365 Tagen angeben.");
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
+            var task = site?.Tasks.FirstOrDefault(t => t.Activity == activity);
+            if (site is null || task is null) return Results.NotFound();
+
+            task.EstimatedDays = input.EstimatedDays;
+            task.NotNeeded = input.NotNeeded;
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
         }).RequireAuthorization(Roles.Planer);
@@ -90,7 +113,7 @@ public static class SiteEndpoints
         {
             if (id == request.TargetId) return ApiErrors.BadRequest("Eine Baustelle lässt sich nicht mit sich selbst zusammenführen.");
             var site = await db.Sites.FindAsync(id);
-            var target = await db.Sites.FindAsync(request.TargetId);
+            var target = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == request.TargetId);
             if (site is null || target is null) return Results.NotFound();
 
             await using var transaction = await db.Database.BeginTransactionAsync();
@@ -108,6 +131,7 @@ public static class SiteEndpoints
                 target.City = site.City;
             }
             target.Description ??= site.Description;
+            target.LabelProjectNumber ??= site.LabelProjectNumber;
             target.PlannedStart ??= site.PlannedStart;
             target.PlannedEnd ??= site.PlannedEnd;
             target.UpdateName();
@@ -128,7 +152,9 @@ public static class SiteEndpoints
     }
 
     public static SiteDto ToDto(Site s) => new(s.Id, s.Name, s.Client, s.Street, s.HouseNumber, s.AddressAddition,
-        s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status);
+        s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
+        s.Tasks.OrderBy(t => t.Activity).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
+        s.LabelProjectNumber);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -143,6 +169,7 @@ public static class SiteEndpoints
             (client, 200, "Der Auftraggeber"), (street, 200, "Die Straße"), (Clean(input.HouseNumber), 20, "Die Hausnummer"),
             (Clean(input.AddressAddition), 200, "Der Adresszusatz"), (Clean(input.PostalCode), 10, "Die PLZ"),
             (Clean(input.City), 100, "Der Ort"), (Clean(input.Description), 1000, "Die Beschreibung"),
+            (Clean(input.LabelProjectNumber), 50, "Die Projektnummer"),
         };
         foreach (var (value, max, label) in fields)
         {
@@ -164,6 +191,7 @@ public static class SiteEndpoints
         site.City = Clean(input.City);
         site.NameSource = input.NameSource;
         site.Description = Clean(input.Description);
+        site.LabelProjectNumber = Clean(input.LabelProjectNumber);
         site.PlannedStart = input.PlannedStart;
         site.PlannedEnd = input.PlannedEnd;
         site.UpdateName();

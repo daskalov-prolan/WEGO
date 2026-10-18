@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Button, Group, Paper, Stack, Text, Title } from '@ma
 import { useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User, Vacation } from '../api/types'
+import { ActivityIcon } from '../components/ActivityIcon'
 import { SiteLocation } from '../components/SiteLocation'
 import { formatAddress } from '../lib/sites'
 import { addDays, formatDateLong, formatTimeRange, todayIso, weekOf } from '../lib/dates'
@@ -142,7 +143,9 @@ export function MyPlanPage({ year, user }: Props) {
                   if (entry.type !== 'Baustelle') {
                     return (
                       <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
-                        <span className="where">{entry.type}</span>
+                        <span className="where">
+                          <ActivityIcon type={entry.type} size={15} /> {entry.type}
+                        </span>
                       </div>
                     )
                   }
@@ -153,7 +156,11 @@ export function MyPlanPage({ year, user }: Props) {
                     <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
                       <span className="when">{formatTimeRange(entry) || 'ganztägig'}</span>
                       <span className="where">{entry.siteName}</span>
-                      {entry.activity && <span className="what">{activityLabel(entry.activity)}</span>}
+                      {entry.activity && (
+                        <span className="what">
+                          <ActivityIcon activity={entry.activity} size={13} /> {activityLabel(entry.activity)}
+                        </span>
+                      )}
                       {address && <SiteLocation location={address} />}
                       {site?.description && <span className="detail">{site.description}</span>}
                       {entry.note && (

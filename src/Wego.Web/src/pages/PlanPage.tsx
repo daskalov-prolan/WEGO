@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Button,
   Checkbox,
+  CloseButton,
   Group,
   Menu,
   Paper,
@@ -22,10 +23,10 @@ import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
 import { ActivityLegend } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
-import { allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
+import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
 import {
   addDays,
@@ -150,28 +151,61 @@ export function PlanPage({ year, canEdit }: Props) {
   const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
   const yearDays = useMemo(() => daysOfYear(year), [year])
 
-  // The plan by site: every site with entries of the shown employees or planned in this year, in the order
-  // the work starts there. A site filter narrows the rows.
+  // The plan by site: every site with entries of the shown employees, planned in this year, or open with
+  // activities still to plan; in the order the work starts there. Site and activity filters narrow the rows.
+  // The activities each open site still needs in its status: not marked as not needed and not planned yet
+  // (counted over all entries, whoever is shown).
+  const openTasksBySite = useMemo(() => {
+    const result = new Map<number, OpenTask[]>()
+    if (!plan) return result
+    const planned = new Map<string, number>()
+    for (const entry of plan.entries) {
+      if (entry.siteId === null || !entry.activity) continue
+      const key = `${entry.siteId}|${entry.activity}`
+      planned.set(key, (planned.get(key) ?? 0) + 1)
+    }
+    for (const site of plan.sites) {
+      if (!isOpen(site.status)) continue
+      const ofStatus = activitiesOfStatus(site.status)
+      const tasks = site.tasks
+        .filter((task) => ofStatus.includes(task.activity) && !task.notNeeded)
+        .map((task) => ({
+          activity: task.activity,
+          planned: planned.get(`${site.id}|${task.activity}`) ?? 0,
+          estimated: task.estimatedDays,
+        }))
+        .filter((task) => task.planned < task.estimated)
+      if (tasks.length > 0) result.set(site.id, tasks)
+    }
+    return result
+  }, [plan])
+
   const siteRows = useMemo<SiteRow[]>(() => {
     if (!plan) return []
     const needle = filter.trim().toLowerCase()
     const shown = new Set(plan.employees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
-    const rows = new Map<number, SiteRow & { start: string }>()
     const byActivity = activityFilter.size > 0
+    // With an activity filter only those activities count.
+    const openTasks = (site: Site) =>
+      (openTasksBySite.get(site.id) ?? []).filter((task) => !byActivity || activityFilter.has(task.activity))
+    const rows = new Map<number, SiteRow & { start: string }>()
     for (const site of plan.sites) {
-      // With an activity filter only sites where such work is planned.
-      if (byActivity) break
       if (openOnly && !isOpen(site.status)) continue
       if (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle)) continue
-      const planned = site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
-      if (planned) rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart! })
+      const plannedThisYear =
+        site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
+      // Planned for this year, or an open site with activities still to plan (sites without dates go last).
+      // With an activity filter: only sites that still need one of these activities; planned work follows below.
+      const tasks = openTasks(site)
+      if ((plannedThisYear && !byActivity) || (isOpen(site.status) && tasks.length > 0))
+        rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart ?? '9999-12-31', openTasks: tasks })
     }
     for (const entry of plan.entries) {
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       if (byActivity && !(entry.activity && activityFilter.has(entry.activity))) continue
       const site = siteById.get(entry.siteId)
       if (!site || (openOnly && !isOpen(site.status)) || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
-      const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
+      const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date, openTasks: openTasks(site) }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
       if (list) list.push(entry)
@@ -179,7 +213,29 @@ export function PlanPage({ year, canEdit }: Props) {
       rows.set(site.id, row)
     }
     return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
-  }, [plan, hidden, filter, siteById, year, openOnly, activityFilter])
+  }, [plan, hidden, filter, siteById, year, openOnly, activityFilter, openTasksBySite])
+
+  // Plan by employee: the open tasks in the employee's main activity, sites starting soonest first.
+  const employeeTasks = useCallback(
+    (employee: PlanEmployee) => {
+      const main = employee.mainActivity
+      if (!main || !plan || (activityFilter.size > 0 && !activityFilter.has(main))) return []
+      const needle = filter.trim().toLowerCase()
+      const result: { site: Site; task: OpenTask }[] = []
+      for (const [siteId, tasks] of openTasksBySite) {
+        const site = siteById.get(siteId)
+        const task = tasks.find((candidate) => candidate.activity === main)
+        if (!site || !task || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
+        result.push({ site, task })
+      }
+      return result.sort(
+        (a, b) =>
+          (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') ||
+          a.site.name.localeCompare(b.site.name, 'de'),
+      )
+    },
+    [plan, activityFilter, filter, openTasksBySite, siteById],
+  )
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
   const earlierWork = useMemo(() => {
@@ -415,6 +471,27 @@ export function PlanPage({ year, canEdit }: Props) {
       : `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
 
   const filteredSite = plan.sites.find((site) => site.name.toLowerCase() === needle)
+
+  /** Puts an open activity of a site on these employees on that day, next to what they have already. */
+  const planTask = async (site: Site, activity: Activity, employeeIds: number[], date: string) => {
+    const changes = employeeIds.map((employeeId) => ({
+      employeeId,
+      date,
+      entries: [
+        ...entriesOf(employeeId, date).map(toInput),
+        {
+          type: 'Baustelle' as const,
+          siteId: site.id,
+          activity,
+          startTime: null,
+          endTime: null,
+          note: null,
+          noteImportant: false,
+        },
+      ],
+    }))
+    await save(changes, `${activityLabel(activity)} auf ${site.name} eingeplant.`)
+  }
   const nameOf = (input: DayEntryInput) => (input.siteId === null ? input.type : (siteById.get(input.siteId)?.name ?? ''))
 
   const createSite = async (input: SiteInput) => {
@@ -502,6 +579,7 @@ export function PlanPage({ year, canEdit }: Props) {
             className="plan-filter"
             value={filter}
             onChange={(e) => setFilter(e.currentTarget.value)}
+            rightSection={filter ? <CloseButton size="sm" aria-label="Suche leeren" onClick={() => setFilter('')} /> : null}
             placeholder="Baustelle hervorheben"
             type="search"
             aria-label="Baustellen-Filter"
@@ -628,7 +706,15 @@ export function PlanPage({ year, canEdit }: Props) {
             )}
           </p>
         ) : perspective === 'employees' ? (
-          <TimelineMatrix days={yearDays} zoom={view} foldWeekends={foldWeekends} {...shared} />
+          <TimelineMatrix
+            days={yearDays}
+            zoom={view}
+            foldWeekends={foldWeekends}
+            employeeTasks={employeeTasks}
+            firstVisible={anchor}
+            onPlanTask={canEdit ? planTask : undefined}
+            {...shared}
+          />
         ) : (
           <SiteTimeline
               days={yearDays}
@@ -639,6 +725,20 @@ export function PlanPage({ year, canEdit }: Props) {
               foldWeekends={foldWeekends}
               onOpenCell={(site, date) => setSiteDay({ siteId: site.id, date })}
               onOpenSite={shared.onOpenSite}
+              candidates={(site, activity) =>
+                employees.filter((employee) => allowedActivities(employee, site.status).includes(activity))
+              }
+              firstVisible={anchor}
+              onPlanTask={canEdit ? planTask : undefined}
+
+              onTaskNotNeeded={
+                canEdit
+                  ? async (site, activity) => {
+                      const saved = await api.updateSiteTask(site.id, activity, 1, true)
+                      setPlan((current) => current && { ...current, sites: current.sites.map((s) => (s.id === saved.id ? saved : s)) })
+                    }
+                  : undefined
+              }
             />
         )}
       </div>

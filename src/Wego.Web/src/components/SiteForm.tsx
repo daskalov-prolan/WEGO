@@ -59,13 +59,22 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               />
             </div>
           )}
-          <TextInput
-            label="Auftraggeber"
-            description="Kunde oder Hausverwaltung"
-            maxLength={200}
-            data-autofocus
-            {...field('client')}
-          />
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+            <TextInput
+              label="Auftraggeber"
+              description="Kunde oder Hausverwaltung"
+              maxLength={200}
+              data-autofocus
+              style={{ gridColumn: 'span 2' }}
+              {...field('client')}
+            />
+            <TextInput
+              label="Projektnummer in Label"
+              description="aus der Warenwirtschaft"
+              maxLength={50}
+              {...field('labelProjectNumber')}
+            />
+          </SimpleGrid>
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
             <TextInput label="Straße" maxLength={200} style={{ gridColumn: 'span 2' }} {...field('street')} />
             <TextInput label="Hausnummer" maxLength={20} {...field('houseNumber')} />

@@ -48,7 +48,7 @@ public static class PlanEndpoints
                 .Select(h => new SchoolHolidayDto(h.Id, h.Name, h.Kind, h.StartDate, h.EndDate))
                 .ToListAsync();
 
-            var sites = (await db.Sites.AsNoTracking().OrderBy(s => s.Name).ToListAsync())
+            var sites = (await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync())
                 .Select(SiteEndpoints.ToDto)
                 .ToList();
 

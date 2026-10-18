@@ -48,7 +48,7 @@ export function SitesPage() {
     const shown = show === 'open' ? sites.filter((site) => isOpen(site.status)) : sites
     const found = needle
       ? shown.filter((site) =>
-          [site.name, site.client, formatAddress(site)].join(' ').toLowerCase().includes(needle),
+          [site.name, site.client, site.labelProjectNumber, formatAddress(site)].join(' ').toLowerCase().includes(needle),
         )
       : shown
     const sorted = [...found].sort((a, b) => compare(a, b, sort.key))
@@ -81,7 +81,7 @@ export function SitesPage() {
         <TextInput
           label="Suchen"
           type="search"
-          placeholder="Name, Auftraggeber oder Adresse"
+          placeholder="Name, Auftraggeber, Projektnummer, Adresse"
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           w={320}
@@ -117,6 +117,7 @@ export function SitesPage() {
                   </UnstyledButton>
                 </Table.Th>
               ))}
+              <Table.Th>Label-Nr.</Table.Th>
               <Table.Th>Adresse</Table.Th>
               <Table.Th>Status</Table.Th>
             </Table.Tr>
@@ -136,6 +137,7 @@ export function SitesPage() {
                   <Table.Td>{site.client}</Table.Td>
                   <Table.Td>{site.plannedStart && formatDate(site.plannedStart)}</Table.Td>
                   <Table.Td>{site.plannedEnd && formatDate(site.plannedEnd)}</Table.Td>
+                  <Table.Td>{site.labelProjectNumber}</Table.Td>
                   <Table.Td>{formatAddress(site)}</Table.Td>
                   <Table.Td>
                     <StatusBadge status={site.status} />

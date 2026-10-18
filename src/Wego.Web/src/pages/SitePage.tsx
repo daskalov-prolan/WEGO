@@ -137,6 +137,12 @@ export function SitePage({ year, siteId }: Props) {
             </div>
             <div>
               <Text size="xs" c="dimmed">
+                Projektnummer in Label
+              </Text>
+              <Text>{site.labelProjectNumber ?? '–'}</Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed">
                 Name im Plan aus
               </Text>
               <Text>{site.nameSource === 'Strasse' ? 'Straße' : 'Auftraggeber'}</Text>

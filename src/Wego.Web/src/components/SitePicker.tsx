@@ -49,7 +49,13 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
             return options.filter((option) => {
               if (!('value' in option)) return true
               const site = byId.get(option.value)
-              return !needle || [site?.name, site?.client, site && formatAddress(site)].join(' ').toLowerCase().includes(needle)
+              return (
+                !needle ||
+                [site?.name, site?.client, site?.labelProjectNumber, site && formatAddress(site)]
+                  .join(' ')
+                  .toLowerCase()
+                  .includes(needle)
+              )
             })
           }}
           renderOption={({ option }) => {

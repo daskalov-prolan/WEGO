@@ -52,6 +52,8 @@ export type SiteNameSource = 'Auftraggeber' | 'Strasse'
 export interface SiteInput {
   /** Auftraggeber: the customer or the property management. */
   client: string | null
+  /** Number of the project in Label, the merchandise management software. */
+  labelProjectNumber: string | null
   street: string | null
   houseNumber: string | null
   addressAddition: string | null
@@ -67,8 +69,16 @@ export interface SiteInput {
 }
 
 /** A construction site (Baustelle). The name is derived from the client or the street. */
+/** An activity a site needs in its status, with the employee days it is expected to take. */
+export interface SiteTask {
+  activity: Activity
+  estimatedDays: number
+  notNeeded: boolean
+}
+
 export interface Site extends NamedItem, SiteInput {
   status: SiteStatus
+  tasks: SiteTask[]
 }
 
 export type HolidayKind = 'Schulferien' | 'Feiertag'

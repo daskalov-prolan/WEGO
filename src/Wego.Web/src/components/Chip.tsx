@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react'
 import type { Entry } from '../api/types'
 import { activityLabel, entryStyle, entryTitle } from '../lib/activities'
 import { formatTimeRange } from '../lib/dates'
+import { ActivityIcon } from './ActivityIcon'
 
 interface Props {
   entry: Entry
@@ -35,6 +36,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
   return (
     <span className={className} style={entryStyle(entry)} title={entryTitle(entry)}>
       <span className="chip-line">
+        <ActivityIcon activity={entry.activity} type={entry.type} />
         {time && <span className="time">{time}</span>}
         <span className="chip-name">
           {label !== undefined ? (

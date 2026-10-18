@@ -28,6 +28,14 @@ export function SiteSheet({ site, canEdit, showPageLink = true, onEdit, onClose 
           </Text>
           <Text>{site.client ?? '–'}</Text>
         </div>
+        {site.labelProjectNumber && (
+          <div>
+            <Text size="xs" c="dimmed">
+              Projektnummer in Label
+            </Text>
+            <Text>{site.labelProjectNumber}</Text>
+          </div>
+        )}
         <div>
           <Text size="xs" c="dimmed">
             Adresse

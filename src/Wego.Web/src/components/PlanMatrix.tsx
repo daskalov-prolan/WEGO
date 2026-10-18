@@ -1,5 +1,7 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
-import type { Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import type { Activity, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import { ActivityIcon } from './ActivityIcon'
+import { TaskBox } from './TaskBox'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
 import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
@@ -23,6 +25,10 @@ export interface MatrixProps {
   selectable: boolean
   selected: Set<string>
   onSelectedChange: (selected: Set<string>) => void
+  /** Plan by employee: open tasks of sites in the employee's main activity, shown in a second column. */
+  employeeTasks?: (employee: PlanEmployee) => { site: Site; task: OpenTask }[]
+  firstVisible?: string
+  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
   /** How much of the timeline fits on the screen: about a week, a month, or the whole year. */
   zoom: 'week' | 'month' | 'year'
   /** Saturdays and Sundays as narrow strips (about 0.5 cm). */
@@ -163,7 +169,9 @@ interface FrameProps {
   zoom: 'week' | 'month' | 'year'
   foldWeekends?: boolean
   /** Heading of the column on the left: "Mitarbeiter" or "Baustelle". */
-  corner: string
+  corner: ReactNode
+  /** A second fixed column next to the names (the unplanned activities in the plan by site). */
+  withTasks?: boolean
   children: ReactNode
 }
 
@@ -171,7 +179,7 @@ interface FrameProps {
  * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
  * and folded weekends work the same in both.
  */
-function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, children }: FrameProps) {
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, withTasks, children }: FrameProps) {
   const weekends = days.filter((day) => day.isWeekend).length
   const months: { month: number; count: number }[] = []
   for (const day of days) {
@@ -181,18 +189,19 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
 
   return (
     <table
-      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}`}
+      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}${withTasks ? ' with-tasks' : ''}`}
       style={{ '--weekdays': days.length - weekends, '--weekends': weekends } as CSSProperties}
     >
       <colgroup>
         <col className="col-employee" />
+        {withTasks && <col className="col-tasks" />}
         {days.map((day) => (
           <col key={day.iso} className={day.isWeekend ? 'col-day col-weekend' : 'col-day'} />
         ))}
       </colgroup>
       <thead>
         <tr className="month-row">
-          <th className="corner" rowSpan={2}>
+          <th className="corner" rowSpan={2} colSpan={withTasks ? 2 : 1}>
             {corner}
           </th>
           {months.map(({ month, count }) => (
@@ -242,6 +251,7 @@ function Compact({ entries, text, dimmed, onTextClick }: { entries: Entry[]; tex
       className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].join(' ')}
       style={entryStyle(first)}
     >
+      <ActivityIcon activity={first.activity} type={first.type} />
       <span className="compact-name" onClick={onTextClick}>
         {text}
       </span>
@@ -272,7 +282,17 @@ export function TimelineMatrix(props: MatrixProps) {
       today={today}
       zoom={zoom}
       foldWeekends={foldWeekends}
-      corner="Mitarbeiter"
+      withTasks={props.employeeTasks !== undefined}
+      corner={
+        props.employeeTasks ? (
+          <span className="corner-split">
+            <span>Mitarbeiter</span>
+            <span>Ungeplant</span>
+          </span>
+        ) : (
+          'Mitarbeiter'
+        )
+      }
     >
       {employees.map((employee, employeeIndex) => {
         const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
@@ -286,6 +306,17 @@ export function TimelineMatrix(props: MatrixProps) {
             >
               <EmployeeName employee={employee} link={linkNames} />
             </th>
+            {props.employeeTasks && (
+              <td className="tasks">
+                <EmployeeTasks
+                  employee={employee}
+                  tasks={props.employeeTasks(employee)}
+                  days={days}
+                  firstVisible={props.firstVisible ?? days[0].iso}
+                  onPlanTask={props.onPlanTask}
+                />
+              </td>
+            )}
             {days.map((day, dayIndex) => {
               const entries = entriesOf(employee.id, day.iso)
               const first = entries[0]
@@ -324,10 +355,59 @@ export function TimelineMatrix(props: MatrixProps) {
   )
 }
 
+/** The open tasks of one employee: the first three, the others on request. */
+function EmployeeTasks({
+  employee,
+  tasks,
+  days,
+  firstVisible,
+  onPlanTask,
+}: {
+  employee: PlanEmployee
+  tasks: { site: Site; task: OpenTask }[]
+  days: Day[]
+  firstVisible: string
+  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
+}) {
+  const [all, setAll] = useState(false)
+  const shown = all ? tasks : tasks.slice(0, 3)
+  return (
+    <>
+      {shown.map(({ site, task }) => (
+        <TaskBox
+          key={`${site.id}|${task.activity}`}
+          task={task}
+          label={site.name}
+          employees={[employee]}
+          employee={employee}
+          defaultDate={firstVisible}
+          minDate={days[0].iso}
+          maxDate={days[days.length - 1].iso}
+          onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
+        />
+      ))}
+      {tasks.length > 3 && (
+        <button type="button" className="task-more" onClick={() => setAll((value) => !value)}>
+          {all ? 'weniger' : `+ ${tasks.length - 3} weitere`}
+        </button>
+      )}
+    </>
+  )
+}
+
+export interface OpenTask {
+  activity: Activity
+  /** Employee days planned with this activity at the site, and how many are expected. */
+  planned: number
+  estimated: number
+}
+
 export interface SiteRow {
   site: Site
   /** The entries at this site, per day. */
   byDate: Map<string, Entry[]>
+  /** Activities of the current status that are not fully planned yet. */
+  openTasks: OpenTask[]
 }
 
 interface SiteTimelineProps {
@@ -340,13 +420,21 @@ interface SiteTimelineProps {
   /** A day of a site: who is there, and (for planners) who else should go. */
   onOpenCell: (site: Site, date: string) => void
   onOpenSite: (siteId: number) => void
+  /** Who can do an activity on this site (for planning an open task). */
+  candidates: (site: Site, activity: Activity) => PlanEmployee[]
+  /** First day in view: offered when planning an open task. */
+  firstVisible: string
+  /** Planners: plan an open task, or mark it as not needed. */
+  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
+  onTaskNotNeeded?: (site: Site, activity: Activity) => Promise<void>
 }
 
 /**
  * The plan by construction site: one row per site, the days from left to right, and in the cells the
  * employees working there, in the colour of their activity.
  */
-export function SiteTimeline({ days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite }: SiteTimelineProps) {
+export function SiteTimeline(props: SiteTimelineProps) {
+  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskNotNeeded } = props
   return (
     <TimelineFrame
       days={days}
@@ -354,15 +442,35 @@ export function SiteTimeline({ days, rows, holidayByDate, today, zoom, foldWeeke
       today={today}
       zoom={zoom}
       foldWeekends={foldWeekends}
-      corner="Baustelle"
+      withTasks
+      corner={
+        <span className="corner-split">
+          <span>Baustelle</span>
+          <span>Ungeplant</span>
+        </span>
+      }
     >
-      {rows.map(({ site, byDate }) => (
+      {rows.map(({ site, byDate, openTasks }) => (
         <tr key={site.id}>
           <th className="employee site-head" scope="row" title={site.client ?? site.name}>
             <span className="site-link" role="link" onClick={() => onOpenSite(site.id)}>
               {site.name}
             </span>
           </th>
+          <td className="tasks">
+            {openTasks.map((task) => (
+              <TaskBox
+                key={task.activity}
+                task={task}
+                employees={props.candidates(site, task.activity)}
+                defaultDate={props.firstVisible}
+                minDate={days[0].iso}
+                maxDate={days[days.length - 1].iso}
+                onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
+                onNotNeeded={onTaskNotNeeded && (() => onTaskNotNeeded(site, task.activity))}
+              />
+            ))}
+          </td>
           {days.map((day) => {
             const entries = byDate.get(day.iso) ?? []
             return (

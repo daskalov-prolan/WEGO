@@ -1,6 +1,7 @@
 import { Button, ColorSwatch, Group, Select, Text } from '@mantine/core'
 import { Fragment, type CSSProperties } from 'react'
 import type { Activity, SiteStatus } from '../api/types'
+import { ActivityIcon } from './ActivityIcon'
 import { ABSENCE, ACTIVITIES, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY, SITE_STATUSES } from '../lib/activities'
 
 const byValue = new Map(ACTIVITIES.map((activity) => [activity.value, activity]))
@@ -42,6 +43,7 @@ export function ActivitySelect({
       renderOption={({ option }) => (
         <Group gap="xs" wrap="nowrap">
           <ColorSwatch color={byValue.get(option.value as Activity)?.background ?? '#ccc'} size={14} />
+          <ActivityIcon activity={option.value as Activity} />
           <span>{option.label}</span>
         </Group>
       )}
@@ -123,6 +125,7 @@ function Stage({ value, selected, onChange }: { value: 'Angebot' | 'Bauphase' } 
               style={{ '--entry-bg': activity.tint, '--entry-strong': activity.background } as CSSProperties}
               onClick={() => toggle(activity.value)}
             >
+              <ActivityIcon activity={activity.value} size={11} />
               {activity.label}
             </button>
           </Fragment>

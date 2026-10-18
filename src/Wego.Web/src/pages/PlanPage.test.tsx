@@ -5,18 +5,28 @@ import type { Entry, Plan } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
 
-const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const }
+const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const, tasks: [], labelProjectNumber: null }
 
 const plan: Plan = {
   year: 2026,
   employees: [
-    { id: 1, name: 'Anna', mainActivity: null, additionalActivities: [] },
+    { id: 1, name: 'Anna', mainActivity: 'Abriss', additionalActivities: [] },
     { id: 2, name: 'Bernd', mainActivity: 'Sanitaer', additionalActivities: ['Abriss'] },
   ],
   sites: [
     { id: 10, name: 'Familie Schulze', ...noAddress },
     { id: 11, name: 'Familie Meier', ...noAddress },
-    { id: 12, name: 'Familie Werner', ...noAddress },
+    {
+      id: 12,
+      name: 'Familie Werner',
+      ...noAddress,
+      // Fliesen is planned once (2 expected), Abriss not at all, RenoDeco is not needed.
+      tasks: [
+        { activity: 'Abriss' as const, estimatedDays: 1, notNeeded: false },
+        { activity: 'RenoDeco' as const, estimatedDays: 1, notNeeded: true },
+        { activity: 'Fliesen' as const, estimatedDays: 2, notNeeded: false },
+      ],
+    },
     { id: 13, name: 'Altbau', ...noAddress, status: 'Abgeschlossen' as const },
   ],
   schoolHolidays: [
@@ -29,7 +39,7 @@ const plan: Plan = {
     entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
     { ...entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null), note: 'mit 2 Helfern' },
     { ...entry(5, 2, '2026-03-13', 11, 'Familie Meier', null, null), note: 'Wasser abstellen!', noteImportant: true },
-    entry(6, 2, '2026-02-20', 12, 'Familie Werner', null, null),
+    { ...entry(6, 2, '2026-02-20', 12, 'Familie Werner', null, null), activity: 'Fliesen' },
     entry(7, 1, '2026-03-04', 13, 'Altbau', null, null),
   ],
 }
@@ -196,7 +206,7 @@ describe('PlanPage', () => {
     // By site only the sites with such work remain.
     await user.click(screen.getByRole('button', { name: 'Trockenbau' }))
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Schulze'])
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Werner', 'Familie Schulze'])
 
     await user.click(screen.getByRole('button', { name: /Alle anzeigen/ }))
     expect(screen.getAllByRole('rowheader').length).toBeGreaterThan(1)
@@ -206,6 +216,50 @@ describe('PlanPage', () => {
     await user.click(screen.getByRole('button', { name: 'Bauphase' }))
     expect(screen.getByRole('button', { name: 'Endmontage' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Besichtigung' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('lists the activities a site still needs and marks entries with the sign of their activity', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    // The sign of the activity starts the entry.
+    const monday = cell(/Anna, Montag, 02.03.2026/)
+    expect(monday.querySelector('.chip [data-activity="Fliesen"]')).not.toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
+    const werner = screen
+      .getAllByRole('row')
+      .find((row) => row.textContent?.startsWith('Familie Werner'))!
+      .querySelector<HTMLElement>('.tasks')!
+    const boxes = within(werner).getAllByRole('button').map((box) => box.textContent)
+    expect(boxes).toEqual(['Abriss / Baubeginn', 'Fliesenarbeiten'])
+
+    // Filtered by an activity, a site that still needs it stays even without any entry of it.
+    // (the legend: the open task boxes carry the same name)
+    await user.click(within(screen.getByRole('group', { name: /Ablauf/ })).getByRole('button', { name: 'Abriss / Baubeginn' }))
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Werner'])
+  })
+  it('offers each employee the open tasks of their main activity and plans one on a chosen day', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    const annaRow = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Anna'))!
+    const box = within(annaRow.querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Familie Werner/ })
+    await user.click(box)
+    expect(await screen.findByText('Abriss / Baubeginn einplanen')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Einplanen', hidden: true }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))).toEqual([
+      expect.objectContaining({
+        employeeId: 1,
+        date: '2026-03-02',
+        entries: expect.arrayContaining([expect.objectContaining({ siteId: 12, activity: 'Abriss' })]),
+      }),
+    ])
   })
 
   it('marks a cell with a note', async () => {

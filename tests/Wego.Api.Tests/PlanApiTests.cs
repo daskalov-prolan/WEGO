@@ -225,13 +225,14 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         {
             client = "Hausverwaltung Nord", street = "Hauptstraße", houseNumber = "12", addressAddition = "Hinterhaus",
             postalCode = "13125", city = "Berlin", nameSource = "Strasse", description = "Komplettbad",
-            plannedStart = $"{Year}-05-04", plannedEnd = $"{Year}-05-29",
+            plannedStart = $"{Year}-05-04", plannedEnd = $"{Year}-05-29", labelProjectNumber = "P-2026-0815",
         };
 
         var byStreet = await (await planer.PostAsJsonAsync("/api/sites", site)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Hauptstraße 12", byStreet.GetProperty("name").GetString());
         Assert.Equal("Hausverwaltung Nord", byStreet.GetProperty("client").GetString());
         Assert.Equal($"{Year}-05-04", byStreet.GetProperty("plannedStart").GetString());
+        Assert.Equal("P-2026-0815", byStreet.GetProperty("labelProjectNumber").GetString());
 
         // The same client may order a second job elsewhere; switching the source renames the site.
         var second = await planer.PostAsJsonAsync("/api/sites", site with { });
@@ -240,7 +241,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var byClient = await (await planer.PutAsJsonAsync($"/api/sites/{id}", new
         {
             site.client, site.street, site.houseNumber, site.addressAddition, site.postalCode, site.city,
-            nameSource = "Auftraggeber", site.description, site.plannedStart, site.plannedEnd,
+            nameSource = "Auftraggeber", site.description, site.plannedStart, site.plannedEnd, site.labelProjectNumber,
         })).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Hausverwaltung Nord", byClient.GetProperty("name").GetString());
 
@@ -284,6 +285,28 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal("Bauphase", (await direct.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
         var closed = await planer.PostAsJsonAsync("/api/sites", new { client = "Zu", nameSource = "Auftraggeber", status = "Abgeschlossen" });
         Assert.Equal(HttpStatusCode.BadRequest, closed.StatusCode);
+    }
+    [Fact]
+    public async Task A_status_brings_its_activities_as_tasks()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateSiteAsync(planer, "Aufgaben");
+        string[] Activities(JsonElement site) => site.GetProperty("tasks").EnumerateArray()
+            .Select(t => t.GetProperty("activity").GetString()!).ToArray();
+
+        var offer = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
+        Assert.Equal(["Besichtigung", "Angebotskalkulation", "Angebotsbesprechung"], Activities(offer));
+
+        var building = await (await planer.PostAsJsonAsync($"/api/sites/{id}/status", new { status = "Bauphase" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(9, Activities(building).Length);
+
+        var changed = await (await planer.PutAsJsonAsync($"/api/sites/{id}/tasks/RenoDeco",
+            new { estimatedDays = 1, notNeeded = true })).Content.ReadFromJsonAsync<JsonElement>();
+        var renoDeco = changed.GetProperty("tasks").EnumerateArray().Single(t => t.GetProperty("activity").GetString() == "RenoDeco");
+        Assert.True(renoDeco.GetProperty("notNeeded").GetBoolean());
+        var tiles = await planer.PutAsJsonAsync($"/api/sites/{id}/tasks/Fliesen", new { estimatedDays = 0, notNeeded = false });
+        Assert.Equal(HttpStatusCode.BadRequest, tiles.StatusCode);
     }
     [Fact]
     public async Task Duplicate_sites_are_merged_with_their_entries()

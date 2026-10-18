@@ -2,6 +2,7 @@ import type { Site, SiteInput } from '../api/types'
 
 export const emptySite: SiteInput = {
   client: null,
+  labelProjectNumber: null,
   street: null,
   houseNumber: null,
   addressAddition: null,
@@ -16,8 +17,20 @@ export const emptySite: SiteInput = {
 
 export function toSiteInput(site: Site): SiteInput {
   const { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description } = site
-  const { plannedStart, plannedEnd } = site
-  return { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description, plannedStart, plannedEnd }
+  const { plannedStart, plannedEnd, labelProjectNumber } = site
+  return {
+    client,
+    labelProjectNumber,
+    street,
+    houseNumber,
+    addressAddition,
+    postalCode,
+    city,
+    nameSource,
+    description,
+    plannedStart,
+    plannedEnd,
+  }
 }
 
 /** The name the plan shows, worked out the same way as on the server. */
@@ -34,5 +47,5 @@ export function formatAddress(site: SiteInput): string | null {
 
 /** Text for searching a site: name, client and address together. */
 export function siteSearchText(site: Site): string {
-  return [site.name, site.client, formatAddress(site)].filter(Boolean).join(' · ')
+  return [site.name, site.client, site.labelProjectNumber, formatAddress(site)].filter(Boolean).join(' · ')
 }

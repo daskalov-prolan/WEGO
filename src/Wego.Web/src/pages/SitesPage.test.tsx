@@ -8,7 +8,7 @@ import { SitesPage } from './SitesPage'
 function site(id: number, name: string, plannedStart: string | null, plannedEnd: string | null, status: Site['status'] = 'Bauphase'): Site {
   return {
     id, name, client: name, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null,
-    nameSource: 'Auftraggeber', description: null, plannedStart, plannedEnd, status,
+    nameSource: 'Auftraggeber', description: null, plannedStart, plannedEnd, status, tasks: [], labelProjectNumber: null,
   }
 }
 

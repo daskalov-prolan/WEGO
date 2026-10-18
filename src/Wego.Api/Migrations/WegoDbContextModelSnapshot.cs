@@ -182,6 +182,10 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("LabelProjectNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(220)
@@ -252,6 +256,36 @@ namespace Wego.Api.Migrations
                     b.ToTable("SiteStatusChanges");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.SiteTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Activity")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("EstimatedDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("NotNeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Activity")
+                        .IsUnique();
+
+                    b.ToTable("SiteTasks");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
                     b.HasOne("Wego.Api.Data.Employee", "Employee")
@@ -281,6 +315,17 @@ namespace Wego.Api.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.SiteTask", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany("Tasks")
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Site");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Navigation("Entries");
@@ -291,6 +336,8 @@ namespace Wego.Api.Migrations
                     b.Navigation("Entries");
 
                     b.Navigation("StatusChanges");
+
+                    b.Navigation("Tasks");
                 });
 #pragma warning restore 612, 618
         }

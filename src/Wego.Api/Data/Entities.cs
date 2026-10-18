@@ -93,6 +93,23 @@ public static class ActivityPhases
         };
 }
 
+/// <summary>
+/// An activity a site needs in its status, generated when the site enters the status. It is fully planned
+/// when the plan has as many employee days with this activity at the site as estimated, or when it is not needed.
+/// </summary>
+public class SiteTask
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public Site Site { get; set; } = null!;
+    public Activity Activity { get; set; }
+
+    /// <summary>Employee days the activity is expected to take; at least one.</summary>
+    public int EstimatedDays { get; set; } = 1;
+
+    public bool NotNeeded { get; set; }
+}
+
 /// <summary>One change of the status of a site, kept as a log.</summary>
 public class SiteStatusChange
 {
@@ -124,6 +141,9 @@ public class Site
     /// <summary>Auftraggeber: the customer or the property management.</summary>
     public string? Client { get; set; }
 
+    /// <summary>Number of the project in Label, the merchandise management software of the company.</summary>
+    public string? LabelProjectNumber { get; set; }
+
     public string? Street { get; set; }
     public string? HouseNumber { get; set; }
     public string? AddressAddition { get; set; }
@@ -134,6 +154,17 @@ public class Site
 
     public SiteStatus Status { get; set; } = SiteStatus.Angebot;
     public List<SiteStatusChange> StatusChanges { get; set; } = [];
+    public List<SiteTask> Tasks { get; set; } = [];
+
+    /// <summary>Adds the activities of the current status that the site does not have yet.</summary>
+    public void GenerateTasks()
+    {
+        if (!ActivityPhases.ByStatus.TryGetValue(Status, out var activities)) return;
+        foreach (var activity in activities)
+        {
+            if (Tasks.All(t => t.Activity != activity)) Tasks.Add(new SiteTask { Activity = activity });
+        }
+    }
 
     public DateOnly? PlannedStart { get; set; }
     public DateOnly? PlannedEnd { get; set; }

@@ -24,7 +24,7 @@ const plan: Plan = {
   sites: [
     {
       id: 10, name: 'Familie Schulze', client: 'Familie Schulze', street: 'Musterweg', houseNumber: '3', addressAddition: null,
-      postalCode: '13125', city: 'Berlin', nameSource: 'Auftraggeber', description: 'Komplettbad', plannedStart: null, plannedEnd: null, status: 'Bauphase',
+      postalCode: '13125', city: 'Berlin', nameSource: 'Auftraggeber', description: 'Komplettbad', plannedStart: null, plannedEnd: null, status: 'Bauphase', tasks: [], labelProjectNumber: null,
     },
   ],
   schoolHolidays: [],

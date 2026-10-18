@@ -1,5 +1,6 @@
 import type {
   Access,
+  Activity,
   DayEntryInput,
   Employee,
   EmployeeInput,
@@ -86,6 +87,8 @@ export const api = {
   mergeSite: (id: number, targetId: number) => request<Site>('POST', `/api/sites/${id}/merge`, { targetId }),
   deleteSite: (id: number) => request<void>('DELETE', `/api/sites/${id}`),
   changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
+  updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
+    request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
   siteReport: (id: number, year: number) => request<SiteReport>('GET', `/api/reports/sites/${id}?year=${year}`),

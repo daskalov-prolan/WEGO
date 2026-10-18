@@ -475,7 +475,8 @@ a:hover {
   /* Zoom: how wide a day is. The week shows about two weeks at a time, the month a whole month. */
   --day-w: max(59px, calc((100cqw - var(--name-col)) / 14));
   --weekend-w: var(--day-w);
-  width: calc(var(--name-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
+  --task-col: 0px;
+  width: calc(var(--name-col) + var(--task-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -709,6 +710,11 @@ a:hover {
   font-weight: 600;
 }
 
+.cell-compact .activity-icon {
+  width: 11px;
+  height: 11px;
+}
+
 .compact-name {
   flex: 1;
   min-width: 0;
@@ -904,4 +910,107 @@ a:hover {
   .selection-bar {
     bottom: calc(64px + env(safe-area-inset-bottom));
   }
+}
+
+/* Plan by site: the activities still to plan, in a second fixed column next to the site name. */
+.timeline.with-tasks {
+  --task-col: 168px;
+}
+
+.timeline .col-tasks {
+  width: var(--task-col);
+}
+
+.timeline td.tasks {
+  position: sticky;
+  left: var(--name-col);
+  z-index: 2;
+  padding: 3px;
+  background: var(--surface);
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.corner-split {
+  display: flex;
+}
+
+.corner-split > span:first-child {
+  width: calc(var(--name-col) - 16px);
+}
+
+.task-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 2px 5px;
+  border: 1.5px dashed var(--entry-strong);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--entry-bg) 60%, white);
+  color: #14232a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-box:disabled {
+  cursor: default;
+}
+
+.task-box .task-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-box .task-count {
+  flex: none;
+  color: #3d5054;
+  font-weight: 400;
+}
+
+/* The sign of an activity at the start of an entry. */
+.activity-icon {
+  flex: none;
+  color: var(--entry-color, #3d5054);
+}
+
+.flow-step .activity-icon {
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+
+.my-entry .activity-icon {
+  vertical-align: -2px;
+}
+
+.timeline.zoom-year .activity-icon,
+.timeline.fold-weekends td.weekend .activity-icon {
+  display: none;
+}
+
+@container (max-width: 760px) {
+  .timeline.with-tasks {
+    --task-col: 104px;
+  }
+
+  .task-box .task-name {
+    display: none;
+  }
+}
+.task-more {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--wego-teal);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
 }
