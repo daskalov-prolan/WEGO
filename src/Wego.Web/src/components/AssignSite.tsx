@@ -15,6 +15,7 @@ interface Props {
   employees: PlanEmployee[]
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
+  onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
   recentSites: NamedItem[]
   onClose: () => void
   /** add: keep what is already planned on those days and add the site as a further entry. */
@@ -22,7 +23,8 @@ interface Props {
 }
 
 /** Puts one construction site on all selected cells at once. */
-export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSites, onClose, onApply }: Props) {
+export function AssignSite(props: Props) {
+  const { cellCount, employees, sites, onCreateSite, onUpdateSite, recentSites, onClose, onApply } = props
   const [siteId, setSiteId] = useState<number | null>(null)
   const [activity, setActivity] = useState<ActivityChoice>('main')
   // Who cannot do the chosen activity keeps their main activity.
@@ -110,7 +112,14 @@ export function AssignSite({ cellCount, employees, sites, onCreateSite, recentSi
               </Group>
             </div>
           )}
-          <SitePicker sites={sites} value={siteId} onChange={setSiteId} onCreate={onCreateSite} required />
+          <SitePicker
+            sites={sites}
+            value={siteId}
+            onChange={setSiteId}
+            onCreate={onCreateSite}
+            onUpdate={onUpdateSite}
+            required
+          />
           <Group grow gap="xs">
             <TextInput label="von" type="time" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
             <TextInput label="bis" type="time" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />

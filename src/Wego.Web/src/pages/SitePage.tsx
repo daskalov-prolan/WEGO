@@ -82,9 +82,14 @@ export function SitePage({ year, siteId }: Props) {
 
   return (
     <div className="page">
-      <Anchor href="#/baustellen" size="sm">
-        ‹ Alle Baustellen
-      </Anchor>
+      <Group gap="md">
+        <Anchor size="sm" onClick={() => window.history.back()}>
+          ‹ Zurück
+        </Anchor>
+        <Anchor href="#/baustellen" size="sm">
+          Alle Baustellen
+        </Anchor>
+      </Group>
       <Title order={2} mt={4} mb="md">
         {site?.name ?? report?.siteName ?? 'Baustelle'}
       </Title>

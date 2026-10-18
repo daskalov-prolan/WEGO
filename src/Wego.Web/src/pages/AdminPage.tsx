@@ -138,7 +138,7 @@ function EmployeesSection({ year }: { year: number }) {
     <Stack gap="md">
       <Text size="sm" c="dimmed">
         Planer dürfen die Planung ändern und sehen alle Auswertungen. Mitarbeiter sehen „Mein Plan“ und den
-        Gesamtplan nur zum Lesen.
+        die Planung nur zum Lesen.
       </Text>
 
       <Group gap="xs">
@@ -407,7 +407,7 @@ function EmployeesSection({ year }: { year: number }) {
                 </Stack>
               </Paper>
               <Checkbox
-                label="Spalte im Gesamtplan (wird auf Baustellen eingeplant)"
+                label="Zeile in der Planung (wird auf Baustellen eingeplant)"
                 checked={editing.input.showInPlan}
                 onChange={(e) => change({ showInPlan: e.currentTarget.checked })}
               />

@@ -520,6 +520,21 @@ a:hover {
   color: inherit;
 }
 
+/* Plan by site: the site name is a link to its record. */
+.timeline th.site-head {
+  box-shadow: inset 5px 0 0 var(--wego-teal);
+}
+
+.timeline th.site-head .site-link {
+  color: var(--wego-teal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.muted-inline {
+  color: var(--text-muted);
+}
+
 .timeline .day-row th.weekend {
   background: #3a8f97;
 }

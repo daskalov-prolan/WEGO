@@ -1,5 +1,5 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import type { Entry, NamedItem, PlanEmployee, SchoolHoliday } from '../api/types'
+import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import type { Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
 import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
@@ -156,21 +156,23 @@ function dayClass(day: Day, holiday: SchoolHoliday | undefined, today: string) {
     .join(' ')
 }
 
-/**
- * The plan as a timeline: one row per employee, the days from left to right. The employee column stays
- * in place while the days scroll sideways. The zoom decides how wide a day is and how much of an entry
- * fits: the whole entry (week), the site name (month) or just the colour of the activity (year).
- */
-export function TimelineMatrix(props: MatrixProps) {
-  const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends } = props
-  const weekends = days.filter((day) => day.isWeekend).length
-  const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
-  const openSite = (siteId: number, event: MouseEvent) => {
-    if (siteClickBelongsToCell()) return
-    event.stopPropagation()
-    props.onOpenSite(siteId)
-  }
+interface FrameProps {
+  days: Day[]
+  holidayByDate: Map<string, SchoolHoliday>
+  today: string
+  zoom: 'week' | 'month' | 'year'
+  foldWeekends?: boolean
+  /** Heading of the column on the left: "Mitarbeiter" or "Baustelle". */
+  corner: string
+  children: ReactNode
+}
 
+/**
+ * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
+ * and folded weekends work the same in both.
+ */
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, children }: FrameProps) {
+  const weekends = days.filter((day) => day.isWeekend).length
   const months: { month: number; count: number }[] = []
   for (const day of days) {
     if (months.at(-1)?.month === day.month) months[months.length - 1].count++
@@ -191,7 +193,7 @@ export function TimelineMatrix(props: MatrixProps) {
       <thead>
         <tr className="month-row">
           <th className="corner" rowSpan={2}>
-            Mitarbeiter
+            {corner}
           </th>
           {months.map(({ month, count }) => (
             <th key={month} colSpan={count} className="month">
@@ -220,71 +222,170 @@ export function TimelineMatrix(props: MatrixProps) {
           })}
         </tr>
       </thead>
-      <tbody>
-        {employees.map((employee, employeeIndex) => {
-          const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
-          return (
-            <tr key={employee.id}>
-              <th
-                className="employee"
-                scope="row"
-                title={main ? `${employee.name} – ${activityLabel(employee.mainActivity)}` : employee.name}
-                style={main ? { boxShadow: `inset 5px 0 0 ${main.background}` } : undefined}
-              >
-                <EmployeeName employee={employee} link={linkNames} />
-              </th>
-              {days.map((day, dayIndex) => {
-                const entries = entriesOf(employee.id, day.iso)
-                const first = entries[0]
-                const isSelected = selected.has(cellKey(employee.id, day.iso))
-                const notes = entries.map((entry) => entry.note).filter(Boolean).join(' / ')
-                return (
-                  <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
-                    <button
-                      type="button"
-                      className={isSelected ? 'cell selected' : 'cell'}
-                      aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
-                      aria-pressed={isSelected || undefined}
-                      title={
-                        entries.length
-                          ? entries.map(entryTitle).join(' / ') +
-                            (notes ? `\n${entries.some((entry) => entry.noteImportant) ? 'WICHTIG: ' : 'Notiz: '}${notes}` : '')
-                          : undefined
-                      }
-                      {...handlers(employeeIndex, dayIndex)}
-                    >
-                      <span className="cell-full">
-                        {entries.map((entry) => (
-                          <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} />
-                        ))}
-                      </span>
-                      {first && (
-                        <span
-                          className={[
-                            'cell-compact',
-                            `compact-${first.type.toLowerCase()}`,
-                            entries.every(isDimmed) ? 'dimmed' : '',
-                          ].join(' ')}
-                          style={entryStyle(first)}
-                        >
-                          <span
-                            className="compact-name"
-                            onClick={(event) => first.siteId !== null && openSite(first.siteId, event)}
-                          >
-                            {first.type === 'Baustelle' ? first.siteName : first.type}
-                          </span>
-                          {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
-                          {notes && <NoteMark important={entries.some((entry) => entry.noteImportant)} />}
-                        </span>
-                      )}
-                    </button>
-                  </td>
-                )
-              })}
-            </tr>
-          )
-        })}
-      </tbody>
+      <tbody>{children}</tbody>
     </table>
+  )
+}
+
+function cellTitle(entries: Entry[], label: (entry: Entry) => string) {
+  if (entries.length === 0) return undefined
+  const notes = entries.map((entry) => entry.note).filter(Boolean).join(' / ')
+  const important = entries.some((entry) => entry.noteImportant)
+  return entries.map(label).join(' / ') + (notes ? `\n${important ? 'WICHTIG: ' : 'Notiz: '}${notes}` : '')
+}
+
+/** Short form of a cell: the first entry, a counter for the others, and the note sign. */
+function Compact({ entries, text, dimmed, onTextClick }: { entries: Entry[]; text: string; dimmed: boolean; onTextClick?: (event: MouseEvent) => void }) {
+  const first = entries[0]
+  return (
+    <span
+      className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].join(' ')}
+      style={entryStyle(first)}
+    >
+      <span className="compact-name" onClick={onTextClick}>
+        {text}
+      </span>
+      {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
+      {entries.some((entry) => entry.note) && <NoteMark important={entries.some((entry) => entry.noteImportant)} />}
+    </span>
+  )
+}
+
+/**
+ * The plan by employee: one row per employee, the days from left to right. The employee column stays
+ * in place while the days scroll sideways. The zoom decides how wide a day is and how much of an entry
+ * fits: the whole entry (week), the site name (month) or just the colour of the activity (year).
+ */
+export function TimelineMatrix(props: MatrixProps) {
+  const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends } = props
+  const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
+  const openSite = (siteId: number, event: MouseEvent) => {
+    if (siteClickBelongsToCell()) return
+    event.stopPropagation()
+    props.onOpenSite(siteId)
+  }
+
+  return (
+    <TimelineFrame
+      days={days}
+      holidayByDate={holidayByDate}
+      today={today}
+      zoom={zoom}
+      foldWeekends={foldWeekends}
+      corner="Mitarbeiter"
+    >
+      {employees.map((employee, employeeIndex) => {
+        const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
+        return (
+          <tr key={employee.id}>
+            <th
+              className="employee"
+              scope="row"
+              title={main ? `${employee.name} – ${activityLabel(employee.mainActivity)}` : employee.name}
+              style={main ? { boxShadow: `inset 5px 0 0 ${main.background}` } : undefined}
+            >
+              <EmployeeName employee={employee} link={linkNames} />
+            </th>
+            {days.map((day, dayIndex) => {
+              const entries = entriesOf(employee.id, day.iso)
+              const first = entries[0]
+              const isSelected = selected.has(cellKey(employee.id, day.iso))
+              return (
+                <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
+                  <button
+                    type="button"
+                    className={isSelected ? 'cell selected' : 'cell'}
+                    aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
+                    aria-pressed={isSelected || undefined}
+                    title={cellTitle(entries, entryTitle)}
+                    {...handlers(employeeIndex, dayIndex)}
+                  >
+                    <span className="cell-full">
+                      {entries.map((entry) => (
+                        <Chip key={entry.id} entry={entry} dimmed={isDimmed(entry)} onSiteClick={openSite} />
+                      ))}
+                    </span>
+                    {first && (
+                      <Compact
+                        entries={entries}
+                        text={first.type === 'Baustelle' ? (first.siteName ?? '') : first.type}
+                        dimmed={entries.every(isDimmed)}
+                        onTextClick={(event) => first.siteId !== null && openSite(first.siteId, event)}
+                      />
+                    )}
+                  </button>
+                </td>
+              )
+            })}
+          </tr>
+        )
+      })}
+    </TimelineFrame>
+  )
+}
+
+export interface SiteRow {
+  site: Site
+  /** The entries at this site, per day. */
+  byDate: Map<string, Entry[]>
+}
+
+interface SiteTimelineProps {
+  days: Day[]
+  rows: SiteRow[]
+  holidayByDate: Map<string, SchoolHoliday>
+  today: string
+  zoom: 'week' | 'month' | 'year'
+  foldWeekends?: boolean
+  /** A day of a site: who is there, and (for planners) who else should go. */
+  onOpenCell: (site: Site, date: string) => void
+  onOpenSite: (siteId: number) => void
+}
+
+/**
+ * The plan by construction site: one row per site, the days from left to right, and in the cells the
+ * employees working there, in the colour of their activity.
+ */
+export function SiteTimeline({ days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite }: SiteTimelineProps) {
+  return (
+    <TimelineFrame
+      days={days}
+      holidayByDate={holidayByDate}
+      today={today}
+      zoom={zoom}
+      foldWeekends={foldWeekends}
+      corner="Baustelle"
+    >
+      {rows.map(({ site, byDate }) => (
+        <tr key={site.id}>
+          <th className="employee site-head" scope="row" title={site.client ?? site.name}>
+            <span className="site-link" role="link" onClick={() => onOpenSite(site.id)}>
+              {site.name}
+            </span>
+          </th>
+          {days.map((day) => {
+            const entries = byDate.get(day.iso) ?? []
+            return (
+              <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)}>
+                <button
+                  type="button"
+                  className="cell"
+                  aria-label={`${site.name}, ${formatDateLong(day.iso)}`}
+                  title={cellTitle(entries, (entry) => entryTitle({ ...entry, siteName: entry.employeeName }))}
+                  onClick={() => onOpenCell(site, day.iso)}
+                >
+                  <span className="cell-full">
+                    {entries.map((entry) => (
+                      <Chip key={entry.id} entry={entry} label={entry.employeeName} />
+                    ))}
+                  </span>
+                  {entries.length > 0 && <Compact entries={entries} text={entries[0].employeeName} dimmed={false} />}
+                </button>
+              </td>
+            )
+          })}
+        </tr>
+      ))}
+    </TimelineFrame>
   )
 }

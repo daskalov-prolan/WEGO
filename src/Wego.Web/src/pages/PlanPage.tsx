@@ -25,7 +25,8 @@ import { AssignSite } from '../components/AssignSite'
 import { allowedActivities } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { TimelineMatrix } from '../components/PlanMatrix'
+import { SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
+import { SiteDayDialog } from '../components/SiteDayDialog'
 import {
   addDays,
   addMonths,
@@ -48,6 +49,36 @@ type DayChange = { employeeId: number; date: string; entries: DayEntryInput[] }
 
 const HIDDEN_KEY = 'wego.plan.hiddenEmployees'
 const WEEKENDS_KEY = 'wego.plan.showWeekends'
+const PERSPECTIVE_KEY = 'wego.plan.perspective'
+
+/** Rows of the plan: one per employee, or one per construction site. */
+type Perspective = 'employees' | 'sites'
+
+const ANCHOR_KEY = 'wego.plan.anchor'
+
+function readRemembered(): string | null {
+  try {
+    return sessionStorage.getItem(ANCHOR_KEY)
+  } catch {
+    return null
+  }
+}
+
+function remember(iso: string) {
+  try {
+    sessionStorage.setItem(ANCHOR_KEY, iso)
+  } catch {
+    // Without storage the plan starts at the current week again.
+  }
+}
+
+function loadPerspective(): Perspective {
+  try {
+    return localStorage.getItem(PERSPECTIVE_KEY) === 'sites' ? 'sites' : 'employees'
+  } catch {
+    return 'employees'
+  }
+}
 
 function loadFoldWeekends(): boolean {
   try {
@@ -72,8 +103,9 @@ const parseKey = (key: string) => {
 }
 
 /**
- * The plan of everybody as a timeline: one row per employee, the days of the year from left to right,
- * scrolled freely while the employees stay in view. Woche, Monat and Jahr are zoom levels.
+ * "Planung": the plan of everybody as a timeline, the days of the year from left to right, scrolled
+ * freely while the rows stay in view. The rows are the employees (with the sites in the cells) or the
+ * construction sites (with the employees in the cells). Woche, Monat and Jahr are zoom levels.
  * Planners select cells to fill many days at once.
  */
 export function PlanPage({ year, canEdit }: Props) {
@@ -86,7 +118,12 @@ export function PlanPage({ year, canEdit }: Props) {
   const [error, setError] = useState('')
   const [chosenView, setChosenView] = useState<View>('week')
   // The days that are currently in view; follows the scrolling.
-  const start = weekOf(today >= first && today <= last ? today : first)[0].iso
+  // Coming back (e.g. from the page of a site) continues where one was; otherwise the current week.
+  const remembered = readRemembered()
+  const start =
+    remembered && remembered >= first && remembered <= last
+      ? remembered
+      : weekOf(today >= first && today <= last ? today : first)[0].iso
   const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 13) })
   const anchor = visible.from
   const scroller = useRef<HTMLDivElement>(null)
@@ -94,6 +131,8 @@ export function PlanPage({ year, canEdit }: Props) {
   // A scroll that has to wait until the table is drawn (first load, other zoom, weekends shown or folded).
   const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: anchor, smooth: false })
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
+  const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
+  const [siteDay, setSiteDay] = useState<{ siteId: number; date: string } | null>(null)
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
   const [open, setOpen] = useState<{ employee: PlanEmployee; date: string } | null>(null)
@@ -127,6 +166,32 @@ export function PlanPage({ year, canEdit }: Props) {
 
   const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
   const yearDays = useMemo(() => daysOfYear(year), [year])
+
+  // The plan by site: every site with entries of the shown employees or planned in this year, in the order
+  // the work starts there. A site filter narrows the rows.
+  const siteRows = useMemo<SiteRow[]>(() => {
+    if (!plan) return []
+    const needle = filter.trim().toLowerCase()
+    const shown = new Set(plan.employees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
+    const rows = new Map<number, SiteRow & { start: string }>()
+    for (const site of plan.sites) {
+      if (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle)) continue
+      const planned = site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
+      if (planned) rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart! })
+    }
+    for (const entry of plan.entries) {
+      if (entry.siteId === null || !shown.has(entry.employeeId)) continue
+      const site = siteById.get(entry.siteId)
+      if (!site || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
+      const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
+      if (entry.date < row.start) row.start = entry.date
+      const list = row.byDate.get(entry.date)
+      if (list) list.push(entry)
+      else row.byDate.set(entry.date, [entry])
+      rows.set(site.id, row)
+    }
+    return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
+  }, [plan, hidden, filter, siteById, year])
 
   // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
   const recentSites = useMemo(() => {
@@ -188,12 +253,16 @@ export function PlanPage({ year, canEdit }: Props) {
   const scrollToDate = (iso: string, smooth = false) => {
     const from = clamp(iso)
     setVisible({ from, to: clamp(addDays(from, view === 'week' ? 13 : 30)) })
+    remember(from)
     if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
   }
 
   const onScroll = () => {
     const next = readVisible()
-    if (next && (next.from !== visible.from || next.to !== visible.to)) setVisible(next)
+    if (next && (next.from !== visible.from || next.to !== visible.to)) {
+      setVisible(next)
+      remember(next.from)
+    }
   }
 
   // Runs after every drawing of the table: carries out a scroll that had to wait for it.
@@ -201,6 +270,17 @@ export function PlanPage({ year, canEdit }: Props) {
     const pending = pendingScroll.current
     if (pending && scrollNow(pending.iso, pending.smooth)) pendingScroll.current = null
   })
+
+  const changePerspective = (next: Perspective) => {
+    pendingScroll.current = { iso: anchor, smooth: false }
+    setSelected(new Set())
+    setPerspective(next)
+    try {
+      localStorage.setItem(PERSPECTIVE_KEY, next)
+    } catch {
+      // Without storage the choice lasts until the page is reloaded.
+    }
+  }
 
   const changeZoom = (next: View) => {
     pendingScroll.current = { iso: anchor, smooth: false }
@@ -379,6 +459,15 @@ export function PlanPage({ year, canEdit }: Props) {
       <div className="plan-toolbar">
         <Group gap="xs" wrap="wrap">
           <SegmentedControl
+            value={perspective}
+            onChange={(value) => changePerspective(value as Perspective)}
+            data={[
+              { value: 'employees', label: 'Nach Mitarbeiter' },
+              { value: 'sites', label: 'Nach Baustelle' },
+            ]}
+            color="wego"
+          />
+          <SegmentedControl
             value={view}
             onChange={(value) => changeZoom(value as View)}
             data={[
@@ -415,7 +504,7 @@ export function PlanPage({ year, canEdit }: Props) {
             onChange={(e) => setFilter(e.currentTarget.value)}
             placeholder="Baustelle hervorheben"
             type="search"
-            aria-label="Nach Baustelle (Kunde) filtern"
+            aria-label="Baustellen-Filter"
           />
           <DatePickerInput
             value={anchor}
@@ -467,7 +556,7 @@ export function PlanPage({ year, canEdit }: Props) {
             </Menu.Dropdown>
           </Menu>
 
-          {canEdit && view === 'week' && (
+          {canEdit && view === 'week' && perspective === 'employees' && (
             <Tooltip label="Baustellen dieser Woche auf freie Tage der nächsten Woche übertragen">
               <Button variant="light" onClick={copyWeekForward}>
                 Woche fortsetzen
@@ -488,13 +577,13 @@ export function PlanPage({ year, canEdit }: Props) {
           )}
         </Group>
         <ActivityLegend />
-        {canEdit && selected.size === 0 && !isPhone && (
+        {canEdit && selected.size === 0 && !isPhone && perspective === 'employees' && (
           <Text size="xs" c="dimmed">
             Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage
             auf einmal zu belegen.
           </Text>
         )}
-        {canEdit && isPhone && selected.size === 0 && (
+        {canEdit && isPhone && selected.size === 0 && perspective === 'employees' && (
           <Text size="xs" c="dimmed">
             Tipp: Feld lange drücken, um mehrere Tage auszuwählen.
           </Text>
@@ -512,12 +601,23 @@ export function PlanPage({ year, canEdit }: Props) {
               </>
             )}
           </p>
-        ) : (
+        ) : perspective === 'employees' ? (
           <TimelineMatrix days={yearDays} zoom={view} foldWeekends={foldWeekends} {...shared} />
+        ) : (
+          <SiteTimeline
+              days={yearDays}
+              rows={siteRows}
+              holidayByDate={holidayByDate}
+              today={today}
+              zoom={view}
+              foldWeekends={foldWeekends}
+              onOpenCell={(site, date) => setSiteDay({ siteId: site.id, date })}
+              onOpenSite={shared.onOpenSite}
+            />
         )}
       </div>
 
-      {selected.size > 0 && (
+      {selected.size > 0 && perspective === 'employees' && (
         <Paper className="selection-bar" shadow="lg" p="sm" withBorder>
           <Group gap="xs" justify="space-between" wrap="wrap">
             <Text fw={700} size="sm">
@@ -605,6 +705,7 @@ export function PlanPage({ year, canEdit }: Props) {
           )}
           sites={plan.sites}
           onCreateSite={createSite}
+          onUpdateSite={updateSite}
           recentSites={recentSites}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
@@ -637,6 +738,7 @@ export function PlanPage({ year, canEdit }: Props) {
             entries={entriesOf(open.employee.id, open.date)}
             sites={plan.sites}
             onCreateSite={createSite}
+            onUpdateSite={updateSite}
             recentSites={recentSites}
             onClose={() => setOpen(null)}
             onSave={async (entries) => {
@@ -686,6 +788,62 @@ export function PlanPage({ year, canEdit }: Props) {
             onEdit={() => setShownSite({ ...shownSite, editing: true })}
             onClose={() => setShownSite(null)}
           />
-        ))}    </div>
+        ))}
+      {siteDay && siteById.get(siteDay.siteId) && (
+        <SiteDayDialog
+          site={siteById.get(siteDay.siteId)!}
+          date={siteDay.date}
+          entries={plan.entries.filter(
+            (entry) =>
+              entry.siteId === siteDay.siteId &&
+              entry.date === siteDay.date &&
+              employees.some((employee) => employee.id === entry.employeeId),
+          )}
+          employees={employees}
+          canEdit={canEdit}
+          onClose={() => setSiteDay(null)}
+          onOpenSite={() => shared.onOpenSite(siteDay.siteId)}
+          onEditDay={(employee) => {
+            setSiteDay(null)
+            setOpen({ employee, date: siteDay.date })
+          }}
+          onAdd={async (employeeIds) => {
+            const changes = employeeIds.map((employeeId) => {
+              const employee = plan.employees.find((candidate) => candidate.id === employeeId)!
+              return {
+                employeeId,
+                date: siteDay.date,
+                entries: [
+                  ...entriesOf(employeeId, siteDay.date).map(toInput),
+                  {
+                    type: 'Baustelle' as const,
+                    siteId: siteDay.siteId,
+                    activity: employee.mainActivity,
+                    startTime: null,
+                    endTime: null,
+                    note: null,
+                    noteImportant: false,
+                  },
+                ],
+              }
+            })
+            await save(changes, `${changes.length} Mitarbeiter auf ${siteById.get(siteDay.siteId)!.name} eingeplant.`)
+          }}
+          onRemove={async (removed) => {
+            await save(
+              [
+                {
+                  employeeId: removed.employeeId,
+                  date: removed.date,
+                  entries: entriesOf(removed.employeeId, removed.date)
+                    .filter((entry) => entry.id !== removed.id)
+                    .map(toInput),
+                },
+              ],
+              `${removed.employeeName} von ${removed.siteName} entfernt.`,
+            )
+          }}
+        />
+      )}    </div>
   )
 }

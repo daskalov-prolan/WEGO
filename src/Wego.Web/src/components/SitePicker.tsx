@@ -1,8 +1,9 @@
-import { ActionIcon, Group, Select, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Anchor, Group, Select, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
-import { emptySite, formatAddress } from '../lib/sites'
+import { emptySite, formatAddress, toSiteInput } from '../lib/sites'
 import { SiteForm } from './SiteForm'
+import { SiteSheet } from './SiteSheet'
 
 interface Props {
   sites: Site[]
@@ -10,14 +11,20 @@ interface Props {
   onChange: (siteId: number | null) => void
   /** Creates a site from the form; the new site is selected right away. */
   onCreate: (input: SiteInput) => Promise<Site>
+  /** Saves changes made in the record of the chosen site. */
+  onUpdate?: (id: number, input: SiteInput) => Promise<Site>
   label?: string
   required?: boolean
 }
 
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
-export function SitePicker({ sites, value, onChange, onCreate, label = 'Baustelle', required }: Props) {
+export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label = 'Baustelle', required }: Props) {
   const [creating, setCreating] = useState(false)
+  // The record of the chosen site, opened on top; closing it leads back here.
+  const [viewing, setViewing] = useState<'record' | 'edit' | null>(null)
   const byId = new Map(sites.map((site) => [String(site.id), site]))
+  const chosen = value === null ? undefined : byId.get(String(value))
+  const chosenAddress = chosen && formatAddress(chosen)
 
   return (
     <>
@@ -66,6 +73,34 @@ export function SitePicker({ sites, value, onChange, onCreate, label = 'Baustell
           </ActionIcon>
         </Tooltip>
       </Group>
+      {chosen && (
+        <Text size="xs" mt={2}>
+          <Anchor size="xs" fw={600} onClick={() => setViewing('record')}>
+            Datensatz öffnen: {chosen.name}
+          </Anchor>
+          {chosenAddress && <span className="muted-inline"> · {chosenAddress}</span>}
+        </Text>
+      )}
+      {chosen && viewing === 'record' && (
+        <SiteSheet
+          site={chosen}
+          canEdit={onUpdate !== undefined}
+          showPageLink={false}
+          onEdit={() => setViewing('edit')}
+          onClose={() => setViewing(null)}
+        />
+      )}
+      {chosen && viewing === 'edit' && onUpdate && (
+        <SiteForm
+          title="Baustelle bearbeiten"
+          initial={toSiteInput(chosen)}
+          onClose={() => setViewing('record')}
+          onSave={async (input) => {
+            await onUpdate(chosen.id, input)
+            setViewing('record')
+          }}
+        />
+      )}
       {creating && (
         <SiteForm
           title="Neue Baustelle"

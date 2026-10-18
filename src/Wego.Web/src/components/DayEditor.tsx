@@ -25,6 +25,7 @@ interface Props {
   entries: Entry[]
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
+  onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
   /** Sites of the weeks around this day, offered as one-tap buttons. */
   recentSites: NamedItem[]
   onClose: () => void
@@ -66,7 +67,8 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 }
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
-export function DayEditor({ employee, date, entries, sites, onCreateSite, recentSites, onClose, onSave, onCopy }: Props) {
+export function DayEditor(props: Props) {
+  const { employee, date, entries, sites, onCreateSite, onUpdateSite, recentSites, onClose, onSave, onCopy } = props
   // A new site row starts with what the employee typically does.
   const main = employee.mainActivity
   const allowed = allowedActivities(employee)
@@ -172,6 +174,7 @@ export function DayEditor({ employee, date, entries, sites, onCreateSite, recent
                     value={row.siteId}
                     onChange={(siteId) => update(index, { siteId })}
                     onCreate={onCreateSite}
+                    onUpdate={onUpdateSite}
                     required
                   />
                 )}

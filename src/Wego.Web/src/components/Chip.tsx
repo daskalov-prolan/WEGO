@@ -9,6 +9,8 @@ interface Props {
   withActivity?: boolean
   /** Makes the site name clickable, e.g. to open the record of the site. */
   onSiteClick?: (siteId: number, event: MouseEvent) => void
+  /** Shown instead of the site name, e.g. the employee in the plan by site. */
+  label?: string
 }
 
 /** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note. */
@@ -26,7 +28,7 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick }: Props) {
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label }: Props) {
   const time = formatTimeRange(entry)
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
@@ -35,7 +37,9 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick 
       <span className="chip-line">
         {time && <span className="time">{time}</span>}
         <span className="chip-name">
-          {entry.type !== 'Baustelle' ? (
+          {label !== undefined ? (
+            label
+          ) : entry.type !== 'Baustelle' ? (
             entry.type
           ) : onSiteClick && siteId !== null ? (
             <span className="site-link" role="link" onClick={(event) => onSiteClick(siteId, event)}>

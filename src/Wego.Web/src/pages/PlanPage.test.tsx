@@ -32,7 +32,7 @@ const plan: Plan = {
 
 function entry(id: number, employeeId: number, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
-    id, employeeId, employeeName: '', date, type: 'Baustelle', siteId, siteName, activity: null,
+    id, employeeId, employeeName: employeeId === 1 ? 'Anna' : 'Bernd', date, type: 'Baustelle', siteId, siteName, activity: null,
     startTime: start, endTime: end, note: null, noteImportant: false,
   }
 }
@@ -41,6 +41,7 @@ let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-03-02T09:00:00') })
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/plan/batch') {
@@ -132,6 +133,39 @@ describe('PlanPage', () => {
     expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
   })
 
+  it('shows the sites in the rows and the employees in the cells', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
+
+    // Rows in the order the work starts: Schulze and Meier on 2 March.
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Meier', 'Familie Schulze'])
+    const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ })
+    expect(within(meierMonday).getAllByText('Anna').length).toBeGreaterThan(0)
+    const meierTuesday = screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ })
+    expect(within(meierTuesday).getAllByText('Bernd').length).toBeGreaterThan(0)
+    expect(localStorage.getItem('wego.plan.perspective')).toBe('sites')
+
+    // A day of a site: who is there, and planning somebody else.
+    await user.click(meierTuesday)
+    expect(await screen.findByText('Weitere Mitarbeiter einplanen')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entfernen' })).toBeInTheDocument()
+  })
+  it('opens the record of the chosen site from the day editor and comes back to it', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await user.click(await screen.findByRole('button', { name: /Bernd, Dienstag, 03.03.2026/ }))
+
+    await user.click(await screen.findByText('Datensatz öffnen: Familie Meier'))
+    expect(await screen.findByText('Auftraggeber')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Schließen' }))
+    expect(screen.queryByText('Auftraggeber')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Speichern' })).toBeInTheDocument()
+  })
+
   it('marks a cell with a note', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
@@ -152,7 +186,7 @@ describe('PlanPage', () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
-    await userEvent.type(screen.getByLabelText(/Nach Baustelle/), 'schulze')
+    await userEvent.type(screen.getByLabelText('Baustellen-Filter'), 'schulze')
 
     const monday = cell(/Anna, Montag, 02.03.2026/)
     expect(within(monday).getAllByText('Familie Schulze')[0].closest('.chip')).not.toHaveClass('dimmed')

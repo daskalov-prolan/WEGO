@@ -8,12 +8,14 @@ import { SiteLocation } from './SiteLocation'
 interface Props {
   site: Site
   canEdit: boolean
+  /** Offer the jump to the page of the site (not from inside a dialog, which would close it). */
+  showPageLink?: boolean
   onEdit: () => void
   onClose: () => void
 }
 
 /** The record of a construction site, opened from a cell of the plan. */
-export function SiteSheet({ site, canEdit, onEdit, onClose }: Props) {
+export function SiteSheet({ site, canEdit, showPageLink = true, onEdit, onClose }: Props) {
   const address = formatAddress(site)
   return (
     <Sheet onClose={onClose} title={<Text fw={700}>{site.name}</Text>} size="md">
@@ -51,9 +53,11 @@ export function SiteSheet({ site, canEdit, onEdit, onClose }: Props) {
         <Group justify="flex-end" gap="xs">
           {canEdit && (
             <>
-              <Button variant="default" component="a" href={`#/baustellen/${site.id}`} onClick={onClose}>
-                Baustelle öffnen
-              </Button>
+              {showPageLink && (
+                <Button variant="default" component="a" href={`#/baustellen/${site.id}`} onClick={onClose}>
+                  Baustelle öffnen
+                </Button>
+              )}
               <Button variant="light" onClick={onEdit}>
                 Bearbeiten
               </Button>
