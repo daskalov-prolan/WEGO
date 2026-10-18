@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Site } from '../api/types'
@@ -46,7 +46,7 @@ describe('SitesPage', () => {
     // Without a planned start at the end.
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
     // Chung has started already; Arndt is the first that starts after today.
-    expect(scrolledTo.at(-1)).toBe('site-row-2')
+    await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
     // Done and cancelled sites only with "Alle".
     expect(screen.queryByText('Abgesagt')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: 'Alle' }))
@@ -66,6 +66,6 @@ describe('SitesPage', () => {
     scrolledTo = []
     await user.click(screen.getByRole('button', { name: /^Geplantes Ende/ }))
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
-    expect(scrolledTo.at(-1)).toBe('site-row-2')
+    await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
   })
 })
