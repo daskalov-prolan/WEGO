@@ -1149,36 +1149,30 @@ a:hover {
   cursor: pointer;
 }
 
-/* Planning of an employee: the open tasks they can do, in a row above their days. */
-.employee-tasks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  margin: 6px 0 10px;
+/* Planning of an employee: one lane per site, its open activities at its name. */
+.employee-plan .mini-lanes {
+  --lane-name: 190px;
 }
 
-.employee-task {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+@container (min-width: 1150px) {
+  .employee-plan .mini-lanes {
+    --lane-name: 210px;
+  }
 }
 
-.employee-tasks .task-box {
-  width: auto;
-  margin: 0;
+.mini-lane-name.site-lane {
+  justify-content: flex-start;
+  gap: 3px;
+}
+
+.mini-lane-name.site-lane .name {
   font-weight: 700;
 }
 
-.employee-tasks-besides {
-  margin-left: 6px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-style: italic;
-}
-
-.employee-plan .mini-cell {
-  min-height: 90px;
+.mini-lane-name.site-lane .task-box {
+  width: 100%;
+  margin: 0;
+  font-weight: 700;
 }
 
 /* About one week in view, one and a half when there is room; Saturday and Sunday as narrow strips. */

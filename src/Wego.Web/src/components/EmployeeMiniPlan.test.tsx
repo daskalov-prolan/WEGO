@@ -57,29 +57,35 @@ const batch = () => {
   return call ? JSON.parse(String(call[1].body)) : null
 }
 
+const laneNames = () => [...document.querySelectorAll('.mini-lane-name .name')].map((name) => name.textContent)
+
 describe('EmployeeMiniPlan', () => {
-  it('lists the open tasks of the main activity first, then of the additional ones, each by planned start', async () => {
+  it('has a lane per site: first those worked on, then those with open tasks by main activity and planned start', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
-    const group = await screen.findByRole('group', { name: 'Ungeplante Tätigkeiten' })
-    const boxes = within(group).getAllByRole('button').filter((button) => button.classList.contains('task-box'))
-    // Sanitär at "Fliesen früh" is nothing Bernd does.
-    expect(boxes.map((button) => button.textContent)).toEqual(['Fliesen früh', 'Fliesen spät', 'Abriss früh'])
-    expect(within(group).getByText('auch:')).toBeInTheDocument()
+    await screen.findByText('KW 10 · ab 02.03.')
+    // Sanitär at "Fliesen früh" is nothing Bernd does; the open tasks stand at their site.
+    expect(laneNames()).toEqual(['Meier', 'Fliesen früh', 'Fliesen spät', 'Abriss früh'])
+    const early = document.querySelectorAll('.mini-lane-name')[1] as HTMLElement
+    expect(within(early).getAllByRole('button').map((button) => button.textContent)).toEqual(['Fliesenarbeiten'])
   })
 
-  it('opens at the current week, jumps to the next free week and plans a dragged task on a day', async () => {
+  it('opens at the current week, jumps to the next free week and plans a dragged task on a day of its site', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
     expect(screen.getByText('KW 10 · 20 %')).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: 'Bernd, 2026-03-03' })).getAllByText('Meier').length).toBeGreaterThan(0)
+    expect(within(screen.getByRole('button', { name: 'Meier, 2026-03-03' })).getAllByText('Fliesenarbeiten').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
 
-    const box = within(screen.getByRole('group', { name: 'Ungeplante Tätigkeiten' })).getByRole('button', { name: 'Abriss früh' })
-    const day = screen.getByRole('button', { name: 'Bernd, 2026-03-17' })
+    const lane = document.querySelectorAll('.mini-lane-name')[2] as HTMLElement
+    expect(lane.textContent).toContain('Abriss früh')
+    const box = within(lane).getByRole('button', { name: 'Abriss / Baubeginn' })
+    // Only a day of its own site takes it.
     fireEvent.dragStart(box)
+    expect(fireEvent.dragOver(screen.getByRole('button', { name: 'Fliesen spät, 2026-03-17' }))).toBe(true)
+    const day = screen.getByRole('button', { name: 'Abriss früh, 2026-03-17' })
     expect(fireEvent.dragOver(day)).toBe(false)
     fireEvent.drop(day)
     fireEvent.dragEnd(box)
@@ -91,21 +97,20 @@ describe('EmployeeMiniPlan', () => {
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
   })
 
-  it('moves an entry to another day by dragging it', async () => {
+  it('moves an entry to another day and site by dragging it', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
-    const tuesday = await screen.findByRole('button', { name: 'Bernd, 2026-03-03' })
-    const chip = within(tuesday).getAllByText('Meier')[0].closest('.chip')!
-    expect(fireEvent.dragOver(tuesday)).toBe(true)
+    const tuesday = await screen.findByRole('button', { name: 'Meier, 2026-03-03' })
+    const chip = within(tuesday).getAllByText('Fliesenarbeiten')[0].closest('.chip')!
     fireEvent.dragStart(chip)
     expect(fireEvent.dragOver(tuesday)).toBe(true)
-    const thursday = screen.getByRole('button', { name: 'Bernd, 2026-03-05' })
-    expect(fireEvent.dragOver(thursday)).toBe(false)
-    fireEvent.drop(thursday)
+    const target = screen.getByRole('button', { name: 'Fliesen spät, 2026-03-05' })
+    expect(fireEvent.dragOver(target)).toBe(false)
+    fireEvent.drop(target)
     fireEvent.dragEnd(chip)
     await waitFor(() => expect(batch()).not.toBeNull())
     expect(batch()).toEqual([
       { employeeId: 2, date: '2026-03-03', entries: [] },
-      { employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 13 })] },
+      { employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11, activity: 'Fliesen' })] },
     ])
   })
 })
