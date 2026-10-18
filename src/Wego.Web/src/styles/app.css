@@ -1030,6 +1030,26 @@ a:hover {
   margin: 0;
 }
 
+/* Activities not relevant for this site: struck through, with a way back. */
+.mini-tasks.cancelled {
+  margin-top: -2px;
+}
+
+.task-cancelled {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 2px 1px 6px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: #6b7280;
+  font-size: 0.74rem;
+}
+
+.task-cancelled .task-name {
+  text-decoration: line-through;
+}
+
 /* About one week in view, one and a half when there is room; Saturday and Sunday as narrow strips. */
 .mini-scroll {
   position: relative;

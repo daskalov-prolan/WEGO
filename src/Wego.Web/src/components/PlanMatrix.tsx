@@ -33,6 +33,8 @@ export interface MatrixProps {
   employeeTasks?: (employee: PlanEmployee) => { site: Site; task: OpenTask }[]
   firstVisible?: string
   onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
+  /** Planners: an open task is not relevant for its site. */
+  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
   /** How much of the timeline fits on the screen: about a week, a month, or the whole year. */
   zoom: 'week' | 'month' | 'year'
   /** Saturdays and Sundays as narrow strips (about 0.5 cm). */
@@ -340,6 +342,7 @@ export function TimelineMatrix(props: MatrixProps) {
                   days={days}
                   firstVisible={props.firstVisible ?? days[0].iso}
                   onPlanTask={props.onPlanTask}
+                  onTaskCancel={props.onTaskCancel}
                 />
               </td>
             )}
@@ -389,12 +392,14 @@ function EmployeeTasks({
   days,
   firstVisible,
   onPlanTask,
+  onTaskCancel,
 }: {
   employee: PlanEmployee
   tasks: { site: Site; task: OpenTask }[]
   days: Day[]
   firstVisible: string
   onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
+  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
 }) {
   const [all, setAll] = useState(false)
   const shown = all ? tasks : tasks.slice(0, 3)
@@ -411,6 +416,7 @@ function EmployeeTasks({
           minDate={days[0].iso}
           maxDate={days[days.length - 1].iso}
           onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
+          onCancel={onTaskCancel && (() => onTaskCancel(site, task.activity))}
           siteId={site.id}
         />
       ))}
@@ -454,7 +460,7 @@ interface SiteTimelineProps {
   firstVisible: string
   /** Planners: plan an open task, or mark it as not needed. */
   onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
-  onTaskNotNeeded?: (site: Site, activity: Activity) => Promise<void>
+  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
   /** Planners: entries and open activities can be dragged onto a cell of a site and a day. */
   dropOn?: (site: Site, date: string) => DropHandlers
 }
@@ -464,7 +470,7 @@ interface SiteTimelineProps {
  * employees working there, in the colour of their activity.
  */
 export function SiteTimeline(props: SiteTimelineProps) {
-  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskNotNeeded, dropOn } = props
+  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskCancel, dropOn } = props
   const draggable = dropOn !== undefined
   return (
     <TimelineFrame
@@ -498,7 +504,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                 minDate={days[0].iso}
                 maxDate={days[days.length - 1].iso}
                 onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
-                onNotNeeded={onTaskNotNeeded && (() => onTaskNotNeeded(site, task.activity))}
+                onCancel={onTaskCancel && (() => onTaskCancel(site, task.activity))}
                 siteId={site.id}
               />
             ))}

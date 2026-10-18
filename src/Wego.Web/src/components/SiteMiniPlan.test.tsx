@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, Site } from '../api/types'
 import { renderWithProviders } from '../test-utils'
@@ -192,5 +193,58 @@ describe('SiteMiniPlan', () => {
       { employeeId: 2, date: '2026-03-05', entries: [] },
       expect.objectContaining({ employeeId: 2, date: '2026-03-06', entries: [expect.objectContaining({ siteId: 11 })] }),
     ])
+  })
+
+  it('cancels an open activity: it is then only listed as cancelled here, and can be brought back', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/sites/10/tasks/')) {
+        const { notNeeded } = JSON.parse(String(init?.body)) as { notNeeded: boolean }
+        const activity = url.split('/').pop()
+        return new Response(
+          JSON.stringify({ ...site, tasks: site.tasks.map((task) => (task.activity === activity ? { ...task, notNeeded } : task)) }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify(plan), { status: 200 })
+    })
+    // The site page keeps the site; the plan reports the saved one back to it.
+    function Page() {
+      const [shown, setShown] = useState(site)
+      return <SiteMiniPlan site={shown} canEdit onSiteChange={setShown} />
+    }
+    renderWithProviders(<Page />)
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+
+    const taskBoxes = () => screen.queryAllByRole('button').filter((button) => button.classList.contains('task-box'))
+    await user.click(taskBoxes()[0])
+    await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
+    const cancelled = await screen.findByRole('group', { name: 'Stornierte Tätigkeiten' })
+    expect(within(cancelled).getByText('Fliesenarbeiten')).toBeInTheDocument()
+    expect(taskBoxes()).toHaveLength(0)
+    const put = fetchMock.mock.calls.find(([url]) => url === '/api/sites/10/tasks/Fliesen')!
+    expect(JSON.parse(String(put[1].body))).toEqual({ estimatedDays: 1, notNeeded: true })
+
+    await user.click(within(cancelled).getByRole('button', { name: 'Wiederherstellen' }))
+    await waitFor(() => expect(taskBoxes().map((button) => button.textContent)).toEqual(['Fliesenarbeiten']))
+    expect(screen.queryByRole('group', { name: 'Stornierte Tätigkeiten' })).not.toBeInTheDocument()
+  })
+
+  it('stays in the week in view after planning', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
+    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Woche vor' }))
+    await user.click(screen.getByRole('button', { name: 'Woche vor' }))
+    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
+
+    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box'))!
+    fireEvent.dragStart(box)
+    fireEvent.dragOver(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))
+    fireEvent.drop(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))
+    fireEvent.dragEnd(box)
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url !== '/api/plan/batch').length).toBeGreaterThan(1))
+    // Planned and loaded again: still KW 12; the next free week is the planner's own step.
+    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
   })
 })

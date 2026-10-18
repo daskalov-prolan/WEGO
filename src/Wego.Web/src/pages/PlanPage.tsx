@@ -495,6 +495,38 @@ export function PlanPage({ year, canEdit }: Props) {
     }))
     await save(changes, `${activityLabel(activity)} auf ${site.name} eingeplant.`)
   }
+  /** An open activity is not relevant for its site: it disappears from the plan, with a way back. */
+  const setTaskCancelled = async (site: Site, activity: Activity, cancelled: boolean) => {
+    const estimated = site.tasks.find((task) => task.activity === activity)?.estimatedDays ?? 1
+    const saved = await api.updateSiteTask(site.id, activity, estimated, cancelled)
+    setPlan((current) => current && { ...current, sites: current.sites.map((other) => (other.id === saved.id ? saved : other)) })
+  }
+  const cancelTask = async (site: Site, activity: Activity) => {
+    await setTaskCancelled(site, activity, true)
+    const id = `cancelled-${++notificationCount.current}`
+    notifications.show({
+      id,
+      autoClose: 7000,
+      message: (
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm">
+            {activityLabel(activity)} auf {site.name} storniert.
+          </Text>
+          <Button
+            size="compact-sm"
+            variant="light"
+            onClick={() => {
+              notifications.hide(id)
+              setTaskCancelled(site, activity, false).catch(fail)
+            }}
+          >
+            Rückgängig
+          </Button>
+        </Group>
+      ),
+    })
+  }
+
   const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
   const canDo = (employee: PlanEmployee, activity: Activity, status?: Site['status']) =>
     allowedActivities(employee, status).includes(activity)
@@ -768,6 +800,7 @@ export function PlanPage({ year, canEdit }: Props) {
             employeeTasks={employeeTasks}
             firstVisible={anchor}
             onPlanTask={canEdit ? planTask : undefined}
+            onTaskCancel={canEdit ? cancelTask : undefined}
             dropOn={canEdit ? dropOnEmployee : undefined}
             {...shared}
           />
@@ -787,14 +820,7 @@ export function PlanPage({ year, canEdit }: Props) {
               firstVisible={anchor}
               onPlanTask={canEdit ? planTask : undefined}
               dropOn={canEdit ? dropOnSite : undefined}
-              onTaskNotNeeded={
-                canEdit
-                  ? async (site, activity) => {
-                      const saved = await api.updateSiteTask(site.id, activity, 1, true)
-                      setPlan((current) => current && { ...current, sites: current.sites.map((s) => (s.id === saved.id ? saved : s)) })
-                    }
-                  : undefined
-              }
+              onTaskCancel={canEdit ? cancelTask : undefined}
             />
         )}
       </div>

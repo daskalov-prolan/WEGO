@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox, Group, MultiSelect, Popover, Stack, Text } from '@mantine/core'
+import { Alert, Button, Group, MultiSelect, Popover, Stack, Text } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useState, type CSSProperties } from 'react'
 import { messageOf } from '../api/client'
@@ -22,14 +22,15 @@ interface Props {
   maxDate: string
   /** Planners only: puts the activity on these employees on that day. */
   onPlan?: (employeeIds: number[], date: string) => Promise<void>
-  onNotNeeded?: () => Promise<void>
+  /** Planners: the activity is not relevant for this site; it is then only listed on the site's page. */
+  onCancel?: () => Promise<void>
   /** The site of the activity: planners can drag the box onto a day of the plan. */
   siteId?: number
 }
 
 /** An activity of a site that is not planned yet: a box in its colour; planners plan it from here. */
 export function TaskBox(props: Props) {
-  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onNotNeeded, siteId } = props
+  const { task, label, employees, employee, defaultDate, minDate, maxDate, onPlan, onCancel, siteId } = props
   const info = ACTIVITIES.find((activity) => activity.value === task.activity)!
   const [opened, setOpened] = useState(false)
   const [chosen, setChosen] = useState<string[]>(employee ? [String(employee.id)] : [])
@@ -127,12 +128,17 @@ export function TaskBox(props: Props) {
             </Alert>
           )}
           <Group justify="space-between">
-            {onNotNeeded ? (
-              <Checkbox
-                label="nicht nötig"
+            {onCancel ? (
+              <Button
+                size="compact-sm"
+                variant="subtle"
+                color="red"
                 disabled={busy}
-                onChange={(event) => event.currentTarget.checked && run(onNotNeeded)}
-              />
+                title="Für diese Baustelle nicht relevant: wird nur noch auf der Seite der Baustelle als storniert gezeigt."
+                onClick={() => run(onCancel)}
+              >
+                Stornieren
+              </Button>
             ) : (
               <span />
             )}

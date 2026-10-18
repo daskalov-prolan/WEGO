@@ -363,6 +363,34 @@ describe('PlanPage', () => {
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
   })
 
+  it('cancels an open activity of a site from the plan, with a way back', async () => {
+    const user = userEvent.setup()
+    const werner = plan.sites.find((site) => site.id === 12)!
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/sites/12/tasks/')) {
+        const { notNeeded } = JSON.parse(String(init?.body)) as { notNeeded: boolean }
+        const activity = url.split('/').pop()
+        return new Response(
+          JSON.stringify({ ...werner, tasks: werner.tasks.map((task) => (task.activity === activity ? { ...task, notNeeded } : task)) }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify(plan), { status: 200 })
+    })
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await screen.findByText(/KW 10/)
+
+    const annaTasks = () => screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Anna'))!.querySelector<HTMLElement>('.tasks')!
+    await user.click(within(annaTasks()).getByRole('button', { name: /Familie Werner/ }))
+    await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
+    await waitFor(() => expect(within(annaTasks()).queryByRole('button', { name: /Familie Werner/ })).not.toBeInTheDocument())
+    const put = fetchMock.mock.calls.find(([url]) => url === '/api/sites/12/tasks/Abriss')!
+    expect(JSON.parse(String(put[1].body))).toEqual({ estimatedDays: 1, notNeeded: true })
+
+    await user.click(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 }))
+    expect(await within(annaTasks()).findByRole('button', { name: /Familie Werner/ })).toBeInTheDocument()
+  })
+
   describe('drag and drop', () => {
     const batch = () => {
       const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')

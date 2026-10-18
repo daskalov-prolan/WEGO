@@ -7,6 +7,7 @@ import { activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, 
 import { addDays, daysBetween, formatDate, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
 import { dropTarget, moveChanges, staysPut, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
+import { ActivityIcon } from './ActivityIcon'
 import { ActivityLegend } from './ActivityPicker'
 import { Chip } from './Chip'
 import type { OpenTask } from './PlanMatrix'
@@ -16,6 +17,8 @@ import { TaskBox } from './TaskBox'
 interface Props {
   site: Site
   canEdit: boolean
+  /** The site as saved after one of its activities was cancelled or brought back. */
+  onSiteChange?: (site: Site) => void
 }
 
 interface LaneCellProps {
@@ -56,7 +59,7 @@ function firstWeek(all: Entry[], activities: Set<Activity>, siteId: number, fall
  * employee whose main activity is still to plan here, with the days as columns that scroll sideways (about a
  * week in view, one and a half when there is room; weekends narrow). The work at this site stands out.
  */
-export function SiteMiniPlan({ site, canEdit }: Props) {
+export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
   const today = todayIso()
   const buildStart = weekOf(site.plannedStart ?? today)[0].iso
   // Monday of the first week in view, follows the scrolling.
@@ -66,6 +69,10 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   const [range, setRange] = useState({ from: addDays(buildStart, -14), to: addDays(buildStart, 41) })
   // Width of the strip before it grew to the left: the scroll position is moved by what was added.
   const grownLeft = useRef<number | null>(null)
+  // Planning keeps the week in view: the position from before (a drag can scroll the days when it comes
+  // near an edge), put back once the saved plan is drawn again. `keptFor` is the plan drawn before.
+  const kept = useRef<{ left: number; keptFor: Plan[] | null } | null>(null)
+  const dragging = useRef(false)
   // A week to bring to the left edge once it is drawn (first load, arrows, jumps) – not on every reload.
   const scrollTarget = useRef<string | null>(buildStart)
   const days = daysBetween(range.from, range.to)
@@ -138,6 +145,16 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
       .filter((task) => task.planned < task.estimated)
   })()
 
+  // Activities of the status that are not relevant for this site: only listed here, with a way back.
+  const cancelledTasks = isOpen(site.status)
+    ? site.tasks.filter((task) => task.notNeeded && activitiesOfStatus(site.status).includes(task.activity))
+    : []
+  const setCancelled = async (activity: Activity, cancelled: boolean) => {
+    const estimated = site.tasks.find((task) => task.activity === activity)?.estimatedDays ?? 1
+    onSiteChange?.(await api.updateSiteTask(site.id, activity, estimated, cancelled))
+    notifications.show({ message: `${activityLabel(activity)} ${cancelled ? 'storniert' : 'wieder offen'}.` })
+  }
+
   // Who counts for how full a week is: everybody whose main activity is still to plan at this site.
   const openActivities = new Set(openTasks.map((task) => task.activity))
   // They are also the lanes of the calendar.
@@ -188,6 +205,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     entries.filter((entry) => entry.employeeId === employeeId && entry.date === date)
 
   const save = async (changes: { employeeId: number; date: string; entries: ReturnType<typeof toInput>[] }[], message: string) => {
+    if (scroller.current) kept.current = { left: kept.current?.left ?? scroller.current.scrollLeft, keptFor: plans }
     await api.saveDays(changes)
     notifications.show({ message, color: 'green' })
     reload()
@@ -246,6 +264,34 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
 
   // The names stay at the left edge and cover the start of the scrolled days.
   const nameWidth = () => scroller.current?.querySelector<HTMLElement>('.mini-corner')?.offsetWidth ?? 0
+
+  // While something is dragged the days stay where they were when it started.
+  useEffect(() => {
+    const start = () => {
+      dragging.current = true
+      if (scroller.current) kept.current = { left: scroller.current.scrollLeft, keptFor: null }
+    }
+    const end = () => {
+      dragging.current = false
+      if (scroller.current && kept.current) scroller.current.scrollLeft = kept.current.left
+      // Dropped nowhere: nothing is saved, so nothing to wait for.
+      if (kept.current?.keptFor === null) kept.current = null
+    }
+    window.addEventListener('dragstart', start)
+    window.addEventListener('dragend', end)
+    return () => {
+      window.removeEventListener('dragstart', start)
+      window.removeEventListener('dragend', end)
+    }
+  }, [])
+
+  // After planning: back to the week that was in view, once the saved plan is drawn.
+  useLayoutEffect(() => {
+    const keep = kept.current
+    if (!keep || dragging.current || !scroller.current || keep.keptFor === null || keep.keptFor === plans) return
+    scroller.current.scrollLeft = keep.left
+    kept.current = null
+  })
 
   // Bring the chosen week to the left edge as soon as it is drawn.
   useLayoutEffect(() => {
@@ -380,18 +426,28 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
             maxDate={`${years[years.length - 1]}-12-31`}
             onPlan={canEdit ? (employeeIds, date) => plan(task.activity, employeeIds, date) : undefined}
             siteId={site.id}
-            onNotNeeded={
-              canEdit
-                ? async () => {
-                    await api.updateSiteTask(site.id, task.activity, 1, true)
-                    notifications.show({ message: `${activityLabel(task.activity)}: nicht nötig.` })
-                    reload()
-                  }
-                : undefined
-            }
+            onCancel={canEdit ? () => setCancelled(task.activity, true) : undefined}
           />
         ))}
       </div>
+      {cancelledTasks.length > 0 && (
+        <div className="mini-tasks cancelled" role="group" aria-label="Stornierte Tätigkeiten">
+          <Text size="xs" fw={700} c="dimmed">
+            Storniert:
+          </Text>
+          {cancelledTasks.map((task) => (
+            <span key={task.activity} className="task-cancelled" title="Für diese Baustelle nicht relevant">
+              <ActivityIcon activity={task.activity} />
+              <span className="task-name">{activityLabel(task.activity)}</span>
+              {canEdit && (
+                <Button size="compact-xs" variant="subtle" onClick={() => setCancelled(task.activity, false)}>
+                  Wiederherstellen
+                </Button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="mini-scroll" ref={scroller} onScroll={onScroll}>
         <div

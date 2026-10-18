@@ -196,7 +196,13 @@ export function SitePage({ year, siteId }: Props) {
         />
       )}
 
-      {site && <SiteMiniPlan site={site} canEdit />}
+      {site && (
+        <SiteMiniPlan
+          site={site}
+          canEdit
+          onSiteChange={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
+        />
+      )}
 
       <Title order={4} mb="xs">
         Einsätze {year}
