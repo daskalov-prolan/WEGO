@@ -1,4 +1,4 @@
-import { ColorSwatch, Group, Select, Text } from '@mantine/core'
+import { Button, ColorSwatch, Group, Select, Text } from '@mantine/core'
 import { Fragment, type CSSProperties } from 'react'
 import type { Activity, SiteStatus } from '../api/types'
 import { ABSENCE, ACTIVITIES, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY, SITE_STATUSES } from '../lib/activities'
@@ -71,23 +71,60 @@ function Arrow() {
 
 const status = (value: SiteStatus) => SITE_STATUSES.find((candidate) => candidate.value === value)!
 
-/** A status as a box in its colour, with its activities as steps in their colours. */
-function Stage({ value }: { value: 'Angebot' | 'Bauphase' }) {
+interface FilterProps {
+  /** Activities switched on as a filter; empty means everything is shown. */
+  selected: Set<Activity>
+  onChange: (selected: Set<Activity>) => void
+}
+
+/** A status as a box in its colour, with its activities as steps in their colours; each step is a filter. */
+function Stage({ value, selected, onChange }: { value: 'Angebot' | 'Bauphase' } & FilterProps) {
   const info = status(value)
   const steps = ACTIVITIES.filter((activity) => activity.phase === value)
+  const all = steps.every((activity) => selected.has(activity.value))
+
+  const toggle = (activity: Activity) => {
+    const next = new Set(selected)
+    if (next.has(activity)) next.delete(activity)
+    else next.add(activity)
+    onChange(next)
+  }
+
+  // The name of the status switches all of its activities at once.
+  const togglePhase = () => {
+    const next = new Set(selected)
+    for (const activity of steps) {
+      if (all) next.delete(activity.value)
+      else next.add(activity.value)
+    }
+    onChange(next)
+  }
+
   return (
     <div className="flow-stage" style={{ '--stage': info.hex } as CSSProperties}>
-      <span className="flow-stage-name">{info.label}</span>
+      <button
+        type="button"
+        className="flow-stage-name"
+        aria-pressed={all}
+        title={all ? `Alle ${info.label}-Tätigkeiten wieder abwählen` : `Nur ${info.label}-Tätigkeiten zeigen`}
+        onClick={togglePhase}
+      >
+        {info.label}
+      </button>
       <span className="flow-steps">
         {steps.map((activity, index) => (
           <Fragment key={activity.value}>
             {index > 0 && <Arrow />}
-            <span
-              className="flow-step"
+            <button
+              type="button"
+              className={selected.size > 0 && !selected.has(activity.value) ? 'flow-step off' : 'flow-step'}
+              aria-pressed={selected.has(activity.value)}
+              title={selected.has(activity.value) ? 'Filter aufheben' : 'Nur diese Tätigkeit zeigen (weitere dazunehmen möglich)'}
               style={{ '--entry-bg': activity.tint, '--entry-strong': activity.background } as CSSProperties}
+              onClick={() => toggle(activity.value)}
             >
               {activity.label}
-            </span>
+            </button>
           </Fragment>
         ))}
       </span>
@@ -97,17 +134,18 @@ function Stage({ value }: { value: 'Angebot' | 'Bauphase' }) {
 
 /**
  * The colours of the plan as the course of a job: the statuses one after the other, in each of them its
- * activities in their colours; cancelled can follow any status. Absences and holidays as dots beside it.
+ * activities in their colours; cancelled can follow any status. The activities work as filters, several
+ * at a time. Absences and holidays as dots beside it.
  */
-export function ActivityLegend() {
+export function ActivityLegend({ selected, onChange }: FilterProps) {
   return (
     <div className="activity-legend">
-      <div className="flow" role="img" aria-label="Ablauf: Angebot, dann Bauphase, dann Abgeschlossen; Storniert aus jedem Status">
-        <Stage value="Angebot" />
+      <div className="flow" role="group" aria-label="Ablauf und Filter nach Tätigkeit">
+        <Stage value="Angebot" selected={selected} onChange={onChange} />
         <span className="flow-arrow big" aria-hidden>
           ➜
         </span>
-        <Stage value="Bauphase" />
+        <Stage value="Bauphase" selected={selected} onChange={onChange} />
         <span className="flow-arrow big" aria-hidden>
           ➜
         </span>
@@ -117,6 +155,11 @@ export function ActivityLegend() {
         <span className="flow-cancel" style={{ '--stage': status('Storniert').hex } as CSSProperties}>
           jederzeit ↘ Storniert
         </span>
+        {selected.size > 0 && (
+          <Button size="compact-xs" variant="light" onClick={() => onChange(new Set())}>
+            Alle anzeigen ({selected.size} Filter aufheben)
+          </Button>
+        )}
       </div>
       <Group gap="sm" wrap="wrap">
         <Dot color={ABSENCE.background} label="Urlaub / Krank" />

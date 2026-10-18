@@ -24,8 +24,8 @@ const plan: Plan = {
     { id: 6, name: 'Frauentag', kind: 'Feiertag', startDate: '2026-03-08', endDate: '2026-03-08' },
   ],
   entries: [
-    entry(1, 1, '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'),
-    entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'),
+    { ...entry(1, 1, '2026-03-02', 10, 'Familie Schulze', '08:00:00', '10:00:00'), activity: 'Fliesen' },
+    { ...entry(2, 1, '2026-03-02', 11, 'Familie Meier', '11:00:00', '13:00:00'), activity: 'Trockenbau' },
     entry(3, 2, '2026-03-03', 11, 'Familie Meier', null, null),
     { ...entry(4, 2, '2026-03-12', 10, 'Familie Schulze', null, null), note: 'mit 2 Helfern' },
     { ...entry(5, 2, '2026-03-13', 11, 'Familie Meier', null, null), note: 'Wasser abstellen!', noteImportant: true },
@@ -179,6 +179,35 @@ describe('PlanPage', () => {
     expect(screen.getByRole('button', { name: 'Speichern' })).toBeInTheDocument()
   })
 
+  it('filters by one or more activities from the legend', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+    const chipOf = (name: string) => within(cell(/Anna, Montag, 02.03.2026/)).getAllByText(name)[0].closest('.chip')
+
+    await user.click(screen.getByRole('button', { name: 'Fliesenarbeiten' }))
+    expect(chipOf('Familie Schulze')).not.toHaveClass('dimmed')
+    expect(chipOf('Familie Meier')).toHaveClass('dimmed')
+
+    // A second activity is added to the filter.
+    await user.click(screen.getByRole('button', { name: 'Trockenbau' }))
+    expect(chipOf('Familie Meier')).not.toHaveClass('dimmed')
+
+    // By site only the sites with such work remain.
+    await user.click(screen.getByRole('button', { name: 'Trockenbau' }))
+    await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Schulze'])
+
+    await user.click(screen.getByRole('button', { name: /Alle anzeigen/ }))
+    expect(screen.getAllByRole('rowheader').length).toBeGreaterThan(1)
+    expect(screen.queryByRole('button', { name: /Alle anzeigen/ })).not.toBeInTheDocument()
+
+    // The name of a status switches all of its activities.
+    await user.click(screen.getByRole('button', { name: 'Bauphase' }))
+    expect(screen.getByRole('button', { name: 'Endmontage' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Besichtigung' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('marks a cell with a note', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
@@ -214,7 +243,7 @@ describe('PlanPage', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Jahr' }))
 
     expect(document.querySelector('table.timeline')).toHaveClass('zoom-year')
-    expect(cell(/Anna, Montag, 02.03.2026/)).toHaveAttribute('title', 'Familie Schulze / Familie Meier')
+    expect(cell(/Anna, Montag, 02.03.2026/)).toHaveAttribute('title', 'Familie Schulze – Fliesenarbeiten / Familie Meier – Trockenbau')
     expect(document.getElementById('col-2026-03-08')).toHaveClass('public-holiday')
     expect(document.getElementById('col-2026-02-03')).toHaveClass('holiday')
   })

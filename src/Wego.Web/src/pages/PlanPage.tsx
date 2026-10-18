@@ -16,7 +16,7 @@ import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { DayEntryInput, Entry, Plan, PlanEmployee, Site, SiteInput } from '../api/types'
+import type { Activity, DayEntryInput, Entry, Plan, PlanEmployee, Site, SiteInput } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
@@ -113,6 +113,8 @@ export function PlanPage({ year, canEdit }: Props) {
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
   // Plan by site: by default only sites that are not done or cancelled.
   const [openOnly, setOpenOnly] = useState(true)
+  // Activities chosen in the legend; empty: all are shown.
+  const [activityFilter, setActivityFilter] = useState<Set<Activity>>(new Set())
   const [siteDay, setSiteDay] = useState<{ siteId: number; date: string } | null>(null)
   const [filter, setFilter] = useState('')
   const [hidden, setHidden] = useState<number[]>(loadHidden)
@@ -155,7 +157,10 @@ export function PlanPage({ year, canEdit }: Props) {
     const needle = filter.trim().toLowerCase()
     const shown = new Set(plan.employees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
     const rows = new Map<number, SiteRow & { start: string }>()
+    const byActivity = activityFilter.size > 0
     for (const site of plan.sites) {
+      // With an activity filter only sites where such work is planned.
+      if (byActivity) break
       if (openOnly && !isOpen(site.status)) continue
       if (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle)) continue
       const planned = site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
@@ -163,6 +168,7 @@ export function PlanPage({ year, canEdit }: Props) {
     }
     for (const entry of plan.entries) {
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
+      if (byActivity && !(entry.activity && activityFilter.has(entry.activity))) continue
       const site = siteById.get(entry.siteId)
       if (!site || (openOnly && !isOpen(site.status)) || (needle && !`${site.name} ${site.client ?? ''}`.toLowerCase().includes(needle))) continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
@@ -173,7 +179,7 @@ export function PlanPage({ year, canEdit }: Props) {
       rows.set(site.id, row)
     }
     return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
-  }, [plan, hidden, filter, siteById, year, openOnly])
+  }, [plan, hidden, filter, siteById, year, openOnly, activityFilter])
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
   const earlierWork = useMemo(() => {
@@ -298,7 +304,9 @@ export function PlanPage({ year, canEdit }: Props) {
   if (!plan || plan.year !== year) return null
 
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
-  const isDimmed = (entry: Entry) => needle !== '' && !matches(entry)
+  const isDimmed = (entry: Entry) =>
+    (needle !== '' && !matches(entry)) ||
+    (activityFilter.size > 0 && !(entry.activity !== null && activityFilter.has(entry.activity)))
   const employees = plan.employees.filter((employee) => !hidden.includes(employee.id))
 
   const toggleEmployee = (id: number) =>
@@ -594,7 +602,7 @@ export function PlanPage({ year, canEdit }: Props) {
             </Text>
           )}
         </Group>
-        <ActivityLegend />
+        <ActivityLegend selected={activityFilter} onChange={setActivityFilter} />
         {canEdit && selected.size === 0 && !isPhone && perspective === 'employees' && (
           <Text size="xs" c="dimmed">
             Tipp: Mit gedrückter Maustaste über mehrere Felder ziehen oder mit Strg+Klick auswählen, um viele Tage

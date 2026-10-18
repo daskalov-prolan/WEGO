@@ -378,6 +378,13 @@ a:hover {
   gap: 2px 3px;
 }
 
+.flow-step,
+.flow-stage-name {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
 .flow-step {
   padding: 1px 6px;
   border-left: 4px solid var(--entry-strong);
@@ -387,6 +394,19 @@ a:hover {
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Chosen as filter: a ring in the colour of the activity; the others fade. */
+.flow-step[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--entry-strong);
+}
+
+.flow-step.off {
+  opacity: 0.4;
+}
+
+.flow-stage-name[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--stage);
 }
 
 .flow-arrow {
