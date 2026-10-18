@@ -12,6 +12,7 @@
 //   built from sheet year, month block and row.
 // - A text cell is split on "/" into several construction sites of that day.
 // - "Krank" becomes a sick day, an empty yellow cell on a working day becomes a vacation day.
+// - The fill colour of a cell is the activity of all sites in it (see ACTIVITY_BY_COLOUR).
 // - The unnamed last column of each month (office absences, events) is not imported.
 // - Below the days each month lists its projects: customer, place, kind of conversion, tiles. They
 //   become place and description of the construction sites that already exist under that name.
@@ -19,6 +20,24 @@ import ExcelJS from 'exceljs'
 
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 const YELLOW = 'FFFFFF00'
+
+// Fill colours of the planning sheet and the activity they stand for, as the planners explained them.
+// Office theme colour 4 (a blue) is matched by its theme number, whatever its tint.
+const ACTIVITY_BY_COLOUR = {
+  FF4CF5F9: 'Besichtigung', // türkis
+  FFFF0000: 'Abriss', // rot
+  FFFFC000: 'Trockenbau', // orange
+  FF66FFFF: 'Sanitaer', // blau (hell)
+  FFFF66FF: 'RenoDeco', // lila / pink-violett
+  FFFF99CC: 'Fliesen', // magenta / rosa
+  theme4: 'Endmontage', // anderes Blau
+}
+
+function activityOf(cell) {
+  const colour = cell.fill?.type === 'pattern' ? cell.fill.fgColor : undefined
+  if (!colour) return null
+  return ACTIVITY_BY_COLOUR[colour.argb] ?? (colour.theme !== undefined ? ACTIVITY_BY_COLOUR[`theme${colour.theme}`] : undefined) ?? null
+}
 
 // Different spellings of the same person in the header row.
 const EMPLOYEE_ALIASES = { Tsonyo: 'Tsonjo' }
@@ -80,9 +99,9 @@ function parsePart(raw) {
   return { name, note: notes.join(', ') || null }
 }
 
-function parseCell(raw) {
+function parseCell(raw, activity) {
   const value = raw.replace(/\s+/g, ' ').trim()
-  if (/^krank$/i.test(value)) return [{ type: 'Krank', customerName: null, startTime: null, endTime: null, note: null }]
+  if (/^krank$/i.test(value)) return [{ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note: null }]
 
   const entries = []
   for (const piece of value.split('/')) {
@@ -90,11 +109,11 @@ function parseCell(raw) {
     // "frei", "?" and "......" are not places of work.
     if (!/[\p{L}\d]/u.test(name) || /^frei$/i.test(name)) continue
     if (/^krank$/i.test(name)) {
-      entries.push({ type: 'Krank', customerName: null, startTime: null, endTime: null, note })
+      entries.push({ type: 'Krank', customerName: null, activity: null, startTime: null, endTime: null, note })
       continue
     }
     if (entries.some((e) => e.customerName?.toLowerCase() === name.toLowerCase())) continue
-    entries.push({ type: 'Baustelle', customerName: name, startTime: null, endTime: null, note })
+    entries.push({ type: 'Baustelle', customerName: name, activity, startTime: null, endTime: null, note })
   }
   return entries
 }
@@ -135,9 +154,9 @@ async function readSheet() {
         const value = text(cell).trim()
 
         let entries = []
-        if (value) entries = parseCell(value)
+        if (value) entries = parseCell(value, activityOf(cell))
         else if (isYellow(cell) && weekday !== 0 && weekday !== 6)
-          entries = [{ type: 'Urlaub', customerName: null, startTime: null, endTime: null, note: null }]
+          entries = [{ type: 'Urlaub', customerName: null, activity: null, startTime: null, endTime: null, note: null }]
 
         if (entries.length > 0) days.push({ employee, date, entries })
       }
@@ -205,6 +224,11 @@ function summarize({ employees, days, sites }) {
 
   console.log(`Sheet ${year}: ${days.length} employee days, ${count('Baustelle')} site entries, ${count('Urlaub')} vacation days, ${count('Krank')} sick days`)
   console.log(`Split days (more than one entry): ${days.filter((d) => d.entries.length > 1).length}`)
+  const activities = {}
+  for (const day of days) for (const entry of day.entries) {
+    if (entry.type === 'Baustelle') activities[entry.activity ?? '(ohne)'] = (activities[entry.activity ?? '(ohne)'] ?? 0) + 1
+  }
+  console.log(`Activities of site entries: ${Object.entries(activities).map(([k, v]) => `${k} ${v}`).join(', ')}`)
   console.log(`Employees (${employees.length}): ${employees.join(', ')}`)
   for (const employee of employees) {
     const own = days.filter((d) => d.employee === employee)
