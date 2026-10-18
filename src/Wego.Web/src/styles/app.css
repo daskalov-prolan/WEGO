@@ -1446,3 +1446,34 @@ a:hover {
 .skill-badge .activity-icon {
   display: block;
 }
+
+/* Menu of a right click on a cell of the plan. */
+.cell-menu {
+  position: fixed;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 4px;
+}
+
+.cell-menu-item {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cell-menu-item:hover:not(:disabled) {
+  background: #e3f6f7;
+}
+
+.cell-menu-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
+}

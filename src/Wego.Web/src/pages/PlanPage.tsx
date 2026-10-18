@@ -29,6 +29,7 @@ import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
 import { PlanTaskDialog } from '../components/PlanTaskDialog'
+import { CellMenu } from '../components/CellMenu'
 import { dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import {
   addDays,
@@ -140,7 +141,10 @@ export function PlanPage({ year, canEdit }: Props) {
   const [assigning, setAssigning] = useState(false)
   // A site opened from a cell, and whether its form is open.
   const [shownSite, setShownSite] = useState<{ site: Site; editing: boolean } | null>(null)
-  const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[] } | null>(null)
+  // Copied or cut entries of one cell; cut ones leave their cell when they are pasted.
+  const [clipboard, setClipboard] = useState<{ label: string; entries: DayEntryInput[]; cutFrom?: { employeeId: number; date: string } } | null>(null)
+  // The menu of a right click on a cell.
+  const [cellMenu, setCellMenu] = useState<{ employee: PlanEmployee; date: string; x: number; y: number } | null>(null)
   // An open activity dropped on a day of a site: who goes there is asked for.
   const [droppedTask, setDroppedTask] = useState<{ site: Site; activity: Activity; date: string } | null>(null)
 
@@ -156,6 +160,8 @@ export function PlanPage({ year, canEdit }: Props) {
       // Without storage the plan simply starts at today.
     }
   }, [])
+
+  const closeCellMenu = useCallback(() => setCellMenu(null), [])
 
   useWindowEvent('keydown', (event) => {
     if (event.key === 'Escape' && selected.size > 0) setSelected(new Set())
@@ -541,6 +547,49 @@ export function PlanPage({ year, canEdit }: Props) {
     })
   }
 
+  /** Copies (or cuts) the entries of one cell. */
+  const copyCell = (employeeId: number, date: string, cut: boolean) => {
+    const entries = entriesOf(employeeId, date)
+    setClipboard({
+      label: entries.map((entry) => entry.siteName ?? entry.type).join(' / '),
+      entries: entries.map(toInput),
+      cutFrom: cut ? { employeeId, date } : undefined,
+    })
+    notifications.show({
+      message: `${cut ? 'Ausgeschnitten' : 'Kopiert'}. Rechtsklick auf ein Feld (oder mehrere ausgewählte) und „Einfügen“.`,
+      autoClose: 3000,
+    })
+  }
+
+  /**
+   * Adds the clipboard to what is planned in these cells already; a site the employee is on that day already
+   * is not added twice. Who cannot do a copied activity gets their own fitting main activity. Cut entries
+   * leave their cell in the same step.
+   */
+  const paste = async (targets: { employeeId: number; date: string }[]) => {
+    if (!clipboard) return
+    const changes: DayChange[] = targets.map(({ employeeId, date }) => {
+      const employee = plan.employees.find((candidate) => candidate.id === employeeId)
+      const there = entriesOf(employeeId, date)
+      const added = clipboard.entries
+        .filter((entry) => !there.some((other) => other.type === entry.type && other.siteId === entry.siteId))
+        .map((entry) => {
+          const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
+          const status = site && isOpen(site.status) ? site.status : undefined
+          if (!employee || entry.type !== 'Baustelle' || (entry.activity && allowedActivities(employee, status).includes(entry.activity)))
+            return entry
+          return { ...entry, activity: defaultActivity(employee, status) }
+        })
+      return { employeeId, date, entries: [...there.map(toInput), ...added] }
+    })
+    const from = clipboard.cutFrom
+    if (from && !targets.some((target) => target.employeeId === from.employeeId && target.date === from.date))
+      changes.push({ employeeId: from.employeeId, date: from.date, entries: [] })
+    await save(changes, `${clipboard.label || 'Leerer Tag'} in ${targets.length} ${targets.length === 1 ? 'Feld' : 'Felder'} eingefügt.`)
+    if (from) setClipboard(null)
+    setSelected(new Set())
+  }
+
   const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
   const canDo = (employee: PlanEmployee, activity: Activity, status?: Site['status']) =>
     allowedActivities(employee, status).includes(activity)
@@ -826,6 +875,7 @@ export function PlanPage({ year, canEdit }: Props) {
             onPlanTask={canEdit ? planTask : undefined}
             onTaskCancel={canEdit ? cancelTask : undefined}
             dropOn={canEdit ? dropOnEmployee : undefined}
+            onCellMenu={canEdit ? (employee, date, { x, y }) => setCellMenu({ employee, date, x, y }) : undefined}
             {...shared}
           />
         ) : (
@@ -906,7 +956,7 @@ export function PlanPage({ year, canEdit }: Props) {
                     size="xs"
                     variant="default"
                     onClick={() =>
-                      applyToSelection(() => clipboard.entries, `In ${selected.size} Felder eingefügt.`)
+                      paste([...selected].map(parseKey)).catch(fail)
                     }
                   >
                     Einfügen
@@ -1024,6 +1074,31 @@ export function PlanPage({ year, canEdit }: Props) {
             onClose={() => setShownSite(null)}
           />
         ))}
+      {cellMenu &&
+        (() => {
+          const key = cellKey(cellMenu.employee.id, cellMenu.date)
+          const empty = entriesOf(cellMenu.employee.id, cellMenu.date).length === 0
+          // A cell of the selection pastes into all selected cells, any other cell only into itself.
+          const targets = selected.has(key) ? [...selected].map(parseKey) : [{ employeeId: cellMenu.employee.id, date: cellMenu.date }]
+          return (
+            <CellMenu
+              x={cellMenu.x}
+              y={cellMenu.y}
+              onClose={closeCellMenu}
+              items={[
+                { label: 'Kopieren', disabled: empty, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, false) },
+                { label: 'Ausschneiden', disabled: empty, onClick: () => copyCell(cellMenu.employee.id, cellMenu.date, true) },
+                {
+                  label: targets.length > 1 ? `Einfügen in ${targets.length} Felder` : 'Einfügen',
+                  disabled: !clipboard,
+                  onClick: () => {
+                    paste(targets).catch(fail)
+                  },
+                },
+              ]}
+            />
+          )
+        })()}
       {droppedTask && (
         <PlanTaskDialog
           site={droppedTask.site}

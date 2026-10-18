@@ -41,6 +41,8 @@ export interface MatrixProps {
   foldWeekends?: boolean
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
+  /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
+  onCellMenu?: (employee: PlanEmployee, date: string, position: { x: number; y: number }) => void
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -140,7 +142,13 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
         cancelPress()
       },
       onContextMenu: (event: MouseEvent) => {
-        if (selectable && pointerType.current !== 'mouse') event.preventDefault()
+        if (selectable && pointerType.current !== 'mouse') {
+          event.preventDefault()
+          return
+        }
+        if (!props.onCellMenu) return
+        event.preventDefault()
+        props.onCellMenu(employee, day.iso, { x: event.clientX, y: event.clientY })
       },
       onClick: () => {
         if (swallowClick.current) {

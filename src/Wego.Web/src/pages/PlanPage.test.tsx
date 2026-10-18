@@ -463,6 +463,94 @@ describe('PlanPage', () => {
     expect(await within(annaTasks()).findByRole('button', { name: /Familie Werner/ })).toBeInTheDocument()
   })
 
+  describe('right click on a cell', () => {
+    const batch = () => {
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
+      return call ? JSON.parse(String(call[1].body)) : null
+    }
+    const menu = async (label: RegExp) => {
+      fireEvent.contextMenu(cell(label))
+      return within(await screen.findByRole('menu'))
+    }
+
+    it('copies a cell and pastes it into another; who cannot do the activity gets their own', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      // Nothing to paste yet, nothing to copy on an empty cell.
+      let items = await menu(/Bernd, Mittwoch, 04.03.2026/)
+      expect(items.getByRole('menuitem', { name: 'Einfügen' })).toBeDisabled()
+      expect(items.getByRole('menuitem', { name: 'Kopieren' })).toBeDisabled()
+      await user.keyboard('{Escape}')
+
+      items = await menu(/Anna, Montag, 02.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Kopieren' }))
+      items = await menu(/Bernd, Mittwoch, 04.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Einfügen' }))
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      // Anna's split day: Fliesen and Trockenbau, which Bernd does not do: he gets Sanitär.
+      expect(batch()).toEqual([
+        {
+          employeeId: 2,
+          date: '2026-03-04',
+          entries: [
+            expect.objectContaining({ siteId: 10, activity: 'Sanitaer', startTime: '08:00:00' }),
+            expect.objectContaining({ siteId: 11, activity: 'Sanitaer', startTime: '11:00:00' }),
+          ],
+        },
+      ])
+    })
+
+    it('adds what is pasted to the entries of the day, without a site twice', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      let items = await menu(/Anna, Montag, 02.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Kopieren' }))
+      // Bernd is at Meier on Tuesday already: only Schulze is added.
+      items = await menu(/Bernd, Dienstag, 03.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Einfügen' }))
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        {
+          employeeId: 2,
+          date: '2026-03-03',
+          entries: [expect.objectContaining({ siteId: 11 }), expect.objectContaining({ siteId: 10, activity: 'Sanitaer' })],
+        },
+      ])
+    })
+
+    it('cuts a cell and pastes it into all selected cells, emptying the source', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      let items = await menu(/Bernd, Dienstag, 03.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Ausschneiden' }))
+
+      await user.keyboard('{Control>}')
+      await user.click(cell(/Bernd, Mittwoch, 04.03.2026/))
+      await user.click(cell(/Bernd, Donnerstag, 05.03.2026/))
+      await user.keyboard('{/Control}')
+      items = await menu(/Bernd, Donnerstag, 05.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Einfügen in 2 Felder' }))
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] }),
+          expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11 })] }),
+          { employeeId: 2, date: '2026-03-03', entries: [] },
+        ]),
+      )
+      expect(batch()).toHaveLength(3)
+    })
+  })
+
   describe('drag and drop', () => {
     const batch = () => {
       const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
