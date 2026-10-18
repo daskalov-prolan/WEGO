@@ -109,7 +109,8 @@ export function TaskBox(props: Props) {
                 value={chosen}
                 onChange={setChosen}
                 searchable
-                comboboxProps={{ withinPortal: false }}
+                // The list opens upwards: the day and the button below stay free to use.
+                comboboxProps={{ withinPortal: false, position: 'top' }}
               />
               <DateInput
                 label="Tag"

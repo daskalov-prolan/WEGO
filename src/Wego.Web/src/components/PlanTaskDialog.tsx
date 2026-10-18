@@ -63,6 +63,8 @@ export function PlanTaskDialog({ site, activity, date, employees, onClose, onPla
             value={chosen}
             onChange={setChosen}
             searchable
+            // The list opens upwards: the button below stays free to use.
+            comboboxProps={{ position: 'top' }}
             data-autofocus
           />
         )}
