@@ -35,6 +35,19 @@ Open http://localhost:5173 and sign in with `planer` / `wego-dev-2026`. This fir
 from `Seed:*` in `appsettings.Development.json` as long as no account exists; create all others under
 **Verwaltung**. In development the database is migrated on startup (`Database:MigrateOnStartup`).
 
+## Employees and sites from the live system
+
+`tools/sync-from-live` copies employees and construction sites from https://planer.wego-badcenter.de into the
+local application, through the API and with your own planner account there. No SSH or server access is needed.
+Plan entries, vacation and sick days are not copied, and neither are logins. Nothing is deleted locally.
+
+```
+# PowerShell, with the local API running
+$env:WEGO_LIVE_USER = "<your user name>"; $env:WEGO_LIVE_PASSWORD = "<your password>"
+node tools/sync-from-live/sync.mjs           # dry run: lists what would change
+node tools/sync-from-live/sync.mjs --apply   # writes to the local application
+```
+
 ## Tests
 
 ```
