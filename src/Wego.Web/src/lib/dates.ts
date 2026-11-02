@@ -115,3 +115,15 @@ export function addMonths(iso: string, count: number): string {
   date.setUTCMonth(date.getUTCMonth() + count)
   return date.toISOString().slice(0, 10)
 }
+
+/** Full and half hours of a working day, "06:00" to "20:00": minutes are not needed on the sites. */
+export const HALF_HOURS = Array.from(
+  { length: 29 },
+  (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`,
+)
+
+/** Two sites of four hours each on one day: the first in the morning, the second after the break. */
+export const HALF_DAYS = [
+  { start: '07:30', end: '11:30' },
+  { start: '12:00', end: '16:00' },
+]

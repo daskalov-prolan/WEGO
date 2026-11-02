@@ -1,9 +1,25 @@
 namespace Wego.Api.Data;
 
+/// <summary>
+/// Handwerker only read the plan. Planer A plan (plan, sites, site reports), Planer G may do everything:
+/// besides that the employees with their reports and vacation, and the administration.
+/// </summary>
 public static class Roles
 {
-    public const string Planer = "Planer";
-    public const string Mitarbeiter = "Mitarbeiter";
+    public const string Handwerker = "Handwerker";
+    public const string PlanerA = "PlanerA";
+    public const string PlanerG = "PlanerG";
+
+    public static readonly string[] All = [Handwerker, PlanerA, PlanerG];
+
+    public static bool CanPlan(string role) => role is PlanerA or PlanerG;
+}
+
+/// <summary>The authorization policies: planning (Planer A and G) and administration (Planer G).</summary>
+public static class Policies
+{
+    public const string Plan = "Planen";
+    public const string Admin = "Verwalten";
 }
 
 public enum EntryType
@@ -14,20 +30,20 @@ public enum EntryType
 }
 
 /// <summary>
-/// What an employee does on a construction site that day, in the order of the job. Each activity belongs
-/// to one status of the site: the offer (Angebot) or the construction (Bauphase), see <see cref="ActivityPhases"/>.
+/// What an employee does on a construction site that day. Planners of group G keep the list under
+/// Verwaltung: each activity belongs to one phase of a site, the offer (Angebot) or the construction
+/// (Bauphase), and the order is that of the job.
 /// </summary>
-public enum Activity
+public class ActivityType
 {
-    Besichtigung,
-    Angebotskalkulation,
-    Angebotsbesprechung,
-    Abriss,
-    Trockenbau,
-    Sanitaer,
-    RenoDeco,
-    Fliesen,
-    Endmontage,
+    /// <summary>Stable key stored in entries, tasks and employees (e.g. "Sanitaer"); the label can change.</summary>
+    public required string Key { get; set; }
+    public required string Label { get; set; }
+    /// <summary><see cref="SiteStatus.Angebot"/> or <see cref="SiteStatus.Bauphase"/>.</summary>
+    public SiteStatus Phase { get; set; }
+    public int SortOrder { get; set; }
+    /// <summary>The colour in the plan, e.g. "#f46a6a".</summary>
+    public required string Color { get; set; }
 }
 
 public class Employee
@@ -42,16 +58,16 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
-    /// <summary>What this employee typically does on a site.</summary>
-    public Activity? MainActivity { get; set; }
+    /// <summary>What this employee typically does on a site (the key of an <see cref="ActivityType"/>).</summary>
+    public string? MainActivity { get; set; }
 
     /// <summary>What this employee can do as well. Main and additional activities are what the plan offers for them.</summary>
-    public List<Activity> AdditionalActivities { get; set; } = [];
+    public List<string> AdditionalActivities { get; set; } = [];
 
     // Login. Employees without a user name cannot sign in.
     public string? UserName { get; set; }
     public string? PasswordHash { get; set; }
-    public string Role { get; set; } = Roles.Mitarbeiter;
+    public string Role { get; set; } = Roles.Handwerker;
 
     /// <summary>Set when a planner assigned the password, so that only the employee knows the final one.</summary>
     public bool MustChangePassword { get; set; }
@@ -68,19 +84,8 @@ public enum SiteStatus
     Storniert,
 }
 
-public static class ActivityPhases
+public static class SiteStatusFlow
 {
-    /// <summary>The activities of a status: the offer has its own, the construction the rest.</summary>
-    public static readonly IReadOnlyDictionary<SiteStatus, Activity[]> ByStatus = new Dictionary<SiteStatus, Activity[]>
-    {
-        [SiteStatus.Angebot] = [Activity.Besichtigung, Activity.Angebotskalkulation, Activity.Angebotsbesprechung],
-        [SiteStatus.Bauphase] =
-        [
-            Activity.Abriss, Activity.Trockenbau, Activity.Sanitaer, Activity.RenoDeco, Activity.Fliesen,
-            Activity.Endmontage,
-        ],
-    };
-
     /// <summary>The allowed status changes: forward one step, or cancelled from anywhere.</summary>
     public static bool CanChange(SiteStatus from, SiteStatus to) =>
         (from, to) switch
@@ -102,7 +107,8 @@ public class SiteTask
     public int Id { get; set; }
     public int SiteId { get; set; }
     public Site Site { get; set; } = null!;
-    public Activity Activity { get; set; }
+    /// <summary>The key of an <see cref="ActivityType"/>.</summary>
+    public required string Activity { get; set; }
 
     /// <summary>Employee days the activity is expected to take; at least one.</summary>
     public int EstimatedDays { get; set; } = 1;
@@ -141,6 +147,9 @@ public class Site
     /// <summary>Auftraggeber: the customer or the property management.</summary>
     public string? Client { get; set; }
 
+    /// <summary>Telephone number of the customer, to call before a visit or the start of the work.</summary>
+    public string? ClientPhone { get; set; }
+
     /// <summary>Number of the project in Label, the merchandise management software of the company.</summary>
     public string? LabelProjectNumber { get; set; }
 
@@ -157,12 +166,11 @@ public class Site
     public List<SiteTask> Tasks { get; set; } = [];
 
     /// <summary>Adds the activities of the current status that the site does not have yet.</summary>
-    public void GenerateTasks()
+    public void GenerateTasks(IEnumerable<ActivityType> activities)
     {
-        if (!ActivityPhases.ByStatus.TryGetValue(Status, out var activities)) return;
-        foreach (var activity in activities)
+        foreach (var activity in activities.Where(a => a.Phase == Status).OrderBy(a => a.SortOrder))
         {
-            if (Tasks.All(t => t.Activity != activity)) Tasks.Add(new SiteTask { Activity = activity });
+            if (Tasks.All(t => t.Activity != activity.Key)) Tasks.Add(new SiteTask { Activity = activity.Key });
         }
     }
 
@@ -192,7 +200,8 @@ public class PlanEntry
     public EntryType Type { get; set; }
     public int? SiteId { get; set; }
     public Site? Site { get; set; }
-    public Activity? Activity { get; set; }
+    /// <summary>The key of an <see cref="ActivityType"/>. An entry of the offer phase may have it without a site.</summary>
+    public string? Activity { get; set; }
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
     public string? Note { get; set; }
@@ -215,4 +224,34 @@ public class SchoolHoliday
     public HolidayKind Kind { get; set; } = HolidayKind.Schulferien;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+}
+
+public enum ChangeArea
+{
+    Plan,
+    Mitarbeiter,
+    Baustelle,
+    Taetigkeit,
+}
+
+/// <summary>
+/// One change to the plan, an employee or a site: when, by whom, and the record before and after as JSON.
+/// Only written, never shown in the application; it is read in the database when needed.
+/// </summary>
+public class ChangeLogEntry
+{
+    public long Id { get; set; }
+    public DateTime ChangedAt { get; set; }
+    public int? ChangedById { get; set; }
+    /// <summary>The name at the time of the change, so it stays readable when the employee is renamed.</summary>
+    public string? ChangedBy { get; set; }
+    public ChangeArea Area { get; set; }
+    /// <summary>What happened, e.g. "Angelegt", "Geändert", "Gelöscht", "Status".</summary>
+    public required string Action { get; set; }
+    /// <summary>The employee (also for plan days) or the site.</summary>
+    public int? EntityId { get; set; }
+    /// <summary>The day, for plan changes.</summary>
+    public DateOnly? Date { get; set; }
+    public string? Before { get; set; }
+    public string? After { get; set; }
 }

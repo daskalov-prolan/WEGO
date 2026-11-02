@@ -1,6 +1,6 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import type { Entry } from '../api/types'
-import { activityLabel, entryStyle, entryTitle } from '../lib/activities'
+import { activityLabel, entryName, entryStyle, entryTitle } from '../lib/activities'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange } from '../lib/dates'
 import { ActivityIcon } from './ActivityIcon'
@@ -61,7 +61,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
               {entry.siteName}
             </span>
           ) : (
-            entry.siteName
+            entryName(entry)
           )}
         </span>
         {entry.note && <NoteMark important={entry.noteImportant} />}

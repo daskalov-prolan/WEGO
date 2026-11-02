@@ -6,7 +6,7 @@ import { renderWithProviders } from '../test-utils'
 import { EmployeesPage } from './EmployeesPage'
 
 const employee = (id: number, name: string, isActive: boolean, patch: Partial<Employee> = {}): Employee => ({
-  id, name, sortOrder: id, isActive, showInPlan: true, vacationDaysPerYear: 30, userName: null, role: 'Mitarbeiter',
+  id, name, sortOrder: id, isActive, showInPlan: true, vacationDaysPerYear: 30, userName: null, role: 'Handwerker',
   hasPassword: false, mainActivity: null, additionalActivities: [], ...patch,
 })
 

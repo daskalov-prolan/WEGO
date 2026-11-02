@@ -11,25 +11,39 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteTask> SiteTasks => Set<SiteTask>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
+    public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
+    public DbSet<ActivityType> Activities => Set<ActivityType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ActivityType>(e =>
+        {
+            e.ToTable("Activities");
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(30);
+            e.Property(x => x.Label).HasMaxLength(100);
+            e.Property(x => x.Phase).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Color).HasMaxLength(20);
+        });
+
         modelBuilder.Entity<Employee>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.UserName).HasMaxLength(100);
             e.Property(x => x.Role).HasMaxLength(50);
-            e.Property(x => x.MainActivity).HasConversion<string>().HasMaxLength(30);
-            // Stored as a comma separated list of names, e.g. "Abriss,RenoDeco".
+            e.Property(x => x.MainActivity).HasMaxLength(30);
+            // A deleted activity is no longer the main activity of anybody.
+            e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
+            // Stored as a comma separated list of keys, e.g. "Abriss,RenoDeco".
             e.Property(x => x.AdditionalActivities)
                 .HasConversion(
                     v => string.Join(',', v),
-                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Enum.Parse<Activity>).ToList(),
-                    new ValueComparer<List<Activity>>(
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+                    new ValueComparer<List<string>>(
                         (a, b) => a!.SequenceEqual(b!),
                         v => v.Aggregate(0, (hash, activity) => HashCode.Combine(hash, activity)),
                         v => v.ToList()))
-                .HasMaxLength(200);
+                .HasMaxLength(400);
             e.HasIndex(x => x.UserName).IsUnique();
         });
 
@@ -37,6 +51,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         {
             e.Property(x => x.Name).HasMaxLength(220);
             e.Property(x => x.Client).HasMaxLength(200);
+            e.Property(x => x.ClientPhone).HasMaxLength(50);
             e.Property(x => x.LabelProjectNumber).HasMaxLength(50);
             e.Property(x => x.Street).HasMaxLength(200);
             e.Property(x => x.HouseNumber).HasMaxLength(20);
@@ -52,8 +67,10 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
 
         modelBuilder.Entity<SiteTask>(e =>
         {
-            e.Property(x => x.Activity).HasConversion<string>().HasMaxLength(30);
+            e.Property(x => x.Activity).HasMaxLength(30);
             e.HasOne(x => x.Site).WithMany(x => x.Tasks).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            // A deleted activity is no task of any site any more.
+            e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.Activity).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.Activity }).IsUnique();
         });
 
@@ -69,7 +86,9 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         modelBuilder.Entity<PlanEntry>(e =>
         {
             e.Property(x => x.Note).HasMaxLength(500);
-            e.Property(x => x.Activity).HasConversion<string>().HasMaxLength(30);
+            e.Property(x => x.Activity).HasMaxLength(30);
+            // Entries of a deleted activity stay, without an activity.
+            e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.Activity).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(x => new { x.EmployeeId, x.Date });
             e.HasIndex(x => new { x.SiteId, x.Date });
             e.HasOne(x => x.Employee).WithMany(x => x.Entries).HasForeignKey(x => x.EmployeeId)
@@ -82,6 +101,18 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         {
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<ChangeLogEntry>(e =>
+        {
+            e.Property(x => x.ChangedBy).HasMaxLength(200);
+            e.Property(x => x.Area).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Action).HasMaxLength(50);
+            e.Property(x => x.Before).HasColumnType("jsonb");
+            e.Property(x => x.After).HasColumnType("jsonb");
+            // No foreign keys: the log outlives deleted sites and employees.
+            e.HasIndex(x => x.ChangedAt);
+            e.HasIndex(x => new { x.Area, x.EntityId, x.Date });
         });
     }
 }

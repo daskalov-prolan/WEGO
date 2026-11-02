@@ -19,6 +19,7 @@ describe('SiteForm', () => {
     await user.type(input(/^Auftraggeber/), 'Hausverwaltung Nord')
     await user.type(input(/^Straße/), 'Hauptstraße')
     await user.type(input(/^Hausnummer/), '12')
+    await user.type(input(/^Telefon Kunde/), '030 1234567')
     expect(screen.getByText('Hausverwaltung Nord', { selector: 'strong' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: 'Straße' }))
@@ -30,6 +31,7 @@ describe('SiteForm', () => {
         client: 'Hausverwaltung Nord',
         street: 'Hauptstraße',
         houseNumber: '12',
+        clientPhone: '030 1234567',
         nameSource: 'Strasse',
         status: 'Angebot',
       }),

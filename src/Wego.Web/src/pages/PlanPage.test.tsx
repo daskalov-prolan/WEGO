@@ -6,7 +6,7 @@ import { renderWithProviders } from '../test-utils'
 import { PlanPage } from './PlanPage'
 import { setClip } from '../lib/clipboard'
 
-const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const, tasks: [], labelProjectNumber: null }
+const noAddress = { client: null, street: null, houseNumber: null, addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber' as const, description: null, plannedStart: null, plannedEnd: null, status: 'Bauphase' as const, tasks: [], labelProjectNumber: null, clientPhone: null }
 
 const plan: Plan = {
   year: 2026,
@@ -186,10 +186,10 @@ describe('PlanPage', () => {
       'Familie Meier',
       'Familie Schulze',
     ])
-    expect(screen.getByRole('button', { name: /Frühere Einsätze: 1 offene Baustellen/ })).toBeInTheDocument()
-    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte Baustellen' }))
+    expect(screen.getByRole('button', { name: /Frühere Einsätze: 1/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte' }))
     expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toContain('Altbau')
-    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte Baustellen' }))
+    await user.click(screen.getByRole('switch', { name: 'Nur unerledigte' }))
     const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ })
     expect(within(meierMonday).getAllByText('Anna').length).toBeGreaterThan(0)
     const meierTuesday = screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ })
@@ -214,36 +214,59 @@ describe('PlanPage', () => {
     expect(screen.getByRole('button', { name: 'Speichern' })).toBeInTheDocument()
   })
 
-  it('filters by one or more activities from the legend', async () => {
+  it('shows one phase at a time: its employees and sites, work of the other phase pale', async () => {
+    const offer = { ...noAddress, status: 'Angebot' as const, plannedStart: '2026-03-10' }
+    const phases: Plan = {
+      ...plan,
+      employees: [
+        ...plan.employees,
+        { id: 3, name: 'Clara', mainActivity: 'Besichtigung', additionalActivities: [] },
+        // A craftsman without activities set: can do everything on a site, but no offer work.
+        { id: 5, name: 'Otto', mainActivity: null, additionalActivities: [] },
+        // A planner who builds as well.
+        { id: 6, name: 'Petra', mainActivity: 'Fliesen', additionalActivities: [], isPlaner: true },
+      ],
+      // A planner without a column of their own in the plan.
+      planners: [{ id: 4, name: 'Paula', mainActivity: null, additionalActivities: [], isPlaner: true }],
+      sites: [...plan.sites, { id: 14, name: 'Familie Neu', ...offer }],
+      entries: [
+        ...plan.entries,
+        { ...entry(8, 2, '2026-03-04', 14, 'Familie Neu', null, null), activity: 'Besichtigung' },
+      ],
+    }
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(phases), { status: 200 }))
     const user = userEvent.setup()
-    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    const { rerender } = renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
-    const chipOf = (name: string) => within(cell(/Anna, Montag, 02.03.2026/)).getAllByText(name)[0].closest('.chip')
 
-    await user.click(screen.getByRole('button', { name: 'Fliesenarbeiten' }))
-    expect(chipOf('Familie Schulze')).not.toHaveClass('dimmed')
-    expect(chipOf('Familie Meier')).toHaveClass('dimmed')
+    // Bauphase by default: only who can build, and an offer visit stays visible but pale.
+    expect(screen.getByRole('group', { name: 'Tätigkeiten der Bauphase' })).toBeInTheDocument()
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd', 'Otto', 'Petra'])
+    const visit = within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
+    expect(visit).toHaveClass('dimmed')
+    // Only the two phases to choose: no done or cancelled, and the activities are no filters.
+    expect(screen.queryByText('Abgeschlossen')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Endmontage' })).not.toBeInTheDocument()
 
-    // A second activity is added to the filter.
-    await user.click(screen.getByRole('button', { name: 'Trockenbau' }))
-    expect(chipOf('Familie Meier')).not.toHaveClass('dimmed')
+    // The offer phase, from the menu: all planners (also those without a column) and who does offer work.
+    rerender(<PlanPage year={2026} phase="Angebot" canEdit={false} />)
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Clara', 'Petra', 'Paula'])
 
-    // By site only the sites with such work remain.
-    await user.click(screen.getByRole('button', { name: 'Trockenbau' }))
+    // By site: the sites in the offer phase.
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Werner', 'Familie Schulze'])
-
-    await user.click(screen.getByRole('button', { name: /Alle anzeigen/ }))
-    expect(screen.getAllByRole('rowheader').length).toBeGreaterThan(1)
-    expect(screen.queryByRole('button', { name: /Alle anzeigen/ })).not.toBeInTheDocument()
-
-    // The name of a status switches all of its activities.
-    await user.click(screen.getByRole('button', { name: 'Bauphase' }))
-    expect(screen.getByRole('button', { name: 'Endmontage' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Besichtigung' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Neu'])
   })
 
-  it('lists the activities a site still needs and marks entries with the sign of their activity', async () => {
+  it('shows the construction phase to whoever may not see the offer phase, even when asked for it', async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...plan, offerPhase: false }), { status: 200 }))
+    renderWithProviders(<PlanPage year={2026} phase="Angebot" canEdit={false} />)
+    await screen.findByText(/KW 10/)
+
+    expect(screen.getByRole('group', { name: 'Tätigkeiten der Bauphase' })).toBeInTheDocument()
+    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd'])
+  })
+
+  it('marks entries with the sign of their activity and has no column of unplanned activities', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
     await screen.findByText(/KW 10/)
@@ -251,71 +274,11 @@ describe('PlanPage', () => {
     // The sign of the activity starts the entry.
     const monday = cell(/Anna, Montag, 02.03.2026/)
     expect(monday.querySelector('.chip [data-activity="Fliesen"]')).not.toBeNull()
+    expect(screen.queryByText('Ungeplant')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
-    const werner = screen
-      .getAllByRole('row')
-      .find((row) => row.textContent?.startsWith('Familie Werner'))!
-      .querySelector<HTMLElement>('.tasks')!
-    const boxes = within(werner).getAllByRole('button').map((box) => box.textContent)
-    expect(boxes).toEqual(['Abriss / Baubeginn', 'Fliesenarbeiten'])
-
-    // Filtered by an activity, a site that still needs it stays even without any entry of it.
-    // (the legend: the open task boxes carry the same name)
-    await user.click(within(screen.getByRole('group', { name: /Ablauf/ })).getByRole('button', { name: 'Abriss / Baubeginn' }))
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Familie Werner'])
-  })
-  it('offers each employee the open tasks of their main activity and plans one on a chosen day', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<PlanPage year={2026} canEdit />)
-    await screen.findByText(/KW 10/)
-
-    const annaRow = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Anna'))!
-    const box = within(annaRow.querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Familie Werner/ })
-    await user.click(box)
-    expect(await screen.findByText('Abriss / Baubeginn einplanen')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Einplanen', hidden: true }))
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
-    expect(JSON.parse(String(call[1].body))).toEqual([
-      expect.objectContaining({
-        employeeId: 1,
-        date: '2026-03-02',
-        entries: expect.arrayContaining([expect.objectContaining({ siteId: 12, activity: 'Abriss' })]),
-      }),
-    ])
-  })
-
-  it('lists the open tasks of the main activity first, then of the additional ones, each by planned start', async () => {
-    const site = (id: number, name: string, plannedStart: string | null, activity: 'Abriss' | 'Sanitaer') => ({
-      id, name, ...noAddress, plannedStart,
-      tasks: [{ activity, estimatedDays: 1, notNeeded: false }],
-    })
-    const sorted: Plan = {
-      ...plan,
-      sites: [
-        site(20, 'Abriss Mai', '2026-05-01', 'Abriss'),
-        site(21, 'Abriss April', '2026-04-01', 'Abriss'),
-        site(22, 'Sanitär Juni', '2026-06-01', 'Sanitaer'),
-        site(23, 'Sanitär ohne Datum', null, 'Sanitaer'),
-      ],
-      entries: [],
-    }
-    fetchMock.mockImplementation(async () => new Response(JSON.stringify(sorted), { status: 200 }))
-    const user = userEvent.setup()
-    renderWithProviders(<PlanPage year={2026} canEdit />)
-    await screen.findByText(/KW 10/)
-
-    // Bernd: Sanitär is his main activity, Abriss an additional one.
-    const tasks = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Bernd'))!.querySelector<HTMLElement>('.tasks')!
-    await user.click(within(tasks).getByRole('button', { name: /weitere/ }))
-    expect(within(tasks).getAllByRole('button').filter((button) => button.classList.contains('task-box')).map((button) => button.textContent)).toEqual([
-      'Sanitär Juni',
-      'Sanitär ohne Datum',
-      'Abriss April',
-      'Abriss Mai',
-    ])
+    expect(screen.queryByText('Ungeplant')).not.toBeInTheDocument()
+    expect(document.querySelector('.tasks')).toBeNull()
   })
 
   it('marks a cell with a note', async () => {
@@ -334,28 +297,36 @@ describe('PlanPage', () => {
     expect(important).toHaveAttribute('title', expect.stringContaining('WICHTIG: Wasser abstellen!'))
   })
 
-  it('dims everything but the filtered site', async () => {
+  it('zooms out to the month (no whole year any more) and marks holidays', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
-    await userEvent.type(screen.getByLabelText('Baustellen-Filter'), 'schulze')
+    expect(screen.queryByRole('radio', { name: 'Jahr' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: 'Monat' }))
 
-    const monday = cell(/Anna, Montag, 02.03.2026/)
-    expect(within(monday).getAllByText('Familie Schulze')[0].closest('.chip')).not.toHaveClass('dimmed')
-    expect(within(monday).getByText('Familie Meier').closest('.chip')).toHaveClass('dimmed')
-    expect(screen.getByText(/2 Tage mit Einsätzen in 2026/)).toBeInTheDocument()
-  })
-
-  it('zooms out to the whole year and marks holidays', async () => {
-    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
-    await screen.findByText(/KW 10/)
-
-    await userEvent.click(screen.getByRole('radio', { name: 'Jahr' }))
-
-    expect(document.querySelector('table.timeline')).toHaveClass('zoom-year')
+    expect(document.querySelector('table.timeline')).toHaveClass('zoom-month')
     expect(cell(/Anna, Montag, 02.03.2026/)).toHaveAttribute('title', 'Familie Schulze – Fliesenarbeiten / Familie Meier – Trockenbau')
     expect(document.getElementById('col-2026-03-08')).toHaveClass('public-holiday')
     expect(document.getElementById('col-2026-02-03')).toHaveClass('holiday')
+  })
+
+  it('pages past December into January of the next year and back before January', async () => {
+    const onYearChange = vi.fn()
+    sessionStorage.setItem('wego.plan.returnTo', '2026-12-21')
+    const { unmount } = renderWithProviders(<PlanPage year={2026} canEdit={false} onYearChange={onYearChange} />)
+    await screen.findByText(/KW 52/)
+    await userEvent.click(screen.getByRole('button', { name: 'Weiter' }))
+    expect(onYearChange).toHaveBeenCalledWith(2027)
+    expect(sessionStorage.getItem('wego.plan.returnTo')).toBe('2027-01-01')
+    unmount()
+
+    onYearChange.mockClear()
+    sessionStorage.setItem('wego.plan.returnTo', '2026-01-05')
+    renderWithProviders(<PlanPage year={2026} canEdit={false} onYearChange={onYearChange} />)
+    await screen.findByText(/KW 2/)
+    await userEvent.click(screen.getByRole('button', { name: 'Zurück' }))
+    expect(onYearChange).toHaveBeenCalledWith(2025)
+    expect(sessionStorage.getItem('wego.plan.returnTo')).toBe('2025-12-29')
   })
 
   it('opens a read-only day for employees and the editor for planners', async () => {
@@ -384,10 +355,9 @@ describe('PlanPage', () => {
     await user.click(await screen.findByRole('option', { name: /Familie Schulze/, hidden: true }))
     expect(input(/^Tätigkeit/)).toHaveValue('Sanitär (Haupttätigkeit)')
     await user.click(input(/^Tätigkeit/))
-    // The site options of the field above are options too.
-    const options = (await screen.findAllByRole('option', { hidden: true }))
-      .map((option) => option.textContent)
-      .filter((text) => !text?.includes('Familie'))
+    // Only the options of this field: the site and time fields have options too.
+    const list = await waitFor(() => document.getElementById(input(/^Tätigkeit/).getAttribute('aria-controls')!)!)
+    const options = within(list).getAllByRole('option', { hidden: true }).map((option) => option.textContent)
     expect(options).toEqual(['Sanitär (Haupttätigkeit)', 'Abriss / Baubeginn'])
     await user.click(await screen.findByRole('option', { name: 'Abriss / Baubeginn', hidden: true }))
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -437,37 +407,87 @@ describe('PlanPage', () => {
       expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
       expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
     ])
-    // The notification offers to take it back (it closes itself after a few seconds, so only its appearance counts).
-    await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 })
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
+
+    // Taken back with the button above the plan, and done again.
+    const batches = () => fetchMock.mock.calls.filter(([url]) => url === '/api/plan/batch').map(([, init]) => JSON.parse(String(init.body)))
+    expect(screen.getByRole('button', { name: /Wiederherstellen/ })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /Rückgängig/ }))
+    await waitFor(() => expect(batches()).toHaveLength(2))
+    expect(batches()[1]).toEqual([
+      { employeeId: 2, date: '2026-03-04', entries: [] },
+      { employeeId: 2, date: '2026-03-05', entries: [] },
+    ])
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rückgängig/ })).toBeDisabled())
+    await user.click(screen.getByRole('button', { name: /Wiederherstellen/ }))
+    await waitFor(() => expect(batches()).toHaveLength(3))
+    expect(batches()[2]).toEqual(batches()[0])
   })
 
-  it('cancels an open activity of a site from the plan, with a way back', async () => {
+  it('splits a day into two halves of four hours, with times in full and half hours only', async () => {
     const user = userEvent.setup()
-    const werner = plan.sites.find((site) => site.id === 12)!
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.startsWith('/api/sites/12/tasks/')) {
-        const { notNeeded } = JSON.parse(String(init?.body)) as { notNeeded: boolean }
-        const activity = url.split('/').pop()
-        return new Response(
-          JSON.stringify({ ...werner, tasks: werner.tasks.map((task) => (task.activity === activity ? { ...task, notNeeded } : task)) }),
-          { status: 200 },
-        )
-      }
-      return new Response(JSON.stringify(plan), { status: 200 })
-    })
     renderWithProviders(<PlanPage year={2026} canEdit />)
+    await user.dblClick(await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ }))
+
+    await user.click(await screen.findByRole('button', { name: '½ Tag' }))
+    const times = (label: string) =>
+      screen.getAllByLabelText(label).filter((element) => element.tagName === 'INPUT').map((input) => (input as HTMLInputElement).value)
+    expect(times('von')).toEqual(['07:30', '12:00'])
+    expect(times('bis')).toEqual(['11:30', '16:00'])
+
+    // The times to choose from: full and half hours; the end only after the start.
+    const optionsOf = async (label: string) => {
+      const input = screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT')!
+      await user.click(input)
+      const list = await waitFor(() => document.getElementById(input.getAttribute('aria-controls')!)!)
+      return within(list).getAllByRole('option', { hidden: true }).map((option) => option.textContent)
+    }
+    const from = await optionsOf('von')
+    expect(from.slice(0, 4)).toEqual(['06:00', '06:30', '07:00', '07:30'])
+    expect(from.every((time) => /:(00|30)$/.test(time ?? ''))).toBe(true)
+    await user.keyboard('{Escape}')
+    expect((await optionsOf('bis')).slice(0, 2)).toEqual(['08:00', '08:30'])
+  })
+
+  it('in the offer phase plans a visit by dragging it from the legend onto a day, the site still open', async () => {
+    const phases: Plan = {
+      ...plan,
+      employees: [...plan.employees, { id: 3, name: 'Clara', mainActivity: 'Besichtigung', additionalActivities: ['Objektauswahl'] }],
+    }
+    fetchMock.mockImplementation(async (url: string) =>
+      new Response(url === '/api/plan/batch' ? '[]' : JSON.stringify(phases), { status: 200 }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} phase="Angebot" canEdit />)
     await screen.findByText(/KW 10/)
+    // No date field: the plan moves with the arrows and "Heute".
+    expect(screen.queryByLabelText('Datum')).not.toBeInTheDocument()
 
-    const annaTasks = () => screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Anna'))!.querySelector<HTMLElement>('.tasks')!
-    await user.click(within(annaTasks()).getByRole('button', { name: /Familie Werner/ }))
-    await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
-    await waitFor(() => expect(within(annaTasks()).queryByRole('button', { name: /Familie Werner/ })).not.toBeInTheDocument())
-    const put = fetchMock.mock.calls.find(([url]) => url === '/api/sites/12/tasks/Abriss')!
-    expect(JSON.parse(String(put[1].body))).toEqual({ estimatedDays: 1, notNeeded: true })
+    // The activities of the phase right above the plan, without arrows between them.
+    const legend = screen.getByRole('group', { name: 'Tätigkeiten der Angebotsphase' })
+    expect([...legend.querySelectorAll('.flow-step')].map((step) => step.textContent)).toEqual([
+      'Besichtigung',
+      'Objektauswahl',
+      'Angebotsübergabe',
+    ])
+    expect(legend.querySelector('.flow-arrow')).toBeNull()
+    const visit = within(legend).getByText('Besichtigung').closest('.flow-step')!
+    const monday = cell(/Clara, Montag, 02.03.2026/).closest('td')!
+    fireEvent.dragStart(visit)
+    expect(fireEvent.dragOver(monday)).toBe(false)
+    fireEvent.drop(monday)
+    fireEvent.dragEnd(visit)
 
-    await user.click(await screen.findByRole('button', { name: 'Rückgängig' }, { timeout: 15000 }))
-    expect(await within(annaTasks()).findByRole('button', { name: /Familie Werner/ })).toBeInTheDocument()
+    // The day opens with the visit as a new row: a site can be chosen or created right there, or left open.
+    expect(await screen.findByText('1 · Besichtigung · Baustelle offen')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Neue Baustelle anlegen' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))).toEqual([
+      { employeeId: 3, date: '2026-03-02', entries: [expect.objectContaining({ type: 'Baustelle', siteId: null, activity: 'Besichtigung' })] },
+    ])
   })
 
   describe('marking an entry', () => {
@@ -504,6 +524,33 @@ describe('PlanPage', () => {
       // Escape lifts the mark.
       await user.keyboard('{Escape}')
       expect(chip()).not.toHaveClass('marked')
+    })
+
+    it('in the plan by site copies an employee onto the following days by dragging the right end', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+      await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
+
+      const meier = (day: RegExp) => screen.getByRole('button', { name: day })
+      const chip = () => within(meier(/Familie Meier, Dienstag, 03.03.2026/)).getAllByText('Bernd')[0].closest('.chip')!
+      // A click on the employee marks the entry, it does not open the day.
+      await user.click(chip())
+      expect(chip()).toHaveClass('marked')
+      expect(screen.queryByText('Weitere Mitarbeiter einplanen')).not.toBeInTheDocument()
+
+      const thursday = meier(/Familie Meier, Donnerstag, 05.03.2026/).closest('td')!
+      document.elementFromPoint = () => thursday
+      fireEvent.pointerDown(chip().querySelector('.stretch-handle.right')!)
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 10 })
+      expect(thursday).toHaveClass('stretch-add')
+      fireEvent.pointerUp(window)
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      expect(batch()).toEqual([
+        { employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ siteId: 11 })] },
+        { employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ siteId: 11 })] },
+      ])
     })
 
     it('copies the marked entry with Ctrl+C and pastes it into selected cells with Ctrl+V', async () => {
@@ -656,7 +703,6 @@ describe('PlanPage', () => {
       fireEvent.dragEnd(source)
       return taken
     }
-    const rowOf = (name: string) => screen.getAllByRole('row').find((row) => row.textContent?.startsWith(name))!
 
     it('moves an entry to another day and plans an open activity on the cell it is dropped on', async () => {
       renderWithProviders(<PlanPage year={2026} canEdit />)
@@ -665,7 +711,7 @@ describe('PlanPage', () => {
       const chip = within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
       // Its own cell and anything outside the plan do not take it.
       expect(dropOn(chip, cell(/Bernd, Dienstag, 03.03.2026/).closest('td')!)).toBe(false)
-      expect(dropOn(chip, screen.getByRole('searchbox', { name: 'Baustellen-Filter' }))).toBe(false)
+      expect(dropOn(chip, screen.getByRole('switch', { name: 'Wochenenden ausblenden' }))).toBe(false)
       expect(batch()).toBeNull()
 
       expect(dropOn(chip, cell(/Bernd, Donnerstag, 05.03.2026/).closest('td')!)).toBe(true)
@@ -676,39 +722,21 @@ describe('PlanPage', () => {
       ])
     })
 
-    it('plans an open activity on the employee and day it is dropped on, if the employee can do it', async () => {
-      renderWithProviders(<PlanPage year={2026} canEdit />)
-      await screen.findByText(/KW 10/)
-
-      // Anna's open Abriss at Werner, dropped on Bernd (who does Abriss as well).
-      const box = within(rowOf('Anna').querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Familie Werner/ })
-      expect(dropOn(box, cell(/Bernd, Mittwoch, 04.03.2026/).closest('td')!)).toBe(true)
-      await waitFor(() => expect(batch()).not.toBeNull())
-      expect(batch()).toEqual([
-        expect.objectContaining({
-          employeeId: 2,
-          date: '2026-03-04',
-          entries: [expect.objectContaining({ siteId: 12, activity: 'Abriss' })],
-        }),
-      ])
-    })
-
-    it('in the plan by site moves an employee to another site, and asks who goes for a dropped activity', async () => {
+    it('in the plan by site puts an employee from the buttons on a site, and moves one to another site', async () => {
       const user = userEvent.setup()
       renderWithProviders(<PlanPage year={2026} canEdit />)
       await screen.findByText(/KW 10/)
+      // The buttons are only there in the plan by site.
+      expect(screen.queryByRole('group', { name: 'Mitarbeiter zum Einplanen' })).not.toBeInTheDocument()
       await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
 
-      // An open activity only goes onto a day of its own site; there the employees are asked for.
-      const box = within(rowOf('Familie Werner').querySelector<HTMLElement>('.tasks')!).getByRole('button', { name: /Abriss/ })
+      // Anna from the buttons onto Werner on Thursday, with her own activity there.
+      const anna = within(screen.getByRole('group', { name: 'Mitarbeiter zum Einplanen' })).getByText('Anna')
       const werner = screen.getByRole('button', { name: /Familie Werner, Donnerstag, 05.03.2026/ }).closest('td')!
-      const meier = screen.getByRole('button', { name: /Familie Meier, Donnerstag, 05.03.2026/ }).closest('td')!
-      expect(dropOn(box, meier)).toBe(false)
-      expect(dropOn(box, werner)).toBe(true)
-      expect(await screen.findByText('Abriss / Baubeginn einplanen')).toBeInTheDocument()
-      await user.click(screen.getAllByLabelText(/^Mitarbeiter/).find((element) => element.tagName === 'INPUT')!)
-      await user.click(await screen.findByRole('option', { name: 'Anna', hidden: true }))
-      await user.click(screen.getByRole('button', { name: 'Einplanen', hidden: true }))
+      // Not where she is already: Anna is at Meier on Monday.
+      const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ }).closest('td')!
+      expect(dropOn(anna, meierMonday)).toBe(false)
+      expect(dropOn(anna, werner)).toBe(true)
       await waitFor(() => expect(batch()).not.toBeNull())
       expect(batch()).toEqual([
         expect.objectContaining({

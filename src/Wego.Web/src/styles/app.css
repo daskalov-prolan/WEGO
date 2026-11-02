@@ -1,20 +1,23 @@
 /* Layout and the plan views. Buttons, inputs, dialogs and tables come from Mantine (see theme.ts). */
 
 :root {
-  /* Colours taken from www.wego-badcenter.de (theme stylesheet and logo). */
-  --wego-teal: #007c87;
-  --wego-teal-dark: #004b50;
-  --wego-aqua: #39bbcf;
+  /* The dark petrol of the WEGO vans with the red of the logo as accent. */
+  --wego-teal: #0f6378;
+  --wego-teal-dark: #08394a;
+  --wego-navy: #072a36;
+  --wego-aqua: #2f8199;
   --wego-green: #009748;
   --wego-red: #d71f27;
+  --wego-hover: #e7f2f5;
 
   --surface: #ffffff;
-  --surface-muted: #f3f7f8;
-  --surface-weekend: #eaf0f2;
+  --surface-muted: #f1f4f6;
+  --surface-weekend: #e9eef1;
   --surface-holiday: #fff6d6;
-  --border: #d5e1e4;
-  --text: #17292b;
-  --text-muted: #5c7275;
+  --border: #dbe3e7;
+  --text: #102a33;
+  --text-muted: #5b6f77;
+  --shadow: 0 1px 2px rgba(7, 42, 54, 0.06), 0 4px 14px rgba(7, 42, 54, 0.06);
 }
 
 html,
@@ -61,7 +64,9 @@ a:hover {
   align-items: center;
   gap: 16px;
   padding: 10px 20px;
-  background: linear-gradient(to bottom, var(--wego-teal-dark) 0%, #007b86 100%);
+  /* Dark petrol, closed by a thin line in the red of the logo. */
+  background: linear-gradient(100deg, #03161d 0%, var(--wego-navy) 18%, var(--wego-teal-dark) 42%, var(--wego-teal) 72%, #2f8fa8 100%);
+  border-bottom: 3px solid var(--wego-red);
   color: #fff;
 }
 
@@ -104,34 +109,39 @@ a:hover {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--wego-aqua);
+  background: var(--wego-red);
   font-size: 0.8rem;
   font-weight: 700;
 }
 
 .shell-nav {
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 4px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 8px 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .shell-nav a {
-  padding: 7px 14px;
+  padding: 7px 16px;
   border-radius: 999px;
   color: var(--wego-teal-dark);
   font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 120ms, color 120ms;
 }
 
 .shell-nav a:hover {
-  background: #e3f6f7;
+  background: var(--wego-hover);
   text-decoration: none;
 }
 
 .shell-nav a[aria-current='page'] {
-  background: var(--wego-teal);
+  background: var(--wego-teal-dark);
   color: #fff;
+  box-shadow: 0 2px 6px rgba(7, 42, 54, 0.25);
 }
 
 .shell-main {
@@ -148,7 +158,7 @@ a:hover {
   justify-content: center;
   min-height: 100%;
   padding: 16px;
-  background: linear-gradient(160deg, var(--wego-teal-dark) 0%, #007b86 70%, var(--wego-aqua) 100%);
+  background: linear-gradient(150deg, var(--wego-navy) 0%, var(--wego-teal-dark) 55%, var(--wego-teal) 100%);
 }
 
 .login-card {
@@ -159,7 +169,8 @@ a:hover {
 
 .login-logo {
   padding: 18px 24px;
-  background: var(--wego-teal-dark);
+  background: var(--wego-navy);
+  border-bottom: 3px solid var(--wego-red);
 }
 
 .login-logo img {
@@ -180,25 +191,25 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 16px;
+  margin: 10px 12px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .plan-title {
   white-space: nowrap;
 }
 
-.plan-filter {
-  flex: 1 1 200px;
-  max-width: 300px;
-}
-
 .plan-scroll {
   flex: 1;
   min-height: 0;
+  margin: 10px 12px 12px;
   overflow: auto;
+  border-radius: 12px;
   background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .selection-bar {
@@ -307,7 +318,33 @@ a:hover {
 
 .site-pick:hover {
   border-color: var(--wego-teal);
-  background: #e3f6f7;
+  background: var(--wego-hover);
+}
+
+/* Plan by site: the employees of the phase as buttons, to drag onto a day of a site. */
+.employee-palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.palette-employee {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  cursor: grab;
+  user-select: none;
+}
+
+.palette-employee:hover {
+  border-color: var(--wego-teal);
+  background: var(--wego-hover);
 }
 
 /* The site name in a cell opens the record of the site. */
@@ -431,7 +468,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 3px;
+  gap: 6px;
 }
 
 .flow-step,
@@ -442,12 +479,16 @@ a:hover {
 }
 
 .flow-step {
-  padding: 1px 6px;
-  border-left: 4px solid var(--entry-strong);
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1.5px solid var(--entry-strong);
+  border-radius: 999px;
   background: var(--entry-bg);
   color: #14232a;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -531,8 +572,7 @@ a:hover {
   /* Zoom: how wide a day is. The week shows about two weeks at a time, the month a whole month. */
   --day-w: max(59px, calc((100cqw - var(--name-col)) / 14));
   --weekend-w: var(--day-w);
-  --task-col: 0px;
-  width: calc(var(--name-col) + var(--task-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
+  width: calc(var(--name-col) + var(--weekdays) * var(--day-w) + var(--weekends) * var(--weekend-w));
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -617,7 +657,7 @@ a:hover {
   top: 0;
   height: var(--month-row);
   padding: 0 8px;
-  background: var(--wego-teal-dark);
+  background: var(--wego-navy);
   font-weight: 700;
   vertical-align: middle;
 }
@@ -662,7 +702,8 @@ a:hover {
   left: 0;
   z-index: 5;
   padding: 8px;
-  background: var(--wego-teal-dark);
+  background: var(--wego-navy);
+  box-shadow: inset 0 -3px 0 var(--wego-red);
   vertical-align: bottom;
 }
 
@@ -700,7 +741,7 @@ a:hover {
 }
 
 .timeline .day-row th.weekend {
-  background: #3a8f97;
+  background: #4d7f8c;
 }
 
 .timeline .day-row th.holiday {
@@ -712,8 +753,9 @@ a:hover {
   background: #2e9e3e;
 }
 
+/* Today in the red of the logo: easy to find in the petrol of the days. */
 .timeline .day-row th.today {
-  background: var(--wego-aqua);
+  background: var(--wego-red);
   color: #fff;
 }
 
@@ -971,44 +1013,17 @@ a:hover {
   }
 
   .plan-toolbar {
+    margin: 6px 6px 0;
     padding: 8px 10px;
   }
 
-  .plan-filter {
-    flex-basis: 100%;
-    max-width: none;
+  .plan-scroll {
+    margin: 6px;
   }
 
   .selection-bar {
     bottom: calc(64px + env(safe-area-inset-bottom));
   }
-}
-
-/* Plan by site: the activities still to plan, in a second fixed column next to the site name. */
-.timeline.with-tasks {
-  --task-col: 168px;
-}
-
-.timeline .col-tasks {
-  width: var(--task-col);
-}
-
-.timeline td.tasks {
-  position: sticky;
-  left: var(--name-col);
-  z-index: 2;
-  padding: 3px;
-  background: var(--surface);
-  font-weight: 400;
-  vertical-align: top;
-}
-
-.corner-split {
-  display: flex;
-}
-
-.corner-split > span:first-child {
-  width: calc(var(--name-col) - 16px);
 }
 
 .task-box {
@@ -1068,10 +1083,6 @@ a:hover {
 }
 
 @container (max-width: 760px) {
-  .timeline.with-tasks {
-    --task-col: 104px;
-  }
-
   .task-box .task-name {
     display: none;
   }
@@ -1298,7 +1309,7 @@ a:hover {
 
 .mini-day-head.weekend {
   padding: 3px 0;
-  background: #3a8f97;
+  background: #4d7f8c;
   font-size: 0.6rem;
   text-align: center;
 }
@@ -1480,7 +1491,7 @@ a:hover {
 }
 
 .cell-menu-item:hover:not(:disabled) {
-  background: #e3f6f7;
+  background: var(--wego-hover);
 }
 
 .cell-menu-item:disabled {
@@ -1541,4 +1552,46 @@ body.stretching * {
 
 .stretch-remove {
   background: rgba(215, 31, 39, 0.14) !important;
+}
+
+/* Verwaltung, Tätigkeiten: the colour of an activity as in the plan. */
+.activity-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: 1px solid;
+  border-left-width: 5px;
+  border-radius: 4px;
+}
+
+/* Main menu: the records on the right; the plan of each phase in the colour of the phase when open. */
+.shell-nav .nav-right {
+  margin-left: auto;
+}
+
+.shell-nav a.nav-angebotsphase[aria-current='page'] {
+  background: var(--wego-teal);
+}
+
+.shell-nav a.nav-bauphase[aria-current='page'] {
+  background: var(--wego-red);
+  box-shadow: 0 2px 6px rgba(215, 31, 39, 0.3);
+}
+
+/* Planung: every button of the toolbar in the round form of the menu and of the activities. */
+.plan-toolbar .mantine-Button-root,
+.plan-toolbar .mantine-ActionIcon-root,
+.plan-toolbar .mantine-SegmentedControl-root,
+.plan-toolbar .mantine-SegmentedControl-indicator,
+.plan-toolbar .mantine-SegmentedControl-control {
+  border-radius: 999px;
+}
+
+.shell-nav a {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding-block: 0;
 }

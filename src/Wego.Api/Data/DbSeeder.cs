@@ -29,7 +29,7 @@ public static class DbSeeder
         {
             Name = app.Configuration["Seed:PlanerName"] ?? "Planer",
             UserName = userName,
-            Role = Roles.Planer,
+            Role = Roles.PlanerG,
             ShowInPlan = false,
         };
         planer.PasswordHash = hasher.HashPassword(planer, password);

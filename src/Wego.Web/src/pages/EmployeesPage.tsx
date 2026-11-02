@@ -6,6 +6,7 @@ import { Chip } from '../components/Chip'
 import { ActivityBadges } from '../components/EmployeeActivities'
 import { isOpen } from '../lib/activities'
 import { todayIso } from '../lib/dates'
+import { roleLabel } from '../lib/roles'
 import { workRuns, type WorkRun } from '../lib/tasks'
 
 /** How many stretches of work a row shows before "+ N". */
@@ -96,8 +97,8 @@ export function EmployeesPage() {
                   onClick={() => (window.location.hash = `#/mitarbeiter/${employee.id}`)}
                 >
                   <Table.Td>
-                    <Badge variant="light" color={employee.role === 'Planer' ? 'wego' : 'gray'}>
-                      {employee.role}
+                    <Badge variant="light" color={employee.role === 'Handwerker' ? 'gray' : 'wego'}>
+                      {roleLabel(employee.role)}
                     </Badge>
                   </Table.Td>
                   <Table.Td fw={600}>

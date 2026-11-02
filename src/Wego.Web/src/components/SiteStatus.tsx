@@ -5,7 +5,7 @@ import type { Site, SiteStatus, StatusChange } from '../api/types'
 import { nextStatuses, SITE_STATUSES } from '../lib/activities'
 
 const ACTION: Record<SiteStatus, string> = {
-  Angebot: 'Zum Angebot',
+  Angebot: 'Zur Angebotsphase',
   Bauphase: 'Bauphase beginnen',
   Abgeschlossen: 'Abschließen',
   Storniert: 'Stornieren',

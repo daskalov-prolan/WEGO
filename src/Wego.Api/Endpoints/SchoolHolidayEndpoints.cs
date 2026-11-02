@@ -18,7 +18,7 @@ public static class SchoolHolidayEndpoints
 
     public static void MapSchoolHolidayEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/schoolholidays").RequireAuthorization(Roles.Planer);
+        var group = app.MapGroup("/api/schoolholidays").RequireAuthorization(Policies.Admin);
 
         group.MapPost("/", async (SchoolHolidayInput input, WegoDbContext db) =>
         {

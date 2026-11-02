@@ -5,6 +5,7 @@ import { api, messageOf } from '../api/client'
 import type { User } from '../api/types'
 import logo from '../assets/logo.svg'
 import { CURRENT_YEAR } from '../lib/dates'
+import { canPlanRole, roleLabel } from '../lib/roles'
 import { Sheet } from './Sheet'
 
 interface Props {
@@ -16,17 +17,20 @@ interface Props {
   children: ReactNode
 }
 
+// Left the plans (the own one, and the plan of everybody per phase), right the records.
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
-  { page: 'plan', label: 'Planung', visible: () => true },
-  { page: 'baustellen', label: 'Baustellen', visible: (user: User) => user.role === 'Planer' },
-  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: (user: User) => user.role === 'Planer' },
-  { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'Planer' },
+  { page: 'angebotsphase', label: 'Planung Angebotsphase', visible: (user: User) => user.seesOffers !== false },
+  { page: 'bauphase', label: 'Planung Bauphase', visible: () => true },
+  { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
+  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: (user: User) => user.role === 'PlanerG', right: true },
+  { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'PlanerG', right: true },
 ]
 
 export function AppShell({ user, page, year, onYearChange, onLogout, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
-  const years = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(String)
+  // A year paged to in the plan beyond these is offered as well.
+  const years = [...new Set([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year])].sort((a, b) => a - b).map(String)
 
   return (
     <div className="shell">
@@ -58,7 +62,7 @@ export function AppShell({ user, page, year, onYearChange, onLogout, children }:
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Label>
-                {user.name} · {user.role}
+                {user.name} · {roleLabel(user.role)}
               </Menu.Label>
               <Menu.Item onClick={() => setChangingPassword(true)}>Passwort ändern</Menu.Item>
               <Menu.Item color="red" onClick={onLogout}>
@@ -70,8 +74,14 @@ export function AppShell({ user, page, year, onYearChange, onLogout, children }:
       </header>
 
       <nav className="shell-nav" aria-label="Hauptnavigation">
-        {NAV.filter((item) => item.visible(user)).map((item) => (
-          <a key={item.page} href={`#/${item.page}`} aria-current={page === item.page ? 'page' : undefined}>
+        {NAV.filter((item) => item.visible(user)).map((item, index, shown) => (
+          <a
+            key={item.page}
+            href={`#/${item.page}`}
+            aria-current={page === item.page ? 'page' : undefined}
+            // The first of the records starts the group on the right.
+            className={item.right && !shown[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
+          >
             {item.label}
           </a>
         ))}

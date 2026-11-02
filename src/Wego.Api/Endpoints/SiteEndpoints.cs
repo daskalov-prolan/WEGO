@@ -10,15 +10,15 @@ public static class SiteEndpoints
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
-        string? LabelProjectNumber);
+        string? LabelProjectNumber, string? ClientPhone);
 
-    public record TaskDto(Activity Activity, int EstimatedDays, bool NotNeeded);
+    public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
 
     public record SiteInput(string? Client, string? Street, string? HouseNumber, string? AddressAddition,
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
-        string? LabelProjectNumber = null);
+        string? LabelProjectNumber = null, string? ClientPhone = null);
 
     public record StatusRequest(SiteStatus Status);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
@@ -29,14 +29,22 @@ public static class SiteEndpoints
     {
         var group = app.MapGroup("/api/sites");
 
-        // Everybody may read sites: the craftsmen need the addresses.
-        group.MapGet("/", async (WegoDbContext db) =>
-            (await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync()).Select(ToDto));
+        // Everybody may read sites: the craftsmen need the addresses. Sites in the offer phase only those
+        // who may see it (see OfferAccess).
+        group.MapGet("/", async (ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var access = await OfferAccess.ForAsync(user, db);
+            return (await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync())
+                .Where(access.Shows).Select(ToDto);
+        });
 
-        group.MapGet("/{id:int}", async (int id, WegoDbContext db) =>
-            await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id) is { } site
+        group.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
+            return site is not null && (await OfferAccess.ForAsync(user, db)).Shows(site)
                 ? Results.Ok(ToDto(site))
-                : Results.NotFound());
+                : Results.NotFound();
+        });
 
         // A new site starts as offer (Angebot), or directly in construction when the offer was made elsewhere.
         group.MapPost("/", async (SiteInput input, ClaimsPrincipal user, WegoDbContext db) =>
@@ -51,32 +59,40 @@ public static class SiteEndpoints
             {
                 To = site.Status, ChangedAt = DateTime.UtcNow, ChangedBy = user.Identity?.Name,
             });
-            site.GenerateTasks();
+            site.GenerateTasks(await db.Activities.ToListAsync());
+            await using var transaction = await db.Database.BeginTransactionAsync();
             db.Sites.Add(site);
             await db.SaveChangesAsync();
+            // The id exists only after the first save.
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Angelegt", site.Id, null, ToDto(site));
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
             return Results.Created($"/api/sites/{site.Id}", ToDto(site));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
-        group.MapPut("/{id:int}", async (int id, SiteInput input, WegoDbContext db) =>
+        group.MapPut("/{id:int}", async (int id, SiteInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
 
+            var before = ToDto(site);
             var error = Apply(site, input);
             if (error is not null) return ApiErrors.BadRequest(error);
 
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Geändert", id, before, ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
         group.MapPost("/{id:int}/status", async (int id, StatusRequest request, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
             if (!Enum.IsDefined(request.Status)) return ApiErrors.BadRequest("Unbekannter Status.");
-            if (!ActivityPhases.CanChange(site.Status, request.Status))
+            if (!SiteStatusFlow.CanChange(site.Status, request.Status))
                 return ApiErrors.BadRequest($"Von „{site.Status}“ kann nicht zu „{request.Status}“ gewechselt werden.");
 
+            var before = ToDto(site);
             db.SiteStatusChanges.Add(new SiteStatusChange
             {
                 SiteId = id, From = site.Status, To = request.Status, ChangedAt = DateTime.UtcNow,
@@ -84,44 +100,50 @@ public static class SiteEndpoints
             });
             site.Status = request.Status;
             // Entering a status brings its activities along.
-            site.GenerateTasks();
+            site.GenerateTasks(await db.Activities.ToListAsync());
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Status", id, before, ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
-        group.MapPut("/{id:int}/tasks/{activity}", async (int id, Activity activity, TaskInput input, WegoDbContext db) =>
+        group.MapPut("/{id:int}/tasks/{activity}", async (int id, string activity, TaskInput input,
+            ClaimsPrincipal user, WegoDbContext db) =>
         {
             if (input.EstimatedDays is < 1 or > 365) return ApiErrors.BadRequest("Bitte zwischen 1 und 365 Tagen angeben.");
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             var task = site?.Tasks.FirstOrDefault(t => t.Activity == activity);
             if (site is null || task is null) return Results.NotFound();
 
+            var before = ToDto(site);
             task.EstimatedDays = input.EstimatedDays;
             task.NotNeeded = input.NotNeeded;
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Tätigkeit geändert", id, before, ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
         group.MapGet("/{id:int}/history", async (int id, WegoDbContext db) =>
             await db.SiteStatusChanges.Where(c => c.SiteId == id)
                 .OrderBy(c => c.ChangedAt).ThenBy(c => c.Id)
                 .Select(c => new StatusChangeDto(c.From, c.To, c.ChangedAt, c.ChangedBy))
-                .ToListAsync()).RequireAuthorization(Roles.Planer);
+                .ToListAsync()).RequireAuthorization(Policies.Plan);
 
         // Two records for the same site (e.g. typed twice): the entries move over, the duplicate goes.
-        group.MapPost("/{id:int}/merge", async (int id, MergeRequest request, WegoDbContext db) =>
+        group.MapPost("/{id:int}/merge", async (int id, MergeRequest request, ClaimsPrincipal user, WegoDbContext db) =>
         {
             if (id == request.TargetId) return ApiErrors.BadRequest("Eine Baustelle lässt sich nicht mit sich selbst zusammenführen.");
-            var site = await db.Sites.FindAsync(id);
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             var target = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == request.TargetId);
             if (site is null || target is null) return Results.NotFound();
 
+            var targetBefore = ToDto(target);
             await using var transaction = await db.Database.BeginTransactionAsync();
-            await db.PlanEntries.Where(e => e.SiteId == id)
+            var moved = await db.PlanEntries.Where(e => e.SiteId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.SiteId, target.Id));
 
             // The remaining site keeps its own details and takes over only what it is missing.
             target.Client ??= site.Client;
+            target.ClientPhone ??= site.ClientPhone;
             if (target.Street is null)
             {
                 target.Street = site.Street;
@@ -136,25 +158,36 @@ public static class SiteEndpoints
             target.PlannedEnd ??= site.PlannedEnd;
             target.UpdateName();
 
+            // The plan entries move without a log entry per day: these two entries say which site they came from.
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Zusammengeführt, gelöscht", id, ToDto(site),
+                new { TargetId = target.Id, MovedEntries = moved });
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Zusammengeführt", target.Id,
+                targetBefore, new { Site = ToDto(target), MergedSiteId = id, MovedEntries = moved });
             db.Sites.Remove(site);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
             return Results.Ok(ToDto(target));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
-        group.MapDelete("/{id:int}", async (int id, WegoDbContext db) =>
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
         {
             if (await db.PlanEntries.AnyAsync(e => e.SiteId == id))
                 return ApiErrors.BadRequest("Die Baustelle ist im Plan eingetragen und kann nicht gelöscht werden.");
-            var deleted = await db.Sites.Where(s => s.Id == id).ExecuteDeleteAsync();
-            return deleted == 0 ? Results.NotFound() : Results.NoContent();
-        }).RequireAuthorization(Roles.Planer);
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
+            if (site is null) return Results.NotFound();
+
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Gelöscht", id, ToDto(site), null);
+            db.Sites.Remove(site);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization(Policies.Plan);
     }
 
     public static SiteDto ToDto(Site s) => new(s.Id, s.Name, s.Client, s.Street, s.HouseNumber, s.AddressAddition,
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
-        s.Tasks.OrderBy(t => t.Activity).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
-        s.LabelProjectNumber);
+        // In the order they were generated: that of the activities when the site entered the status.
+        s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
+        s.LabelProjectNumber, s.ClientPhone);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -169,7 +202,7 @@ public static class SiteEndpoints
             (client, 200, "Der Auftraggeber"), (street, 200, "Die Straße"), (Clean(input.HouseNumber), 20, "Die Hausnummer"),
             (Clean(input.AddressAddition), 200, "Der Adresszusatz"), (Clean(input.PostalCode), 10, "Die PLZ"),
             (Clean(input.City), 100, "Der Ort"), (Clean(input.Description), 1000, "Die Beschreibung"),
-            (Clean(input.LabelProjectNumber), 50, "Die Projektnummer"),
+            (Clean(input.LabelProjectNumber), 50, "Die Projektnummer"), (Clean(input.ClientPhone), 50, "Die Telefonnummer"),
         };
         foreach (var (value, max, label) in fields)
         {
@@ -184,6 +217,7 @@ public static class SiteEndpoints
             return "Das geplante Ende darf nicht vor dem geplanten Start liegen.";
 
         site.Client = client;
+        site.ClientPhone = Clean(input.ClientPhone);
         site.Street = street;
         site.HouseNumber = Clean(input.HouseNumber);
         site.AddressAddition = Clean(input.AddressAddition);

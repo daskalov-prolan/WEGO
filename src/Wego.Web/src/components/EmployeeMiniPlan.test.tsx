@@ -6,7 +6,7 @@ import { renderWithProviders } from '../test-utils'
 import { EmployeeMiniPlan } from './EmployeeMiniPlan'
 
 const site = (id: number, name: string, plannedStart: string | null, tasks: Site['tasks']): Site => ({
-  id, name, client: name, labelProjectNumber: null, street: null, houseNumber: null, addressAddition: null,
+  id, name, client: name, labelProjectNumber: null, clientPhone: null, street: null, houseNumber: null, addressAddition: null,
   postalCode: null, city: null, nameSource: 'Auftraggeber', description: null, plannedStart, plannedEnd: null,
   status: 'Bauphase', tasks,
 })

@@ -124,6 +124,11 @@ export function SitePage({ year, siteId }: Props) {
                   {site.plannedStart ? formatDate(site.plannedStart) : '?'} – {site.plannedEnd ? formatDate(site.plannedEnd) : '?'}
                 </Fact>
               )}
+              {site.clientPhone && (
+                <Fact label="Telefon">
+                  <a href={`tel:${site.clientPhone.replace(/[^+0-9]/g, '')}`}>{site.clientPhone}</a>
+                </Fact>
+              )}
               {site.labelProjectNumber && <Fact label="Label">{site.labelProjectNumber}</Fact>}
               {site.description && (
                 <Text size="xs" c="dimmed" className="site-page-head-description" title={site.description}>
