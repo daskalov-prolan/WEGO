@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications'
 import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, NamedItem, Site } from '../api/types'
-import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { openTasksBySite, tasksForEmployee } from '../lib/tasks'
@@ -157,7 +157,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
 
   /** A site's day takes the open activities of that site the employee can do, and the employee's site entries. */
   const acceptsOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee) return false
+    if (!employee || item.kind === 'employee' || item.kind === 'activity') return false
     if (item.kind === 'task') return item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
     const { entry } = item
     return (
@@ -169,7 +169,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
   }
 
   const dropOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee) return
+    if (!employee || item.kind === 'employee' || item.kind === 'activity') return
     if (item.kind === 'task') {
       planTask(site, item.activity, date).catch(fail)
       return
@@ -181,7 +181,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
         ? entry.activity
         : defaultActivity(employee, site.status)
     const changes = moveChanges(entry, { employeeId, date, siteId: site.id, activity }, entriesOf)
-    save(changes, `${entry.siteName ?? entry.type} verschoben: ${site.name}, ${formatDate(date)}.`).catch(fail)
+    save(changes, `${entryName(entry)} verschoben: ${site.name}, ${formatDate(date)}.`).catch(fail)
   }
 
   /** The lane of absences takes vacation and sick days of the employee, moved to another day. */

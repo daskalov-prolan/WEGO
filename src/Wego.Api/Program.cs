@@ -61,15 +61,18 @@ builder.Services
     });
 
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(Roles.Planer, policy => policy.RequireRole(Roles.Planer))
+    .AddPolicy(Policies.Plan, policy => policy.RequireRole(Roles.PlanerA, Roles.PlanerG))
+    .AddPolicy(Policies.Admin, policy => policy.RequireRole(Roles.PlanerG))
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
+// Sign-ins per minute and address; the tests sign in far more often than a person.
+var loginsPerMinute = builder.Configuration.GetValue("RateLimit:LoginsPerMinute", 30);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(AuthEndpoints.LoginRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = loginsPerMinute, Window = TimeSpan.FromMinutes(1) }));
 });
 
 // The keys encrypt the login cookie. On the server they lie on a volume, otherwise a new container
@@ -124,6 +127,7 @@ app.MapSiteEndpoints();
 app.MapReportEndpoints();
 app.MapEmployeeEndpoints();
 app.MapSchoolHolidayEndpoints();
+app.MapActivityEndpoints();
 
 app.Run();
 

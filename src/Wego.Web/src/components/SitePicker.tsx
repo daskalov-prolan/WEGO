@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Group, Select, Text, Tooltip } from '@mantine/core'
+import { Anchor, Button, Group, Select, Text } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
@@ -74,11 +74,9 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
           }}
           comboboxProps={{ withinPortal: true }}
         />
-        <Tooltip label="Neue Baustelle anlegen">
-          <ActionIcon variant="light" size={36} onClick={() => setCreating(true)} aria-label="Neue Baustelle anlegen">
-            +
-          </ActionIcon>
-        </Tooltip>
+        <Button variant="light" h={36} px="sm" onClick={() => setCreating(true)} aria-label="Neue Baustelle anlegen">
+          + Neue Baustelle
+        </Button>
       </Group>
       {chosen && (
         <Text size="xs" mt={2}>

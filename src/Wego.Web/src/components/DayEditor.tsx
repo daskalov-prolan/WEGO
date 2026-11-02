@@ -9,15 +9,17 @@ import {
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
-import { allowedActivities, defaultActivity, entryStyle, isOpen } from '../lib/activities'
-import { formatDateLong } from '../lib/dates'
+import { activityLabel, allowedActivities, defaultActivity, entryStyle, isOpen } from '../lib/activities'
+import { formatDateLong, HALF_DAYS } from '../lib/dates'
 import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
+import { TimeSelect } from './TimeSelect'
 
 interface Props {
   employee: PlanEmployee
@@ -33,6 +35,8 @@ interface Props {
   onSave: (entries: DayEntryInput[]) => Promise<void>
   /** Puts the day on the clipboard of the plan; without it there is no copy button. */
   onCopy?: (entries: DayEntryInput[]) => void
+  /** An activity dragged onto the day: added as a new row whose site is chosen (or created) here. */
+  addActivity?: Activity
 }
 
 interface Row {
@@ -79,19 +83,19 @@ export function DayEditor(props: Props) {
     return status && isOpen(status) ? status : undefined
   }
   const siteName = (siteId: number | null) => sites.find((site) => site.id === siteId)?.name
-  const [rows, setRows] = useState<Row[]>(() =>
-    entries.length === 0
-      ? [emptyRow('Baustelle', null, main)]
-      : entries.map((e) => ({
-          type: e.type,
-          siteId: e.siteId,
-          activity: e.activity,
-          start: e.startTime?.slice(0, 5) ?? '',
-          end: e.endTime?.slice(0, 5) ?? '',
-          note: e.note ?? '',
-          important: e.noteImportant,
-        })),
-  )
+  const [rows, setRows] = useState<Row[]>(() => {
+    const saved = entries.map((e) => ({
+      type: e.type,
+      siteId: e.siteId,
+      activity: e.activity,
+      start: e.startTime?.slice(0, 5) ?? '',
+      end: e.endTime?.slice(0, 5) ?? '',
+      note: e.note ?? '',
+      important: e.noteImportant,
+    }))
+    if (props.addActivity) return [...saved, emptyRow('Baustelle', null, props.addActivity)]
+    return saved.length === 0 ? [emptyRow('Baustelle', null, main)] : saved
+  })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -105,6 +109,15 @@ export function DayEditor(props: Props) {
       const activity = defaultActivity(employee, statusOf(siteId))
       if (index >= 0) return current.map((row, i) => (i === index ? { ...row, siteId, activity } : row))
       return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', siteId, activity)]
+    })
+
+  // The day in two halves: the first two site rows get the times (a missing second row is added for the
+  // next site); vacation or sick rows go, half a day is work on sites.
+  const splitDay = () =>
+    setRows((current) => {
+      const sites = current.filter((row) => row.type === 'Baustelle')
+      while (sites.length < HALF_DAYS.length) sites.push(emptyRow('Baustelle', null, main))
+      return sites.map((row, i) => (i < HALF_DAYS.length ? { ...row, ...HALF_DAYS[i] } : row))
     })
 
   const submit = async (event: FormEvent) => {
@@ -169,7 +182,7 @@ export function DayEditor(props: Props) {
               <Stack gap="xs">
                 <Group justify="space-between" wrap="nowrap">
                   <Text fw={700} size="sm" className="day-row-title">
-                    {index + 1} · {row.type === 'Baustelle' ? (siteName(row.siteId) ?? 'neue Baustelle') : row.type}
+                    {index + 1} · {row.type === 'Baustelle' ? (siteName(row.siteId) ?? (row.activity ? `${activityLabel(row.activity)} · Baustelle offen` : 'neue Baustelle')) : row.type}
                   </Text>
                   <SegmentedControl
                     size="xs"
@@ -199,7 +212,8 @@ export function DayEditor(props: Props) {
                     }}
                     onCreate={onCreateSite}
                     onUpdate={onUpdateSite}
-                    required
+                    // An offer visit can be planned before its site is known: then the activity is enough.
+                    required={row.activity === null}
                   />
                 )}
                 {row.type === 'Baustelle' && (
@@ -211,18 +225,13 @@ export function DayEditor(props: Props) {
                   />
                 )}
                 <Group grow gap="xs">
-                  <TextInput
+                  <TimeSelect
                     label="von"
-                    type="time"
                     value={row.start}
-                    onChange={(e) => update(index, { start: e.currentTarget.value })}
+                    // An end that is no longer after the start is chosen anew.
+                    onChange={(start) => update(index, { start, ...(row.end && start && row.end <= start ? { end: '' } : {}) })}
                   />
-                  <TextInput
-                    label="bis"
-                    type="time"
-                    value={row.end}
-                    onChange={(e) => update(index, { end: e.currentTarget.value })}
-                  />
+                  <TimeSelect label="bis" value={row.end} onChange={(end) => update(index, { end })} after={row.start} />
                 </Group>
                 <Group gap="sm" align="flex-end" wrap="nowrap">
                   <TextInput
@@ -250,6 +259,11 @@ export function DayEditor(props: Props) {
             <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
               + Baustelle
             </Button>
+            <Tooltip label="Zwei Baustellen je 4 Stunden: 07:30–11:30 und 12:00–16:00">
+              <Button size="xs" variant="light" onClick={splitDay}>
+                ½ Tag
+              </Button>
+            </Tooltip>
             <Button size="xs" variant="light" color="green" onClick={() => setRows([emptyRow('Urlaub')])}>
               Urlaub
             </Button>

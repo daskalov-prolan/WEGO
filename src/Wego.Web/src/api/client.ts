@@ -1,6 +1,8 @@
 import type {
   Access,
   Activity,
+  ActivityDef,
+  ActivityInput,
   DayEntryInput,
   Employee,
   EmployeeInput,
@@ -103,7 +105,16 @@ export const api = {
 
   createAccess: (id: number) => request<Access>('POST', `/api/employees/${id}/access`),
 
-  addSchoolHoliday: (name: string, startDate: string, endDate: string, kind: HolidayKind) =>
+  activities: () => request<ActivityDef[]>('GET', '/api/activities'),
+  createActivity: (input: ActivityInput) => request<ActivityDef>('POST', '/api/activities', input),
+  updateActivity: (key: Activity, input: ActivityInput) => request<ActivityDef>('PUT', `/api/activities/${key}`, input),
+  /** All activities as their keys, from first to last. */
+  orderActivities: (keys: Activity[]) => request<ActivityDef[]>('PUT', '/api/activities/order', keys),
+  activityUsage: (key: Activity) =>
+    request<{ entries: number; employees: number; sites: number }>('GET', `/api/activities/${key}/usage`),
+  deleteActivity: (key: Activity) => request<void>('DELETE', `/api/activities/${key}`),
+
+  addSchoolHoliday:(name: string, startDate: string, endDate: string, kind: HolidayKind) =>
     request<SchoolHoliday>('POST', '/api/schoolholidays', { name, startDate, endDate, kind }),
   deleteSchoolHoliday: (id: number) => request<void>('DELETE', `/api/schoolholidays/${id}`),
   importSchoolHolidays: (year: number) =>

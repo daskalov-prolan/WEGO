@@ -5,7 +5,7 @@ import type { Entry, Plan, User } from '../api/types'
 import { renderWithProviders } from '../test-utils'
 import { MyPlanPage } from './MyPlanPage'
 
-const user: User = { id: 1, name: 'Anna', userName: 'anna', role: 'Mitarbeiter', showInPlan: true, mustChangePassword: false }
+const user: User = { id: 1, name: 'Anna', userName: 'anna', role: 'Handwerker', showInPlan: true, mustChangePassword: false }
 
 function entry(id: number, employeeId: number, employeeName: string, date: string, siteId: number, siteName: string, start: string | null, end: string | null): Entry {
   return {
@@ -24,7 +24,7 @@ const plan: Plan = {
   sites: [
     {
       id: 10, name: 'Familie Schulze', client: 'Familie Schulze', street: 'Musterweg', houseNumber: '3', addressAddition: null,
-      postalCode: '13125', city: 'Berlin', nameSource: 'Auftraggeber', description: 'Komplettbad', plannedStart: null, plannedEnd: null, status: 'Bauphase', tasks: [], labelProjectNumber: null,
+      postalCode: '13125', city: 'Berlin', nameSource: 'Auftraggeber', description: 'Komplettbad', plannedStart: null, plannedEnd: null, status: 'Bauphase', tasks: [], labelProjectNumber: null, clientPhone: null,
     },
   ],
   schoolHolidays: [],

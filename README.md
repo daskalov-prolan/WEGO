@@ -70,6 +70,14 @@ dotnet ef migrations add <Name> --project src/Wego.Api
 - A "Einsatztag" in the reports is a day on which an employee was scheduled at the site, also on split days.
   Hours are calculated only from entries that have a time window.
 - School holidays are entered under **Verwaltung**, by hand or fetched from openholidaysapi.org (Berlin, `DE-BE`).
+- Every change to the plan, an employee or a site is written to the table `ChangeLog`: when, by whom, and the
+  record before and after as JSON. Nobody sees it in the application and no endpoint reads it; passwords and
+  their hashes are never logged. To look at it on the server, e.g. everything since a point in time:
+
+  ```
+  cd /opt/wego
+  docker compose exec db psql -U wego -c "SELECT \"ChangedAt\", \"ChangedBy\", \"Area\", \"Action\", \"EntityId\", \"Date\" FROM \"ChangeLog\" WHERE \"ChangedAt\" >= '2026-11-02 08:00+01' ORDER BY \"Id\";"
+  ```
 
 ## Production
 

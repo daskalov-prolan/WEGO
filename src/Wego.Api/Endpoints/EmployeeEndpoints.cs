@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -9,16 +10,16 @@ public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
-        int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, Activity? MainActivity,
-        IReadOnlyList<Activity> AdditionalActivities);
+        int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
+        IReadOnlyList<string> AdditionalActivities);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
     public record AccessDto(int EmployeeId, string Name, string UserName, string InitialPassword);
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
-        string? UserName, string Role, string? Password, Activity? MainActivity = null,
-        Activity[]? AdditionalActivities = null);
+        string? UserName, string Role, string? Password, string? MainActivity = null,
+        string[]? AdditionalActivities = null);
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -28,55 +29,70 @@ public static class EmployeeEndpoints
                 .Where(e => e.ShowInPlan)
                 .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
                 .Select(e => new EmployeeListItem(e.Id, e.Name))
-                .ToListAsync()).RequireAuthorization(Roles.Planer);
+                .ToListAsync()).RequireAuthorization(Policies.Admin);
 
-        var group = app.MapGroup("/api/employees").RequireAuthorization(Roles.Planer);
+        var group = app.MapGroup("/api/employees").RequireAuthorization(Policies.Admin);
 
         group.MapGet("/", async (WegoDbContext db) =>
             (await db.Employees.OrderBy(e => e.SortOrder).ThenBy(e => e.Name).ToListAsync()).Select(ToDto));
 
-        group.MapPost("/", async (EmployeeInput input, WegoDbContext db, IPasswordHasher<Employee> hasher) =>
+        group.MapPost("/", async (EmployeeInput input, ClaimsPrincipal user, WegoDbContext db,
+            IPasswordHasher<Employee> hasher) =>
         {
             var employee = new Employee { Name = "" };
             var error = await Apply(employee, input, db, hasher);
             if (error is not null) return ApiErrors.BadRequest(error);
 
+            await using var transaction = await db.Database.BeginTransactionAsync();
             db.Employees.Add(employee);
             await db.SaveChangesAsync();
+            // The id exists only after the first save.
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter, "Angelegt", employee.Id, null, ToDto(employee));
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
             return Results.Created($"/api/employees/{employee.Id}", ToDto(employee));
         });
 
-        group.MapPut("/{id:int}", async (int id, EmployeeInput input, WegoDbContext db,
+        group.MapPut("/{id:int}", async (int id, EmployeeInput input, ClaimsPrincipal user, WegoDbContext db,
             IPasswordHasher<Employee> hasher) =>
         {
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
 
+            var before = ToDto(employee);
             var error = await Apply(employee, input, db, hasher);
             if (error is not null) return ApiErrors.BadRequest(error);
 
-            // Nobody must be able to lock everyone out of the planning rights.
-            var otherPlaners = await db.Employees.AnyAsync(e =>
-                e.Id != id && e.IsActive && e.Role == Roles.Planer && e.UserName != null && e.PasswordHash != null);
-            if (!otherPlaners && !CanPlan(employee))
-                return ApiErrors.BadRequest("Es muss mindestens ein aktiver Planer mit Anmeldung übrig bleiben.");
+            // Nobody must be able to lock everyone out of the administration.
+            var otherAdmins = await db.Employees.AnyAsync(e =>
+                e.Id != id && e.IsActive && e.Role == Roles.PlanerG && e.UserName != null && e.PasswordHash != null);
+            if (!otherAdmins && !IsActiveAdmin(employee))
+                return ApiErrors.BadRequest("Es muss mindestens ein aktiver Planer G mit Anmeldung übrig bleiben.");
 
+            // A new password is logged as such, never the password or its hash.
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter,
+                string.IsNullOrEmpty(input.Password) ? "Geändert" : "Geändert, Passwort gesetzt",
+                id, before, ToDto(employee));
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(employee));
         });
 
         // Creates the login of an employee (user name from the name) or resets a forgotten password.
         // The employee has to choose their own password at the first sign-in.
-        group.MapPost("/{id:int}/access", async (int id, WegoDbContext db, IPasswordHasher<Employee> hasher) =>
+        group.MapPost("/{id:int}/access", async (int id, ClaimsPrincipal user, WegoDbContext db,
+            IPasswordHasher<Employee> hasher) =>
         {
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
             if (!employee.IsActive) return ApiErrors.BadRequest("Für inaktive Mitarbeiter gibt es keinen Zugang.");
 
+            var before = ToDto(employee);
             employee.UserName ??= await UniqueUserName(db, employee.Name);
             var password = NewInitialPassword();
             employee.PasswordHash = hasher.HashPassword(employee, password);
             employee.MustChangePassword = true;
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter,
+                before.HasPassword ? "Passwort zurückgesetzt" : "Zugang angelegt", id, before, ToDto(employee));
             await db.SaveChangesAsync();
 
             return Results.Ok(new AccessDto(employee.Id, employee.Name, employee.UserName, password));
@@ -103,8 +119,8 @@ public static class EmployeeEndpoints
     private static string NewInitialPassword() =>
         new(RandomNumberGenerator.GetItems<char>(PasswordAlphabet, 10));
 
-    private static bool CanPlan(Employee e) =>
-        e.IsActive && e.Role == Roles.Planer && e.UserName is not null && e.PasswordHash is not null;
+    private static bool IsActiveAdmin(Employee e) =>
+        e.IsActive && e.Role == Roles.PlanerG && e.UserName is not null && e.PasswordHash is not null;
 
     private static async Task<string?> Apply(Employee employee, EmployeeInput input, WegoDbContext db,
         IPasswordHasher<Employee> hasher)
@@ -112,10 +128,11 @@ public static class EmployeeEndpoints
         var name = input.Name?.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > 200)
             return "Bitte einen Namen mit höchstens 200 Zeichen angeben.";
-        if (input.Role is not (Roles.Planer or Roles.Mitarbeiter)) return "Unbekannte Rolle.";
+        if (!Roles.All.Contains(input.Role)) return "Unbekannte Rolle.";
         if (input.VacationDaysPerYear is < 0 or > 366) return "Bitte gültige Urlaubstage pro Jahr angeben.";
         var additional = input.AdditionalActivities ?? [];
-        if (input.MainActivity is { } main && !Enum.IsDefined(main) || additional.Any(a => !Enum.IsDefined(a)))
+        var activities = await db.Activities.OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
+        if (input.MainActivity is { } main && !activities.Contains(main) || additional.Any(a => !activities.Contains(a)))
             return "Unbekannte Tätigkeit.";
 
         var userName = AuthEndpoints.NormalizeUserName(input.UserName);
@@ -146,7 +163,7 @@ public static class EmployeeEndpoints
         employee.Role = input.Role;
         employee.MainActivity = input.MainActivity;
         // The main activity is not repeated among the additional ones; the order is that of the job.
-        employee.AdditionalActivities = additional.Distinct().Where(a => a != input.MainActivity).Order().ToList();
+        employee.AdditionalActivities = activities.Where(a => additional.Contains(a) && a != input.MainActivity).ToList();
         return null;
     }
 

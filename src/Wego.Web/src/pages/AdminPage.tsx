@@ -25,11 +25,13 @@ import { api, messageOf } from '../api/client'
 import type { Access, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
 import { ActivitiesEditor, ActivityBadges } from '../components/EmployeeActivities'
 import { toEmployeeInput } from '../lib/employees'
+import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
 import { formatDate } from '../lib/dates'
+import { roleLabel, ROLES } from '../lib/roles'
 
-/** Planner-only: employees and their rights, school and public holidays. Sites have their own page. */
-export function AdminPage({ year }: { year: number }) {
+/** Planer G only: employees and their rights, activities, school and public holidays. Sites have their own page. */
+export function AdminPage({ year, onActivitiesChanged }: { year: number; onActivitiesChanged: () => Promise<void> }) {
   return (
     <div className="page">
       <Title order={2} mb="md">
@@ -38,10 +40,14 @@ export function AdminPage({ year }: { year: number }) {
       <Tabs defaultValue="employees" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
+          <Tabs.Tab value="activities">Tätigkeiten</Tabs.Tab>
           <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
           <EmployeesSection year={year} />
+        </Tabs.Panel>
+        <Tabs.Panel value="activities">
+          <ActivitiesAdmin onChanged={onActivitiesChanged} />
         </Tabs.Panel>
         <Tabs.Panel value="holidays">
           <SchoolHolidaysSection year={year} />
@@ -58,7 +64,7 @@ const newEmployee: EmployeeInput = {
   showInPlan: true,
   vacationDaysPerYear: 30,
   userName: null,
-  role: 'Mitarbeiter',
+  role: 'Handwerker',
   password: null,
   mainActivity: null,
   additionalActivities: [],
@@ -203,8 +209,8 @@ function EmployeesSection({ year }: { year: number }) {
                   )}
                 </Table.Td>
                 <Table.Td>
-                  <Badge variant="light" color={employee.role === 'Planer' ? 'wego' : 'gray'}>
-                    {employee.role}
+                  <Badge variant="light" color={employee.role === 'Handwerker' ? 'gray' : 'wego'}>
+                    {roleLabel(employee.role)}
                   </Badge>
                 </Table.Td>
                 <Table.Td>
@@ -290,7 +296,7 @@ function EmployeesSection({ year }: { year: number }) {
                   label="Rolle"
                   value={editing.input.role}
                   onChange={(value) => value && change({ role: value as Role })}
-                  data={['Mitarbeiter', 'Planer']}
+                  data={ROLES.map((role) => ({ value: role.value, label: `${role.label} – ${role.description}` }))}
                   allowDeselect={false}
                 />
                 <NumberInput

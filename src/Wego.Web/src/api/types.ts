@@ -1,16 +1,20 @@
-export type Role = 'Planer' | 'Mitarbeiter'
+/** Handwerker read the plan; Planer A plan; Planer G may do everything (employees, administration). */
+export type Role = 'Handwerker' | 'PlanerA' | 'PlanerG'
 export type EntryType = 'Baustelle' | 'Urlaub' | 'Krank'
-/** What is done on a site that day, in the order of the job. */
-export type Activity =
-  | 'Besichtigung'
-  | 'Angebotskalkulation'
-  | 'Angebotsbesprechung'
-  | 'Abriss'
-  | 'Trockenbau'
-  | 'Sanitaer'
-  | 'RenoDeco'
-  | 'Fliesen'
-  | 'Endmontage'
+/** The key of an activity (e.g. 'Sanitaer'); the activities themselves are kept under Verwaltung. */
+export type Activity = string
+
+/** An activity as the server keeps it: its phase, its place in the order and its colour. */
+export interface ActivityDef {
+  key: Activity
+  label: string
+  phase: 'Angebot' | 'Bauphase'
+  sortOrder: number
+  /** e.g. '#f46a6a' */
+  color: string
+}
+
+export type ActivityInput = Pick<ActivityDef, 'label' | 'phase' | 'color'>
 
 /** Where a construction site stands: offer, construction, done, or cancelled. */
 export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert'
@@ -31,6 +35,8 @@ export interface User {
   /** The user has a column of their own in the plan, i.e. is scheduled on construction sites. */
   showInPlan: boolean
   mustChangePassword: boolean
+  /** Planners and whoever does offer work: the menu offers the plan of the offer phase. */
+  seesOffers?: boolean
 }
 
 export interface Access {
@@ -52,6 +58,8 @@ export type SiteNameSource = 'Auftraggeber' | 'Strasse'
 export interface SiteInput {
   /** Auftraggeber: the customer or the property management. */
   client: string | null
+  /** Telephone number of the customer. */
+  clientPhone: string | null
   /** Number of the project in Label, the merchandise management software. */
   labelProjectNumber: string | null
   street: string | null
@@ -113,11 +121,17 @@ export interface Entry {
 export interface PlanEmployee extends NamedItem {
   mainActivity: Activity | null
   additionalActivities: Activity[]
+  /** Planer A or G: part of the offer phase whatever their activities. */
+  isPlaner?: boolean
 }
 
 export interface Plan {
   year: number
   employees: PlanEmployee[]
+  /** Planners not shown in the plan otherwise: they appear in the offer phase. */
+  planners?: PlanEmployee[]
+  /** false: the viewer does no offer work and does not see the offer phase (its sites and work are left out). */
+  offerPhase?: boolean
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
   sites: Site[]

@@ -2,6 +2,7 @@ import type { Site, SiteInput } from '../api/types'
 
 export const emptySite: SiteInput = {
   client: null,
+  clientPhone: null,
   labelProjectNumber: null,
   street: null,
   houseNumber: null,
@@ -17,9 +18,10 @@ export const emptySite: SiteInput = {
 
 export function toSiteInput(site: Site): SiteInput {
   const { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description } = site
-  const { plannedStart, plannedEnd, labelProjectNumber } = site
+  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone } = site
   return {
     client,
+    clientPhone,
     labelProjectNumber,
     street,
     houseNumber,

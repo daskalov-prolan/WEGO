@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, UNAUTHORIZED_EVENT } from './api/client'
+import { setActivities } from './lib/activities'
+import { canPlanRole } from './lib/roles'
 import type { User } from './api/types'
 import { AppShell } from './components/AppShell'
 import { AdminPage } from './pages/AdminPage'
@@ -29,6 +31,9 @@ export default function App() {
   // Kept in memory only, so that somebody with an initial password does not have to type it twice.
   const [loginPassword, setLoginPassword] = useState('')
   const [page, param] = useHashRoute()
+  // The activities are kept under Verwaltung: loaded once signed in, and again when they change there.
+  const [activities, setActivitiesVersion] = useState(0)
+  const signedIn = Boolean(user && !user.mustChangePassword)
 
   useEffect(() => {
     api.me().then(setUser, () => setUser(null))
@@ -36,6 +41,19 @@ export default function App() {
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
   }, [])
+
+  const reloadActivities = useCallback(
+    () =>
+      api.activities().then((defs) => {
+        setActivities(defs)
+        setActivitiesVersion((version) => version + 1)
+      }),
+    [],
+  )
+  useEffect(() => {
+    // Without them the plan still works with the activities it starts with.
+    if (signedIn) reloadActivities().catch(() => setActivitiesVersion((version) => version + 1))
+  }, [signedIn, reloadActivities])
 
   if (user === undefined) return null
   if (user === null) {
@@ -62,22 +80,32 @@ export default function App() {
     )
   }
 
-  const isPlaner = user.role === 'Planer'
+  if (activities === 0) return null
+
+  const canPlan = canPlanRole(user.role)
+  const isAdmin = user.role === 'PlanerG'
   const selectedId = param ? Number(param) : null
 
-  // Craftsmen start with their own week, planners with the plan of everybody.
-  const startPage = user.showInPlan && !isPlaner ? 'mein-plan' : 'plan'
-  const current = page || startPage
+  // Craftsmen start with their own week, planners with the plan of everybody (in the construction phase).
+  const startPage = user.showInPlan && !canPlan ? 'mein-plan' : 'bauphase'
+  // The plan has a page per phase; "plan" (older links) is the construction phase, and so is the offer
+  // phase for whoever may not see it.
+  const offers = user.seesOffers !== false
+  const current = page === 'plan' || (page === 'angebotsphase' && !offers) ? 'bauphase' : page || startPage
+  const phase = current === 'angebotsphase' ? 'Angebot' : 'Bauphase'
 
   let content
   if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
-  // Reports and administration are for planners only.
-  else if (page === 'baustellen' && isPlaner)
+  // Sites are for planners; employees with their reports and the administration for Planer G only.
+  else if (page === 'baustellen' && canPlan)
     content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} /> : <SitesPage />
-  else if (page === 'mitarbeiter' && isPlaner)
+  else if (page === 'mitarbeiter' && isAdmin)
     content = selectedId ? <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} /> : <EmployeesPage />
-  else if (page === 'verwaltung' && isPlaner) content = <AdminPage year={year} />
-  else content = <PlanPage key={year} year={year} canEdit={isPlaner} />
+  else if (page === 'verwaltung' && isAdmin) content = <AdminPage year={year} onActivitiesChanged={reloadActivities} />
+  else
+    content = (
+      <PlanPage key={`${year}|${activities}`} year={year} phase={phase} canEdit={canPlan} onYearChange={setYear} />
+    )
 
   return (
     <AppShell

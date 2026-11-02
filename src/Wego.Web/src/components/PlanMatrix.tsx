@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import type { Activity, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { ActivityIcon } from './ActivityIcon'
-import { TaskBox } from './TaskBox'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { activityLabel, ACTIVITIES, entryStyle, entryTitle } from '../lib/activities'
+import { activityLabel, ACTIVITIES, entryName, entryStyle, entryTitle } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -29,14 +28,8 @@ export interface MatrixProps {
   selectable: boolean
   selected: Set<string>
   onSelectedChange: (selected: Set<string>) => void
-  /** Plan by employee: open tasks of sites in the employee's main activity, shown in a second column. */
-  employeeTasks?: (employee: PlanEmployee) => { site: Site; task: OpenTask }[]
-  firstVisible?: string
-  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
-  /** Planners: an open task is not relevant for its site. */
-  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
-  /** How much of the timeline fits on the screen: about a week, a month, or the whole year. */
-  zoom: 'week' | 'month' | 'year'
+  /** How much of the timeline fits on the screen: about two weeks, or a month. */
+  zoom: 'week' | 'month'
   /** Saturdays and Sundays as narrow strips (about 0.5 cm). */
   foldWeekends?: boolean
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
@@ -206,12 +199,10 @@ interface FrameProps {
   days: Day[]
   holidayByDate: Map<string, SchoolHoliday>
   today: string
-  zoom: 'week' | 'month' | 'year'
+  zoom: 'week' | 'month'
   foldWeekends?: boolean
   /** Heading of the column on the left: "Mitarbeiter" or "Baustelle". */
   corner: ReactNode
-  /** A second fixed column next to the names (the unplanned activities in the plan by site). */
-  withTasks?: boolean
   children: ReactNode
 }
 
@@ -219,7 +210,7 @@ interface FrameProps {
  * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
  * and folded weekends work the same in both.
  */
-function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, withTasks, children }: FrameProps) {
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, children }: FrameProps) {
   const weekends = days.filter((day) => day.isWeekend).length
   const months: { month: number; count: number }[] = []
   for (const day of days) {
@@ -229,19 +220,18 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
 
   return (
     <table
-      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}${withTasks ? ' with-tasks' : ''}`}
+      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}`}
       style={{ '--weekdays': days.length - weekends, '--weekends': weekends } as CSSProperties}
     >
       <colgroup>
         <col className="col-employee" />
-        {withTasks && <col className="col-tasks" />}
         {days.map((day) => (
           <col key={day.iso} className={day.isWeekend ? 'col-day col-weekend' : 'col-day'} />
         ))}
       </colgroup>
       <thead>
         <tr className="month-row">
-          <th className="corner" rowSpan={2} colSpan={withTasks ? 2 : 1}>
+          <th className="corner" rowSpan={2}>
             {corner}
           </th>
           {months.map(({ month, count }) => (
@@ -337,17 +327,7 @@ export function TimelineMatrix(props: MatrixProps) {
       today={today}
       zoom={zoom}
       foldWeekends={foldWeekends}
-      withTasks={props.employeeTasks !== undefined}
-      corner={
-        props.employeeTasks ? (
-          <span className="corner-split">
-            <span>Mitarbeiter</span>
-            <span>Ungeplant</span>
-          </span>
-        ) : (
-          'Mitarbeiter'
-        )
-      }
+      corner="Mitarbeiter"
     >
       {employees.map((employee, employeeIndex) => {
         const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
@@ -361,18 +341,6 @@ export function TimelineMatrix(props: MatrixProps) {
             >
               <EmployeeName employee={employee} link={linkNames} />
             </th>
-            {props.employeeTasks && (
-              <td className="tasks">
-                <EmployeeTasks
-                  employee={employee}
-                  tasks={props.employeeTasks(employee)}
-                  days={days}
-                  firstVisible={props.firstVisible ?? days[0].iso}
-                  onPlanTask={props.onPlanTask}
-                  onTaskCancel={props.onTaskCancel}
-                />
-              </td>
-            )}
             {days.map((day, dayIndex) => {
               const entries = entriesOf(employee.id, day.iso)
               const first = entries[0]
@@ -418,7 +386,7 @@ export function TimelineMatrix(props: MatrixProps) {
                     {first && (
                       <Compact
                         entries={entries}
-                        text={first.type === 'Baustelle' ? (first.siteName ?? '') : first.type}
+                        text={entryName(first)}
                         dimmed={entries.every(isDimmed)}
                         onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
                         draggable={draggable}
@@ -432,50 +400,6 @@ export function TimelineMatrix(props: MatrixProps) {
         )
       })}
     </TimelineFrame>
-  )
-}
-
-/** The open tasks of one employee: the first three, the others on request. */
-function EmployeeTasks({
-  employee,
-  tasks,
-  days,
-  firstVisible,
-  onPlanTask,
-  onTaskCancel,
-}: {
-  employee: PlanEmployee
-  tasks: { site: Site; task: OpenTask }[]
-  days: Day[]
-  firstVisible: string
-  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
-  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
-}) {
-  const [all, setAll] = useState(false)
-  const shown = all ? tasks : tasks.slice(0, 3)
-  return (
-    <>
-      {shown.map(({ site, task }) => (
-        <TaskBox
-          key={`${site.id}|${task.activity}`}
-          task={task}
-          label={site.name}
-          employees={[employee]}
-          employee={employee}
-          defaultDate={firstVisible}
-          minDate={days[0].iso}
-          maxDate={days[days.length - 1].iso}
-          onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
-          onCancel={onTaskCancel && (() => onTaskCancel(site, task.activity))}
-          siteId={site.id}
-        />
-      ))}
-      {tasks.length > 3 && (
-        <button type="button" className="task-more" onClick={() => setAll((value) => !value)}>
-          {all ? 'weniger' : `+ ${tasks.length - 3} weitere`}
-        </button>
-      )}
-    </>
   )
 }
 
@@ -499,22 +423,21 @@ interface SiteTimelineProps {
   rows: SiteRow[]
   holidayByDate: Map<string, SchoolHoliday>
   today: string
-  zoom: 'week' | 'month' | 'year'
+  zoom: 'week' | 'month'
   foldWeekends?: boolean
   /** A day of a site: who is there, and (for planners) who else should go. */
   onOpenCell: (site: Site, date: string) => void
   onOpenSite: (siteId: number) => void
-  /** Who can do an activity on this site (for planning an open task). */
-  candidates: (site: Site, activity: Activity) => PlanEmployee[]
-  /** First day in view: offered when planning an open task. */
-  firstVisible: string
-  /** Planners: plan an open task, or mark it as not needed. */
-  onPlanTask?: (site: Site, activity: Activity, employeeIds: number[], date: string) => Promise<void>
-  onTaskCancel?: (site: Site, activity: Activity) => Promise<void>
-  /** Planners: entries and open activities can be dragged onto a cell of a site and a day. */
+  /** Planners: entries and employees can be dragged onto a cell of a site and a day. */
   dropOn?: (site: Site, date: string) => DropHandlers
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (site: Site, date: string, at: { x: number; y: number; entryId?: number }) => void
+  /** Planners: the marked entries (an employee's stretch of days at a site) and the entries at its ends. */
+  marked?: { ids: Set<number>; first: number; last: number }
+  /** Planners: a click on an employee in a cell marks the entry; a click elsewhere in the cell opens the day. */
+  onMark?: (entry: Entry | null) => void
+  /** Planners: an end of the marked stretch is dragged, to the following days or back. */
+  onStretchStart?: (entry: Entry, side: 'left' | 'right', event: PointerEvent) => void
 }
 
 /**
@@ -522,55 +445,41 @@ interface SiteTimelineProps {
  * employees working there, in the colour of their activity.
  */
 export function SiteTimeline(props: SiteTimelineProps) {
-  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, onPlanTask, onTaskCancel, dropOn } = props
+  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
   const draggable = dropOn !== undefined
   return (
-    <TimelineFrame
-      days={days}
-      holidayByDate={holidayByDate}
-      today={today}
-      zoom={zoom}
-      foldWeekends={foldWeekends}
-      withTasks
-      corner={
-        <span className="corner-split">
-          <span>Baustelle</span>
-          <span>Ungeplant</span>
-        </span>
-      }
-    >
-      {rows.map(({ site, byDate, openTasks }) => (
+    <TimelineFrame days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} foldWeekends={foldWeekends} corner="Baustelle">
+      {rows.map(({ site, byDate }) => (
         <tr key={site.id}>
           <th className="employee site-head" scope="row" title={site.client ?? site.name}>
             <span className="site-link" role="link" onClick={() => onOpenSite(site.id)}>
               {site.name}
             </span>
           </th>
-          <td className="tasks">
-            {openTasks.map((task) => (
-              <TaskBox
-                key={task.activity}
-                task={task}
-                employees={props.candidates(site, task.activity)}
-                defaultDate={props.firstVisible}
-                minDate={days[0].iso}
-                maxDate={days[days.length - 1].iso}
-                onPlan={onPlanTask && ((employeeIds, date) => onPlanTask(site, task.activity, employeeIds, date))}
-                onCancel={onTaskCancel && (() => onTaskCancel(site, task.activity))}
-                siteId={site.id}
-              />
-            ))}
-          </td>
           {days.map((day) => {
             const entries = byDate.get(day.iso) ?? []
             return (
-              <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} {...dropOn?.(site, day.iso)}>
+              <td
+                key={day.iso}
+                className={dayClass(day, holidayByDate.get(day.iso), today)}
+                data-stretch-row={`s${site.id}`}
+                data-stretch-date={day.iso}
+                {...dropOn?.(site, day.iso)}
+              >
                 <button
                   type="button"
                   className="cell"
                   aria-label={`${site.name}, ${formatDateLong(day.iso)}`}
                   title={cellTitle(entries, (entry) => entryTitle({ ...entry, siteName: entry.employeeName }))}
-                  onClick={() => onOpenCell(site, day.iso)}
+                  onClick={(event) => {
+                    if (props.onMark) {
+                      const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+                      const entry = chip && entries.find((candidate) => candidate.id === Number(chip.dataset.entryId))
+                      props.onMark(entry ?? null)
+                      if (entry) return
+                    }
+                    onOpenCell(site, day.iso)
+                  }}
                   onContextMenu={(event) => {
                     if (!props.onCellMenu) return
                     event.preventDefault()
@@ -580,7 +489,22 @@ export function SiteTimeline(props: SiteTimelineProps) {
                 >
                   <span className="cell-full">
                     {entries.map((entry) => (
-                      <Chip key={entry.id} entry={entry} label={entry.employeeName} draggable={draggable} />
+                      <Chip
+                        key={entry.id}
+                        entry={entry}
+                        label={entry.employeeName}
+                        draggable={draggable}
+                        marked={marked?.ids.has(entry.id)}
+                        stretch={
+                          props.onStretchStart && marked && (marked.first === entry.id || marked.last === entry.id)
+                            ? {
+                                left: marked.first === entry.id,
+                                right: marked.last === entry.id,
+                                onStart: (side, event) => props.onStretchStart!(entry, side, event),
+                              }
+                            : undefined
+                        }
+                      />
                     ))}
                   </span>
                   {entries.length > 0 && (

@@ -1,7 +1,7 @@
 import { notifications } from '@mantine/notifications'
 import { useSyncExternalStore } from 'react'
 import type { Entry, PlanEmployee, Site } from '../api/types'
-import { allowedActivities, defaultActivity, isOpen } from './activities'
+import { allowedActivities, defaultActivity, entryName, isOpen } from './activities'
 import type { DayChange } from './dragPlan'
 import { toInput } from './ui'
 
@@ -34,7 +34,7 @@ export function useClip(): Clip | null {
 /** Puts these entries (one, or all of a day) on the clipboard. */
 export function copyEntries(entries: Entry[], cut: boolean) {
   if (entries.length === 0) return
-  setClip({ label: [...new Set(entries.map((entry) => entry.siteName ?? entry.type))].join(' / '), entries, cut })
+  setClip({ label: [...new Set(entries.map((entry) => entryName(entry)))].join(' / '), entries, cut })
 }
 
 /**
@@ -80,7 +80,9 @@ export function pasteChanges(
       const employeeId = target.employeeId ?? entry.employeeId
       const siteId = entry.type === 'Baustelle' ? (target.siteId ?? entry.siteId) : null
       const change = day(employeeId, target.date)
-      if (change.entries.some((other) => other.type === entry.type && other.siteId === siteId)) continue
+      // A site (or a vacation) only once a day; visits whose site is still open may be several.
+      const open = entry.type === 'Baustelle' && siteId === null
+      if (!open && change.entries.some((other) => other.type === entry.type && other.siteId === siteId)) continue
       const employee = employees.find((candidate) => candidate.id === employeeId)
       const site = siteId === null ? undefined : siteById.get(siteId)
       const status = site && isOpen(site.status) ? site.status : undefined
@@ -129,8 +131,8 @@ export function clipMenuItems({
   if (one) {
     if (one.siteId !== null && onOpenSite) items.push({ label: `Baustelle öffnen: ${one.siteName}`, onClick: () => onOpenSite(one.siteId!) })
     items.push(
-      { label: `Kopieren: ${one.siteName ?? one.type}`, onClick: copied([one], false) },
-      { label: `Ausschneiden: ${one.siteName ?? one.type}`, onClick: copied([one], true) },
+      { label: `Kopieren: ${entryName(one)}`, onClick: copied([one], false) },
+      { label: `Ausschneiden: ${entryName(one)}`, onClick: copied([one], true) },
     )
   }
   if (!one || all.length > 1)

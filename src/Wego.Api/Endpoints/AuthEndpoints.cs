@@ -15,7 +15,7 @@ public static class AuthEndpoints
     public record LoginRequest(string UserName, string Password);
     public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
     public record UserDto(int Id, string Name, string UserName, string Role, bool ShowInPlan,
-        bool MustChangePassword);
+        bool MustChangePassword, bool SeesOffers);
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -46,7 +46,7 @@ public static class AuthEndpoints
             await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
 
-            return Results.Ok(ToDto(employee));
+            return Results.Ok(await ToDtoAsync(employee, db));
         }).AllowAnonymous().RequireRateLimiting(LoginRateLimit);
 
         group.MapPost("/logout", async (HttpContext http) =>
@@ -58,7 +58,7 @@ public static class AuthEndpoints
         group.MapGet("/me", async (ClaimsPrincipal user, WegoDbContext db) =>
         {
             var employee = await db.Employees.FindAsync(user.EmployeeId());
-            return employee is null ? Results.Unauthorized() : Results.Ok(ToDto(employee));
+            return employee is null ? Results.Unauthorized() : Results.Ok(await ToDtoAsync(employee, db));
         });
 
         group.MapPost("/password", async (ChangePasswordRequest request, ClaimsPrincipal user,
@@ -81,6 +81,7 @@ public static class AuthEndpoints
 
             employee.PasswordHash = hasher.HashPassword(employee, request.NewPassword!);
             employee.MustChangePassword = false;
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter, "Eigenes Passwort geändert", employee.Id, null, null);
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
@@ -95,10 +96,13 @@ public static class AuthEndpoints
     public static int EmployeeId(this ClaimsPrincipal user) =>
         int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
 
-    public static bool IsPlaner(this ClaimsPrincipal user) => user.IsInRole(Roles.Planer);
+    public static bool CanPlan(this ClaimsPrincipal user) => user.IsInRole(Roles.PlanerA) || user.IsInRole(Roles.PlanerG);
 
-    private static UserDto ToDto(Employee e) =>
-        new(e.Id, e.Name, e.UserName ?? "", e.Role, e.ShowInPlan, e.MustChangePassword);
+    public static bool IsPlanerG(this ClaimsPrincipal user) => user.IsInRole(Roles.PlanerG);
+
+    // SeesOffers: whether the menu offers the plan of the offer phase (see OfferAccess).
+    private static async Task<UserDto> ToDtoAsync(Employee e, WegoDbContext db) =>
+        new(e.Id, e.Name, e.UserName ?? "", e.Role, e.ShowInPlan, e.MustChangePassword, await OfferAccess.SeesOffersAsync(e, db));
 }
 
 public static class ApiErrors

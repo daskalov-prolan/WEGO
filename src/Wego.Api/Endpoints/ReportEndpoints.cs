@@ -40,12 +40,12 @@ public static class ReportEndpoints
 
             return Results.Ok(new SiteReportDto(site.Id, site.Name, year,
                 rows.Sum(r => r.Days), rows.Sum(r => r.Hours), rows, entries));
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Plan);
 
-        // Planners see every employee, everybody else only their own report.
+        // Planer G see every employee, everybody else only their own report.
         group.MapGet("/employees/{id:int}", async (int id, int year, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            if (!user.IsPlaner() && user.EmployeeId() != id) return Results.Forbid();
+            if (!user.IsPlanerG() && user.EmployeeId() != id) return Results.Forbid();
 
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
@@ -58,7 +58,7 @@ public static class ReportEndpoints
             var entries = Sort(all.Where(e => e.Type == EntryType.Baustelle).Select(ToDto));
             var rows = entries
                 .GroupBy(e => (e.SiteId, e.SiteName))
-                .Select(g => ToRow(g.Key.SiteId ?? 0, g.Key.SiteName ?? "", g))
+                .Select(g => ToRow(g.Key.SiteId ?? 0, g.Key.SiteName ?? "ohne Baustelle", g))
                 .OrderByDescending(r => r.Days).ThenBy(r => r.Name)
                 .ToList();
 
@@ -82,7 +82,7 @@ public static class ReportEndpoints
                 .ToListAsync();
 
             return employees.Select(e => ToVacation(e, byEmployee[e.Id])).ToList();
-        }).RequireAuthorization(Roles.Planer);
+        }).RequireAuthorization(Policies.Admin);
     }
 
     private static ReportRow ToRow(int id, string name, IEnumerable<EntryDto> entries)

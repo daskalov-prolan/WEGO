@@ -22,6 +22,84 @@ namespace Wego.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Wego.Api.Data.ActivityType", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("Activities", (string)null);
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.ChangeLogEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("After")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Area")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Before")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("ChangedById")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("EntityId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt");
+
+                    b.HasIndex("Area", "EntityId", "Date");
+
+                    b.ToTable("ChangeLog");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Property<int>("Id")
@@ -32,8 +110,8 @@ namespace Wego.Api.Migrations
 
                     b.Property<string>("AdditionalActivities")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -72,6 +150,8 @@ namespace Wego.Api.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("MainActivity");
 
                     b.HasIndex("UserName")
                         .IsUnique();
@@ -117,6 +197,8 @@ namespace Wego.Api.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Activity");
 
                     b.HasIndex("EmployeeId", "Date");
 
@@ -173,6 +255,10 @@ namespace Wego.Api.Migrations
                     b.Property<string>("Client")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ClientPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -280,14 +366,29 @@ namespace Wego.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Activity");
+
                     b.HasIndex("SiteId", "Activity")
                         .IsUnique();
 
                     b.ToTable("SiteTasks");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.Employee", b =>
+                {
+                    b.HasOne("Wego.Api.Data.ActivityType", null)
+                        .WithMany()
+                        .HasForeignKey("MainActivity")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
+                    b.HasOne("Wego.Api.Data.ActivityType", null)
+                        .WithMany()
+                        .HasForeignKey("Activity")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Wego.Api.Data.Employee", "Employee")
                         .WithMany("Entries")
                         .HasForeignKey("EmployeeId")
@@ -317,6 +418,12 @@ namespace Wego.Api.Migrations
 
             modelBuilder.Entity("Wego.Api.Data.SiteTask", b =>
                 {
+                    b.HasOne("Wego.Api.Data.ActivityType", null)
+                        .WithMany()
+                        .HasForeignKey("Activity")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Wego.Api.Data.Site", "Site")
                         .WithMany("Tasks")
                         .HasForeignKey("SiteId")

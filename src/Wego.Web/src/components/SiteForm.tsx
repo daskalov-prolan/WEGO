@@ -55,7 +55,7 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               <SegmentedControl
                 value={site.status}
                 onChange={(value) => setSite((current) => ({ ...current, status: value as SiteStatus }))}
-                data={['Angebot', 'Bauphase']}
+                data={[{ value: 'Angebot', label: 'Angebotsphase' }, 'Bauphase']}
               />
             </div>
           )}
@@ -65,9 +65,9 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               description="Kunde oder Hausverwaltung"
               maxLength={200}
               data-autofocus
-              style={{ gridColumn: 'span 2' }}
               {...field('client')}
             />
+            <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
             <TextInput
               label="Projektnummer in Label"
               description="aus der Warenwirtschaft"

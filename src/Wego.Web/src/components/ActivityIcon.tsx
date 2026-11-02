@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { Activity, EntryType } from '../api/types'
 
 // Simple line drawings on a 16×16 grid, drawn in the current text colour.
-const PATHS: Record<Activity | 'Urlaub' | 'Krank', ReactNode> = {
+const PATHS: Record<string, ReactNode> = {
   // magnifying glass
   Besichtigung: (
     <>
@@ -10,15 +10,15 @@ const PATHS: Record<Activity | 'Urlaub' | 'Krank', ReactNode> = {
       <path d="M9.6 9.6 14 14" />
     </>
   ),
-  // calculator
-  Angebotskalkulation: (
+  // list with ticks: the products are chosen
+  Objektauswahl: (
     <>
-      <rect x="3" y="1.5" width="10" height="13" rx="1.5" />
-      <path d="M5.5 4.5h5M5.5 8h.01M8 8h.01M10.5 8h.01M5.5 11h.01M8 11h.01M10.5 11h.01" />
+      <rect x="2.5" y="1.5" width="11" height="13" rx="1.5" />
+      <path d="m4.8 5 1.2 1.2L8.2 4M9.5 5.2h2M4.8 10l1.2 1.2L8.2 9M9.5 10.2h2" />
     </>
   ),
-  // two speech bubbles
-  Angebotsbesprechung: (
+  // two speech bubbles: the offer is handed over and talked through
+  Angebotsuebergabe: (
     <>
       <path d="M1.5 2.5h8v5.5H5L2.5 10V8h-1z" />
       <path d="M11 5.5h3.5V11h-1v2l-2.5-2H7.5V9.5" />
@@ -102,7 +102,8 @@ export function ActivityIcon({ activity, type = 'Baustelle', size = 12 }: Props)
       aria-hidden
       data-activity={key}
     >
-      {PATHS[key]}
+      {/* An activity added under Verwaltung has no drawing of its own: a dot. */}
+      {PATHS[key] ?? <circle cx="8" cy="8" r="3.5" />}
     </svg>
   )
 }

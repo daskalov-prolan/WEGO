@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { Activity, Entry, SiteStatus } from '../api/types'
+import type { Activity, ActivityDef, Entry, SiteStatus } from '../api/types'
 
 export interface Colours {
   /** The full colour, as in the Excel sheet: legend, colour bar, year view. */
@@ -17,26 +17,63 @@ export interface ActivityInfo extends Colours {
   phase: 'Angebot' | 'Bauphase'
 }
 
+// The colours the planners know from the Excel sheet, with a tint and an edge chosen by hand.
+const TUNED: Record<string, { tint: string; edge: string }> = {
+  '#5fd6cf': { tint: '#d2f4f1', edge: '#0f9c93' },
+  '#a1887f': { tint: '#ece5e2', edge: '#795548' },
+  '#b5bd3a': { tint: '#eff1c9', edge: '#827717' },
+  '#f46a6a': { tint: '#fdd9d9', edge: '#d32f2f' },
+  '#ffc000': { tint: '#ffeeb8', edge: '#e0a200' },
+  '#7db4f2': { tint: '#d9e8fb', edge: '#1e6fd9' },
+  '#c49be3': { tint: '#ece0f7', edge: '#8b45c2' },
+  '#f472c9': { tint: '#fcd8f0', edge: '#cf2f98' },
+  '#3f51b5': { tint: '#d6dbf3', edge: '#3f51b5' },
+}
+
+/** A colour mixed with another, e.g. with white for a tint: amount 0 keeps it, 1 gives the other. */
+function mix(hex: string, other: string, amount: number) {
+  const channels = (value: string) => [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16))
+  const [a, b] = [channels(hex), channels(other)]
+  return `#${a.map((c, i) => Math.round(c + (b[i] - c) * amount).toString(16).padStart(2, '0')).join('')}`
+}
+
+/** The three colours of an activity from its one colour: tuned by hand for the known ones, mixed for others. */
+export function coloursOf(color: string): Colours {
+  const background = color.toLowerCase()
+  return { background, ...(TUNED[background] ?? { tint: mix(background, '#ffffff', 0.75), edge: mix(background, '#000000', 0.3) }) }
+}
+
+const toInfo = (def: ActivityDef): ActivityInfo => ({ value: def.key, label: def.label, phase: def.phase, ...coloursOf(def.color) })
+
 /**
- * The activities in the order of the job, each belonging to one status of the site. The construction
- * keeps the colours the planners know from the Excel sheet: Besichtigung türkis, Abriss rot, Trockenbau
- * orange, Sanitär blau, RenoDeco lila, Fliesenarbeiten magenta, Endmontage ein anderes (dunkleres) Blau.
+ * The activities in the order of the job, each belonging to one phase of a site. They are kept under
+ * Verwaltung and loaded after signing in (see setActivities); until then, and in tests, these are the ones.
  */
-export const ACTIVITIES: ActivityInfo[] = [
-  { value: 'Besichtigung', label: 'Besichtigung', phase: 'Angebot', background: '#5fd6cf', tint: '#d2f4f1', edge: '#0f9c93' },
-  { value: 'Angebotskalkulation', label: 'Angebotskalkulation', phase: 'Angebot', background: '#a1887f', tint: '#ece5e2', edge: '#795548' },
-  { value: 'Angebotsbesprechung', label: 'Angebotsbesprechung', phase: 'Angebot', background: '#b5bd3a', tint: '#eff1c9', edge: '#827717' },
-  { value: 'Abriss', label: 'Abriss / Baubeginn', phase: 'Bauphase', background: '#f46a6a', tint: '#fdd9d9', edge: '#d32f2f' },
-  { value: 'Trockenbau', label: 'Trockenbau', phase: 'Bauphase', background: '#ffc000', tint: '#ffeeb8', edge: '#e0a200' },
-  { value: 'Sanitaer', label: 'Sanitär', phase: 'Bauphase', background: '#7db4f2', tint: '#d9e8fb', edge: '#1e6fd9' },
-  { value: 'RenoDeco', label: 'RenoDeco-Platten', phase: 'Bauphase', background: '#c49be3', tint: '#ece0f7', edge: '#8b45c2' },
-  { value: 'Fliesen', label: 'Fliesenarbeiten', phase: 'Bauphase', background: '#f472c9', tint: '#fcd8f0', edge: '#cf2f98' },
-  { value: 'Endmontage', label: 'Endmontage', phase: 'Bauphase', background: '#3f51b5', tint: '#d6dbf3', edge: '#3f51b5' },
-]
+export let ACTIVITIES: ActivityInfo[] = (
+  [
+    ['Besichtigung', 'Besichtigung', 'Angebot', '#5fd6cf'],
+    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#a1887f'],
+    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#b5bd3a'],
+    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#f46a6a'],
+    ['Trockenbau', 'Trockenbau', 'Bauphase', '#ffc000'],
+    ['Sanitaer', 'Sanitär', 'Bauphase', '#7db4f2'],
+    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#c49be3'],
+    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#f472c9'],
+    ['Endmontage', 'Endmontage', 'Bauphase', '#3f51b5'],
+  ] as const
+).map(([key, label, phase, color], index) => toInfo({ key, label, phase, color, sortOrder: index + 1 }))
+
+let BY_VALUE = new Map(ACTIVITIES.map((activity) => [activity.value, activity]))
+
+/** Takes the activities as the server keeps them; everything that shows activities reads them from here. */
+export function setActivities(defs: ActivityDef[]) {
+  ACTIVITIES = [...defs].sort((a, b) => a.sortOrder - b.sortOrder).map(toInfo)
+  BY_VALUE = new Map(ACTIVITIES.map((activity) => [activity.value, activity]))
+}
 
 /** color: Mantine colour of the badges; hex: the same colour for the process diagram of the legend. */
 export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; hex: string }[] = [
-  { value: 'Angebot', label: 'Angebot', color: 'cyan', hex: '#1098ad' },
+  { value: 'Angebot', label: 'Angebotsphase', color: 'cyan', hex: '#1098ad' },
   { value: 'Bauphase', label: 'Bauphase', color: 'orange', hex: '#e8590c' },
   { value: 'Abgeschlossen', label: 'Abgeschlossen', color: 'green', hex: '#2f9e44' },
   { value: 'Storniert', label: 'Storniert', color: 'red', hex: '#e03131' },
@@ -57,7 +94,6 @@ export function activitiesOfStatus(status: SiteStatus): Activity[] {
   return ACTIVITIES.filter((activity) => activity.phase === status).map((activity) => activity.value)
 }
 
-const BY_VALUE = new Map(ACTIVITIES.map((activity) => [activity.value, activity]))
 
 export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', edge: '#8fa3a8' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
@@ -67,6 +103,14 @@ export const PUBLIC_HOLIDAY: Colours = { background: '#5cc46a', tint: '#d9f2dc',
 export const SCHOOL_HOLIDAY: Colours = { background: '#d3f0d6', tint: '#eef9ef', edge: '#8fd29a' }
 export function activityLabel(activity: Activity | null | undefined): string | null {
   return activity ? (BY_VALUE.get(activity)?.label ?? null) : null
+}
+
+export const activityInfo = (activity: Activity): ActivityInfo | undefined => BY_VALUE.get(activity)
+
+/** What an entry is called in the plan: its site, or (planned before the site is known) its activity. */
+export function entryName(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
+  if (entry.type !== 'Baustelle') return entry.type
+  return entry.siteName ?? activityLabel(entry.activity) ?? ''
 }
 
 function colours(entry: Pick<Entry, 'type' | 'activity'>): Colours {
@@ -84,23 +128,42 @@ export function entryStyle(entry: Pick<Entry, 'type' | 'activity'>): CSSProperti
 export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
   if (entry.type !== 'Baustelle') return entry.type
   const activity = activityLabel(entry.activity)
-  return activity ? `${entry.siteName} – ${activity}` : (entry.siteName ?? '')
+  if (!entry.siteName) return activity ? `${activity} (Baustelle noch offen)` : ''
+  return activity ? `${entry.siteName} – ${activity}` : entry.siteName
 }
+
+type Skilled = { mainActivity: Activity | null; additionalActivities: Activity[]; isPlaner?: boolean }
+
+const ownActivities = (employee: Skilled) =>
+  [employee.mainActivity, ...employee.additionalActivities].filter((a): a is Activity => a !== null)
 
 /**
  * The activities the plan offers for an employee: the main activity first, then the additional ones.
- * Somebody without any configured activity can be planned for everything.
+ * Somebody without any configured activity can be planned for everything; planners can do all
+ * activities of the offer phase as well.
  */
-export function allowedActivities(
-  employee: { mainActivity: Activity | null; additionalActivities: Activity[] },
-  status?: SiteStatus,
-): Activity[] {
-  const own = [employee.mainActivity, ...employee.additionalActivities].filter((a): a is Activity => a !== null)
-  const all = own.length > 0 ? [...new Set(own)] : ACTIVITIES.map((activity) => activity.value)
+export function allowedActivities(employee: Skilled, status?: SiteStatus): Activity[] {
+  const own = ownActivities(employee)
+  const all =
+    own.length > 0
+      ? [...new Set([...own, ...(employee.isPlaner ? activitiesOfStatus('Angebot') : [])])]
+      : ACTIVITIES.map((activity) => activity.value)
   if (!status) return all
   // On a site only the activities of its status: what the employee can do of them.
   const ofStatus = activitiesOfStatus(status)
   return all.filter((activity) => ofStatus.includes(activity))
+}
+
+/**
+ * Who appears in a phase of the plan. The offer phase: every planner, and whoever can do at least one of
+ * its activities (set at the employee). The construction phase: whoever can do something there.
+ */
+export function worksInPhase(employee: Skilled, phase: 'Angebot' | 'Bauphase'): boolean {
+  if (phase === 'Angebot') {
+    const offer = activitiesOfStatus('Angebot')
+    return Boolean(employee.isPlaner) || ownActivities(employee).some((activity) => offer.includes(activity))
+  }
+  return allowedActivities(employee, phase).length > 0
 }
 
 /**

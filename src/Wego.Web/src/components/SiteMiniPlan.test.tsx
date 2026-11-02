@@ -7,7 +7,7 @@ import { renderWithProviders } from '../test-utils'
 import { SiteMiniPlan } from './SiteMiniPlan'
 
 const site: Site = {
-  id: 10, name: 'Familie Schulze', client: 'Familie Schulze', labelProjectNumber: null, street: null, houseNumber: null,
+  id: 10, name: 'Familie Schulze', client: 'Familie Schulze', labelProjectNumber: null, clientPhone: null, street: null, houseNumber: null,
   addressAddition: null, postalCode: null, city: null, nameSource: 'Auftraggeber', description: null,
   // Planned for April, but the first work is planned for early March already.
   plannedStart: '2026-04-01', plannedEnd: null, status: 'Bauphase',

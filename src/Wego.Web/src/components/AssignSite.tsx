@@ -3,8 +3,10 @@ import { useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
 import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities } from '../lib/activities'
+import { HALF_DAYS } from '../lib/dates'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
+import { TimeSelect } from './TimeSelect'
 
 /** 'main': every employee gets their own main activity. */
 export type ActivityChoice = Activity | 'main'
@@ -131,8 +133,30 @@ export function AssignSite(props: Props) {
             required
           />
           <Group grow gap="xs">
-            <TextInput label="von" type="time" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
-            <TextInput label="bis" type="time" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+            <TimeSelect
+              label="von"
+              value={start}
+              onChange={(next) => {
+                setStart(next)
+                if (end && next && end <= next) setEnd('')
+              }}
+            />
+            <TimeSelect label="bis" value={end} onChange={setEnd} after={start} />
+          </Group>
+          <Group gap={6}>
+            {HALF_DAYS.map((half, index) => (
+              <Button
+                key={half.start}
+                size="compact-xs"
+                variant="light"
+                onClick={() => {
+                  setStart(half.start)
+                  setEnd(half.end)
+                }}
+              >
+                ½ Tag {index === 0 ? 'vormittags' : 'nachmittags'} ({half.start}–{half.end})
+              </Button>
+            ))}
           </Group>
           <Group gap="sm" align="flex-end" wrap="nowrap">
             <TextInput

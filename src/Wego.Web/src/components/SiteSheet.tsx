@@ -1,4 +1,4 @@
-import { Button, Group, Stack, Text } from '@mantine/core'
+import { Anchor, Button, Group, Stack, Text } from '@mantine/core'
 import type { Site } from '../api/types'
 import { formatDate } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
@@ -28,6 +28,14 @@ export function SiteSheet({ site, canEdit, showPageLink = true, onEdit, onClose 
           </Text>
           <Text>{site.client ?? '–'}</Text>
         </div>
+        {site.clientPhone && (
+          <div>
+            <Text size="xs" c="dimmed">
+              Telefon Kunde
+            </Text>
+            <Anchor href={`tel:${site.clientPhone.replace(/[^+0-9]/g, '')}`}>{site.clientPhone}</Anchor>
+          </div>
+        )}
         {site.labelProjectNumber && (
           <div>
             <Text size="xs" c="dimmed">

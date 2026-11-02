@@ -21,11 +21,15 @@ const only = args.find((a) => a.startsWith('--only='))?.slice('--only='.length)
 if (only && !['employees', 'sites'].includes(only)) throw new Error('--only takes employees or sites')
 
 const PHASE_ACTIVITIES = {
-  Angebot: ['Besichtigung', 'Angebotskalkulation', 'Angebotsbesprechung'],
+  Angebot: ['Besichtigung', 'Objektauswahl', 'Angebotsuebergabe'],
   Bauphase: ['Abriss', 'Trockenbau', 'Sanitaer', 'RenoDeco', 'Fliesen', 'Endmontage'],
 }
+// Activities renamed since: a live system on an older version still sends the old keys.
+const RENAMED = { Angebotskalkulation: 'Objektauswahl', Angebotsbesprechung: 'Angebotsuebergabe' }
+const renamed = (activity) => RENAMED[activity] ?? activity
+const PLANNER_ROLES = ['Planer', 'PlanerA', 'PlanerG']
 const EMPLOYEE_FIELDS = ['name', 'sortOrder', 'isActive', 'showInPlan', 'vacationDaysPerYear', 'mainActivity', 'additionalActivities']
-const SITE_FIELDS = ['client', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
+const SITE_FIELDS = ['client', 'clientPhone', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
   'description', 'plannedStart', 'plannedEnd', 'labelProjectNumber']
 
 const norm = (value) => (value ?? '').toString().trim().toLocaleLowerCase('de')
@@ -53,7 +57,7 @@ function apiClient(base, { readOnly }) {
 async function signIn(call, userName, password, label) {
   try {
     const user = await call('POST', '/api/auth/login', { userName, password })
-    if (user.role !== 'Planer') throw new Error(`${userName} is not a Planer`)
+    if (!PLANNER_ROLES.includes(user.role)) throw new Error(`${userName} is not a Planer`)
   } catch (error) {
     throw new Error(`Sign-in at ${label} failed (${error.message}). Check user name and password.`)
   }
@@ -62,7 +66,11 @@ async function signIn(call, userName, password, label) {
 // ---- Employees ----
 
 async function syncEmployees(live, local) {
-  const liveEmployees = await live('GET', '/api/employees')
+  const liveEmployees = (await live('GET', '/api/employees')).map((e) => ({
+    ...e,
+    mainActivity: e.mainActivity && renamed(e.mainActivity),
+    additionalActivities: e.additionalActivities.map(renamed),
+  }))
   const localEmployees = await local('GET', '/api/employees')
   const unused = new Set(localEmployees)
   const actions = []
@@ -83,7 +91,7 @@ async function syncEmployees(live, local) {
       actions.push({
         text: `Mitarbeiter ${source.name}: neu`,
         run: () => local('POST', '/api/employees', {
-          ...pick(source, EMPLOYEE_FIELDS), userName: null, role: 'Mitarbeiter', password: null,
+          ...pick(source, EMPLOYEE_FIELDS), userName: null, role: 'Handwerker', password: null,
         }),
       })
     }
@@ -113,7 +121,10 @@ function statusPath(from, source) {
 const siteKey = (s) => [s.name, s.street, s.houseNumber, s.postalCode, s.city].map(norm).join('|')
 
 async function syncSites(live, local) {
-  const liveSites = await live('GET', '/api/sites')
+  const liveSites = (await live('GET', '/api/sites')).map((s) => ({
+    ...s,
+    tasks: s.tasks.map((t) => ({ ...t, activity: renamed(t.activity) })),
+  }))
   const localSites = await local('GET', '/api/sites')
   const unused = new Set(localSites)
   const actions = []

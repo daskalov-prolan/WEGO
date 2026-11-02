@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications'
 import { Fragment, useState, type CSSProperties } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, PlanEmployee, Site } from '../api/types'
-import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, isOpen } from '../lib/activities'
+import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
@@ -147,20 +147,23 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
 
   /** A lane's day takes entries the employee can do and the open activities of this site they can do. */
   const accepts = (employee: PlanEmployee, date: string, item: DragItem) =>
-    item.kind === 'task'
+    item.kind === 'employee' || item.kind === 'activity'
+      ? false
+      : item.kind === 'task'
       ? item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
       : !staysPut(item.entry, { employeeId: employee.id, date, siteId: item.entry.siteId }) &&
         (item.entry.activity === null || allowedActivities(employee).includes(item.entry.activity))
 
   /** Dropped there: an entry moves to this employee and day, an open activity is planned there. */
   const dropItem = (employee: PlanEmployee, date: string, item: DragItem) => {
+    if (item.kind === 'employee' || item.kind === 'activity') return
     if (item.kind === 'task') {
       plan(item.activity, [employee.id], date).catch(fail)
       return
     }
     const { entry } = item
     const changes = moveChanges(entry, { employeeId: employee.id, date, siteId: entry.siteId, activity: entry.activity }, entriesOf)
-    save(changes, `${entry.siteName ?? entry.type} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
+    save(changes, `${entryName(entry)} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
   }
 
   /** An activity of the site's status in the flow: open, planned already, or cancelled for this site. */

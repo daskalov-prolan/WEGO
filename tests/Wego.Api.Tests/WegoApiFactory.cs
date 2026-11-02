@@ -31,5 +31,6 @@ public class WegoApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Database:MigrateOnStartup", "true");
         builder.UseSetting("Seed:PlanerUserName", PlanerUserName);
         builder.UseSetting("Seed:PlanerPassword", PlanerPassword);
+        builder.UseSetting("RateLimit:LoginsPerMinute", "1000");
     }
 }
