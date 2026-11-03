@@ -58,7 +58,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
               color={status === 'Storniert' ? 'red' : undefined}
               onClick={() => change(status)}
             >
-              {ACTION[status]}
+              {site.status === 'Abgeschlossen' && status === 'Bauphase' ? 'Zurück in die Bauphase' : ACTION[status]}
             </Button>
           ))}
         {canEdit && history.length > 0 && (

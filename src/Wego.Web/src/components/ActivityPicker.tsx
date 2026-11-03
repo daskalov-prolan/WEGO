@@ -2,7 +2,7 @@ import { ColorSwatch, Group, Select, Text } from '@mantine/core'
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import type { Activity, SiteStatus } from '../api/types'
 import { ActivityIcon } from './ActivityIcon'
-import { ABSENCE, ACTIVITIES, activityInfo, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY, SITE_STATUSES } from '../lib/activities'
+import { ABSENCE, ACTIVITIES, activityInfo, PUBLIC_HOLIDAY, SCHOOL_HOLIDAY, SITE_STATUSES, textOn } from '../lib/activities'
 import { dragSource } from '../lib/dragPlan'
 
 /** Choice of the activity on the site, each with its colour from the plan. */
@@ -75,17 +75,6 @@ const status = (value: SiteStatus) => SITE_STATUSES.find((candidate) => candidat
 /** The two phases the plan is looked at in. */
 export type Phase = 'Angebot' | 'Bauphase'
 
-/** The colours of absences and holidays, as a short key. */
-export function DayKey() {
-  return (
-    <Group gap="sm" wrap="nowrap" className="day-key">
-      <Dot color={ABSENCE.background} label="Urlaub / Krank" />
-      <Dot color={PUBLIC_HOLIDAY.background} label="Feiertag" />
-      <Dot color={SCHOOL_HOLIDAY.background} label="Schulferien" />
-    </Group>
-  )
-}
-
 /** The activities of a phase in the order of the job and in their colours; planners may drag them onto a day. */
 export function PhaseActivities({ phase, draggable = false }: { phase: Phase; draggable?: boolean }) {
   return (
@@ -94,8 +83,14 @@ export function PhaseActivities({ phase, draggable = false }: { phase: Phase; dr
         <span
           key={activity.value}
           className={draggable ? 'flow-step drag-source' : 'flow-step'}
-          style={{ '--entry-bg': activity.tint, '--entry-strong': activity.background } as CSSProperties}
-          title={draggable ? `${activity.label} auf einen Tag eines Mitarbeiters ziehen` : undefined}
+          style={
+            {
+              '--entry-bg': activity.tint,
+              '--entry-strong': activity.background,
+              '--entry-text': textOn(activity.background),
+            } as CSSProperties
+          }
+          title={draggable ? `${activity.label} auf einen Tag oder auf einen Einsatz ziehen` : undefined}
           {...dragSource({ kind: 'activity', activity: activity.value, label: activity.label }, draggable)}
         >
           <ActivityIcon activity={activity.value} size={11} />

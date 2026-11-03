@@ -46,7 +46,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
             .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' ? `${site.name} (Angebot)` : site.name }))}
           filter={({ options, search }) => {
             const needle = search.trim().toLowerCase()
-            return options.filter((option) => {
+            const matches = options.filter((option) => {
               if (!('value' in option)) return true
               const site = byId.get(option.value)
               return (
@@ -57,6 +57,10 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
                   .includes(needle)
               )
             })
+            // Names that begin with what is typed come first: one letter jumps to the sites with it.
+            const begins = (option: (typeof options)[number]) =>
+              'value' in option && (byId.get(option.value)?.name.toLowerCase().startsWith(needle) ?? false)
+            return needle ? [...matches.filter(begins), ...matches.filter((option) => !begins(option))] : matches
           }}
           renderOption={({ option }) => {
             const site = byId.get(option.value)
@@ -79,12 +83,25 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
         </Button>
       </Group>
       {chosen && (
-        <Text size="xs" mt={2}>
+        <div className="site-contact">
+          <Text size="sm">
+            <span className="muted-inline">Adresse: </span>
+            {chosenAddress ?? '–'}
+          </Text>
+          <Text size="sm">
+            <span className="muted-inline">Telefon Kunde: </span>
+            {chosen.clientPhone ? (
+              <Anchor size="sm" href={`tel:${chosen.clientPhone.replace(/[^+0-9]/g, '')}`}>
+                {chosen.clientPhone}
+              </Anchor>
+            ) : (
+              '–'
+            )}
+          </Text>
           <Anchor size="xs" fw={600} onClick={() => setViewing('record')}>
             Datensatz öffnen: {chosen.name}
           </Anchor>
-          {chosenAddress && <span className="muted-inline"> · {chosenAddress}</span>}
-        </Text>
+        </div>
       )}
       {chosen && viewing === 'record' && (
         <SiteSheet

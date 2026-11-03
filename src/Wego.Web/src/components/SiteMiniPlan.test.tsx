@@ -126,13 +126,11 @@ describe('SiteMiniPlan', () => {
     // KW 11: Bernd and Carla have an entry, Dora is free but cannot lay tiles. KW 12: Carla is free.
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
-    // Lanes: Bernd (main activity) first, then Carla (additional activity); not Dora.
-    expect(screen.getByRole('button', { name: 'Bernd, 2026-03-16' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Carla, 2026-03-16' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Dora, 2026-03-16' })).not.toBeInTheDocument()
+    // Lanes only for what concerns this site: Anna worked here, Bernd's main activity is open here. Carla
+    // counts for the free week, but has no lane: she has not worked here.
     expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual([
+      'AnnaAbriss / Baubeginn',
       'BerndFliesenarbeiten',
-      'Carlaauch Fliesenarbeiten',
     ])
   })
 
@@ -145,10 +143,12 @@ describe('SiteMiniPlan', () => {
     expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
     expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()
 
-    // One lane per employee whose main activity is still open here: Bernd (Fliesen), not Anna (Abriss is planned).
-    expect(screen.queryByRole('button', { name: 'Anna, 2026-03-05' })).not.toBeInTheDocument()
+    // A lane for who worked here (Anna) and whose main activity is still open here (Bernd, Fliesen).
+    expect(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).toBeInTheDocument()
+    // Bernd's work elsewhere only shows that the day is taken.
     const thursday = screen.getByRole('button', { name: 'Bernd, 2026-03-05' })
-    expect(within(thursday).getAllByText('Familie Meier').length).toBeGreaterThan(0)
+    expect(within(thursday).getAllByText('belegt')[0]).toHaveAttribute('title', 'Familie Meier – Fliesenarbeiten')
+    expect(within(thursday).queryByText('Familie Meier')).not.toBeInTheDocument()
 
     // Abriss is planned already, Fliesen is still open.
     const open = screen.getAllByRole('button').filter((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))
@@ -175,7 +175,7 @@ describe('SiteMiniPlan', () => {
     ])
   })
 
-  it('plans an open activity and moves entries by dragging them onto a day of a lane', async () => {
+  it('plans an open activity and moves its entries by dragging them onto a day of a lane', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
     const batch = () => {
@@ -202,14 +202,14 @@ describe('SiteMiniPlan', () => {
     ])
     fetchMock.mockClear()
 
-    // Bernd's day elsewhere moves to Friday; his own cell does not take it.
-    const chip = within(screen.getByRole('button', { name: 'Bernd, 2026-03-05' })).getAllByText('Familie Meier')[0].closest('.chip')!
-    expect(dropOn(chip, screen.getByRole('button', { name: 'Bernd, 2026-03-05' }))).toBe(false)
-    expect(dropOn(chip, screen.getByRole('button', { name: 'Bernd, 2026-03-06' }))).toBe(true)
+    // Anna's day here moves to Friday; her own cell does not take it.
+    const chip = within(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).getAllByText('Abriss / Baubeginn')[0].closest('.chip')!
+    expect(dropOn(chip, screen.getByRole('button', { name: 'Anna, 2026-03-05' }))).toBe(false)
+    expect(dropOn(chip, screen.getByRole('button', { name: 'Anna, 2026-03-06' }))).toBe(true)
     await waitFor(() => expect(batch()).not.toBeNull())
     expect(batch()).toEqual([
-      { employeeId: 2, date: '2026-03-05', entries: [] },
-      expect.objectContaining({ employeeId: 2, date: '2026-03-06', entries: [expect.objectContaining({ siteId: 11 })] }),
+      { employeeId: 1, date: '2026-03-05', entries: [] },
+      expect.objectContaining({ employeeId: 1, date: '2026-03-06', entries: [expect.objectContaining({ siteId: 10 })] }),
     ])
   })
 

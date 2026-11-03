@@ -153,6 +153,10 @@ public static class PlanEndpoints
                     entry.StartTime, entry.EndTime, entry.Note, entry.NoteImportant));
             }
 
+            // Urlaub and Krank are entered, changed and removed by Planer G only (everybody sees them).
+            if (!user.IsPlanerG() && ChangeLog.ToJson(Absences(before)) != ChangeLog.ToJson(Absences(after)))
+                return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: Urlaub und Krank trägt nur Planer G ein.");
+
             // Saving a day unchanged (e.g. a selection that covers it) is no change worth logging.
             if (ChangeLog.ToJson(before) == ChangeLog.ToJson(after)) continue;
             var action = before.Count == 0 ? "Eingetragen" : after.Count == 0 ? "Gelöscht" : "Geändert";
@@ -173,6 +177,9 @@ public static class PlanEndpoints
         return Results.Ok(Sort(saved.Select(ToDto)));
     }
 
+
+    private static List<LoggedEntry> Absences(IEnumerable<LoggedEntry> entries) =>
+        entries.Where(e => e.Type != EntryType.Baustelle).ToList();
 
     public static (DateOnly From, DateOnly To) YearRange(int year) =>
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));

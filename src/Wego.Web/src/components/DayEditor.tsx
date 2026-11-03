@@ -5,18 +5,16 @@ import {
   CloseButton,
   Group,
   Paper,
-  SegmentedControl,
   Stack,
   Text,
   TextInput,
   Tooltip,
 } from '@mantine/core'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, EntryType, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
+import type { Activity, DayEntryInput, Entry, EntryType, PlanEmployee, Site, SiteInput } from '../api/types'
 import { activityLabel, allowedActivities, defaultActivity, entryStyle, isOpen } from '../lib/activities'
 import { formatDateLong, HALF_DAYS } from '../lib/dates'
-import { ActivitySelect } from './ActivityPicker'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
 import { TimeSelect } from './TimeSelect'
@@ -28,8 +26,8 @@ interface Props {
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
   onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
-  /** Sites of the weeks around this day, offered as one-tap buttons. */
-  recentSites: NamedItem[]
+  /** Urlaub and Krank are for Planer G: without it such a row stays as it is. */
+  canAbsence?: boolean
   onClose: () => void
   /** Saves the day; a rejected promise keeps the editor open and shows the message. */
   onSave: (entries: DayEntryInput[]) => Promise<void>
@@ -73,7 +71,7 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
-  const { employee, date, entries, sites, onCreateSite, onUpdateSite, recentSites, onClose, onSave, onCopy } = props
+  const { employee, date, entries, sites, onCreateSite, onUpdateSite, canAbsence = false, onClose, onSave, onCopy } = props
   // A new site row starts with what the employee typically does.
   const main = employee.mainActivity
   // The activities offered follow the status of an open site. On a done or cancelled site (entries from
@@ -83,6 +81,12 @@ export function DayEditor(props: Props) {
     return status && isOpen(status) ? status : undefined
   }
   const siteName = (siteId: number | null) => sites.find((site) => site.id === siteId)?.name
+  // A site row is titled with its activity (there is no field for it: it comes from what was dragged in, the
+  // employee and the site) and its site.
+  const rowTitle = (row: Row) =>
+    [activityLabel(row.activity), siteName(row.siteId) ?? (row.siteId === null ? 'Baustelle wählen oder neu anlegen' : null)]
+      .filter(Boolean)
+      .join(' · ')
   const [rows, setRows] = useState<Row[]>(() => {
     const saved = entries.map((e) => ({
       type: e.type,
@@ -99,29 +103,31 @@ export function DayEditor(props: Props) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // A site created here goes onto the day at once, with the activity of its row (e.g. the one dragged in):
+  // saved as soon as the new site is in its row.
+  const createdSite = useRef<number | null>(null)
+  const createSite = async (input: SiteInput) => {
+    const site = await onCreateSite(input)
+    createdSite.current = site.id
+    return site
+  }
+
   const update = (index: number, change: Partial<Row>) =>
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...change } : row)))
 
-  // A recent site fills the first empty site row, or becomes an additional one.
-  const pick = (siteId: number) =>
-    setRows((current) => {
-      const index = current.findIndex((row) => row.type === 'Baustelle' && row.siteId === null)
-      const activity = defaultActivity(employee, statusOf(siteId))
-      if (index >= 0) return current.map((row, i) => (i === index ? { ...row, siteId, activity } : row))
-      return [...current.filter((row) => row.type === 'Baustelle'), emptyRow('Baustelle', siteId, activity)]
-    })
+  // Urlaub and Krank rows that may not be changed here (see canAbsence).
+  const kept = (current: Row[]) => (canAbsence ? [] : current.filter((row) => row.type !== 'Baustelle'))
 
   // The day in two halves: the first two site rows get the times (a missing second row is added for the
-  // next site); vacation or sick rows go, half a day is work on sites.
+  // next site); vacation or sick rows go (if allowed), half a day is work on sites.
   const splitDay = () =>
     setRows((current) => {
       const sites = current.filter((row) => row.type === 'Baustelle')
       while (sites.length < HALF_DAYS.length) sites.push(emptyRow('Baustelle', null, main))
-      return sites.map((row, i) => (i < HALF_DAYS.length ? { ...row, ...HALF_DAYS[i] } : row))
+      return [...kept(current), ...sites.map((row, i) => (i < HALF_DAYS.length ? { ...row, ...HALF_DAYS[i] } : row))]
     })
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
+  const save = async () => {
     setBusy(true)
     setError('')
     try {
@@ -130,6 +136,20 @@ export function DayEditor(props: Props) {
       setError(messageOf(e))
       setBusy(false)
     }
+  }
+
+  // Runs after every change; saves once the rows hold a site just created.
+  useEffect(() => {
+    if (createdSite.current === null || !rows.some((row) => row.siteId === createdSite.current)) return
+    createdSite.current = null
+    void save()
+  })
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    // Only this form: a site form opened from here (a child in React) does not save the day.
+    if (event.target !== event.currentTarget) return
+    void save()
   }
 
   return (
@@ -143,26 +163,6 @@ export function DayEditor(props: Props) {
     >
       <form onSubmit={submit}>
         <Stack gap="sm">
-          {recentSites.length > 0 && (
-            <div>
-              <Text size="xs" c="dimmed" mb={4}>
-                Baustellen dieser Wochen
-              </Text>
-              <Group gap={6}>
-                {recentSites.map((site) => (
-                  <button
-                    type="button"
-                    key={site.id}
-                    className="site-pick"
-                    onClick={() => pick(site.id)}
-                  >
-                    {site.name}
-                  </button>
-                ))}
-              </Group>
-            </div>
-          )}
-
           {rows.length === 0 && (
             <Text c="dimmed" size="sm">
               Keine Einträge. Speichern leert diesen Tag.
@@ -182,23 +182,14 @@ export function DayEditor(props: Props) {
               <Stack gap="xs">
                 <Group justify="space-between" wrap="nowrap">
                   <Text fw={700} size="sm" className="day-row-title">
-                    {index + 1} · {row.type === 'Baustelle' ? (siteName(row.siteId) ?? (row.activity ? `${activityLabel(row.activity)} · Baustelle offen` : 'neue Baustelle')) : row.type}
+                    {index + 1} · {row.type === 'Baustelle' ? rowTitle(row) : row.type}
                   </Text>
-                  <SegmentedControl
-                    size="xs"
-                    value={row.type}
-                    onChange={(value) =>
-                      update(index, {
-                        type: value as EntryType,
-                        activity: value === 'Baustelle' ? (row.activity ?? main) : null,
-                      })
-                    }
-                    data={['Baustelle', 'Urlaub', 'Krank']}
-                  />
-                  <CloseButton
-                    aria-label={`Eintrag ${index + 1} entfernen`}
-                    onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                  />
+                  {(row.type === 'Baustelle' || canAbsence) && (
+                    <CloseButton
+                      aria-label={`Eintrag ${index + 1} entfernen`}
+                      onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                    />
+                  )}
                 </Group>
                 {row.type === 'Baustelle' && (
                   <SitePicker
@@ -210,18 +201,10 @@ export function DayEditor(props: Props) {
                       const fits = row.activity !== null && allowedActivities(employee, status).includes(row.activity)
                       update(index, { siteId, activity: fits ? row.activity : defaultActivity(employee, status) })
                     }}
-                    onCreate={onCreateSite}
+                    onCreate={createSite}
                     onUpdate={onUpdateSite}
                     // An offer visit can be planned before its site is known: then the activity is enough.
                     required={row.activity === null}
-                  />
-                )}
-                {row.type === 'Baustelle' && (
-                  <ActivitySelect
-                    value={row.activity}
-                    onChange={(activity) => update(index, { activity })}
-                    allowed={allowedActivities(employee, statusOf(row.siteId))}
-                    main={main}
                   />
                 )}
                 <Group grow gap="xs">
@@ -236,7 +219,7 @@ export function DayEditor(props: Props) {
                 <Group gap="sm" align="flex-end" wrap="nowrap">
                   <TextInput
                     label="Notiz"
-                    placeholder="z. B. mit 2 Helfern"
+                    placeholder="hier wichtige Hinweise oder Notizen eintragen"
                     value={row.note}
                     onChange={(e) => update(index, { note: e.currentTarget.value })}
                     maxLength={500}
@@ -264,13 +247,7 @@ export function DayEditor(props: Props) {
                 ½ Tag
               </Button>
             </Tooltip>
-            <Button size="xs" variant="light" color="green" onClick={() => setRows([emptyRow('Urlaub')])}>
-              Urlaub
-            </Button>
-            <Button size="xs" variant="light" color="red" onClick={() => setRows([emptyRow('Krank')])}>
-              Krank
-            </Button>
-            <Button size="xs" variant="subtle" color="gray" onClick={() => setRows([])}>
+            <Button size="xs" variant="subtle" color="gray" onClick={() => setRows(kept)}>
               Tag leeren
             </Button>
             {onCopy && (

@@ -10,6 +10,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteStatusChange> SiteStatusChanges => Set<SiteStatusChange>();
     public DbSet<SiteTask> SiteTasks => Set<SiteTask>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
+    public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
@@ -32,6 +33,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.UserName).HasMaxLength(100);
             e.Property(x => x.Role).HasMaxLength(50);
             e.Property(x => x.MainActivity).HasMaxLength(30);
+            e.Property(x => x.HourlyRate).HasPrecision(8, 2);
             // A deleted activity is no longer the main activity of anybody.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
             // Stored as a comma separated list of keys, e.g. "Abriss,RenoDeco".
@@ -95,6 +97,14 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Site).WithMany(x => x.Entries).HasForeignKey(x => x.SiteId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SiteHourlyRate>(e =>
+        {
+            e.HasKey(x => new { x.SiteId, x.EmployeeId });
+            e.Property(x => x.HourlyRate).HasPrecision(8, 2);
+            e.HasOne(x => x.Site).WithMany(x => x.HourlyRates).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SchoolHoliday>(e =>

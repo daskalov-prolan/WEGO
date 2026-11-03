@@ -98,13 +98,21 @@ export default function App() {
   if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
-    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} /> : <SitesPage />
+    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage />
   else if (page === 'mitarbeiter' && isAdmin)
     content = selectedId ? <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} /> : <EmployeesPage />
   else if (page === 'verwaltung' && isAdmin) content = <AdminPage year={year} onActivitiesChanged={reloadActivities} />
   else
     content = (
-      <PlanPage key={`${year}|${activities}`} year={year} phase={phase} canEdit={canPlan} onYearChange={setYear} />
+      <PlanPage
+        key={`${year}|${activities}`}
+        year={year}
+        phase={phase}
+        canEdit={canPlan}
+        canAbsence={isAdmin}
+        user={user}
+        onYearChange={setYear}
+      />
     )
 
   return (

@@ -22,6 +22,11 @@ const TUNED: Record<string, { tint: string; edge: string }> = {
   '#5fd6cf': { tint: '#d2f4f1', edge: '#0f9c93' },
   '#a1887f': { tint: '#ece5e2', edge: '#795548' },
   '#b5bd3a': { tint: '#eff1c9', edge: '#827717' },
+  // Since November 2026: the light petrol and the petrol of the header for the offer phase, the red of the logo
+  // for Abriss.
+  '#3aa6c0': { tint: '#cdeaf1', edge: '#1f7f96' },
+  '#0f6378': { tint: '#cfe3e8', edge: '#08394a' },
+  '#d71f27': { tint: '#f8d2d4', edge: '#a3141a' },
   '#f46a6a': { tint: '#fdd9d9', edge: '#d32f2f' },
   '#ffc000': { tint: '#ffeeb8', edge: '#e0a200' },
   '#7db4f2': { tint: '#d9e8fb', edge: '#1e6fd9' },
@@ -35,6 +40,12 @@ function mix(hex: string, other: string, amount: number) {
   const channels = (value: string) => [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16))
   const [a, b] = [channels(hex), channels(other)]
   return `#${a.map((c, i) => Math.round(c + (b[i] - c) * amount).toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Text on a full colour: white on dark and strong ones, dark on light ones such as yellow. */
+export function textOn(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#14232a' : '#ffffff'
 }
 
 /** The three colours of an activity from its one colour: tuned by hand for the known ones, mixed for others. */
@@ -51,15 +62,15 @@ const toInfo = (def: ActivityDef): ActivityInfo => ({ value: def.key, label: def
  */
 export let ACTIVITIES: ActivityInfo[] = (
   [
-    ['Besichtigung', 'Besichtigung', 'Angebot', '#5fd6cf'],
-    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#a1887f'],
-    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#b5bd3a'],
-    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#f46a6a'],
-    ['Trockenbau', 'Trockenbau', 'Bauphase', '#ffc000'],
-    ['Sanitaer', 'Sanitär', 'Bauphase', '#7db4f2'],
-    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#c49be3'],
-    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#f472c9'],
-    ['Endmontage', 'Endmontage', 'Bauphase', '#3f51b5'],
+    ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
+    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
+    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#e8590c'],
+    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
+    ['Trockenbau', 'Trockenbau', 'Bauphase', '#fd7e14'],
+    ['Sanitaer', 'Sanitär', 'Bauphase', '#1c7ed6'],
+    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#7048e8'],
+    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#d6336c'],
+    ['Endmontage', 'Endmontage', 'Bauphase', '#1c7ed6'],
   ] as const
 ).map(([key, label, phase, color], index) => toInfo({ key, label, phase, color, sortOrder: index + 1 }))
 
@@ -85,7 +96,9 @@ export const isOpen = (status: SiteStatus) => status === 'Angebot' || status ===
 /** The status a site may change to: one step forward, or cancelled from anywhere but cancelled. */
 export function nextStatuses(status: SiteStatus): SiteStatus[] {
   if (status === 'Storniert') return []
-  const next: SiteStatus[] = status === 'Angebot' ? ['Bauphase'] : status === 'Bauphase' ? ['Abgeschlossen'] : []
+  // A done site can go back to the construction phase when there is more to do after all.
+  const next: SiteStatus[] =
+    status === 'Angebot' ? ['Bauphase'] : status === 'Bauphase' ? ['Abgeschlossen'] : status === 'Abgeschlossen' ? ['Bauphase'] : []
   return [...next, 'Storniert']
 }
 
@@ -97,7 +110,7 @@ export function activitiesOfStatus(status: SiteStatus): Activity[] {
 
 export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', edge: '#8fa3a8' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
-export const ABSENCE: Colours = { background: '#ffeb3b', tint: '#fff6bd', edge: '#d4b800' }
+export const ABSENCE: Colours = { background: '#ffc61a', tint: '#ffe27a', edge: '#e0a000' }
 /** Feiertage are green, school holidays a lighter green. */
 export const PUBLIC_HOLIDAY: Colours = { background: '#5cc46a', tint: '#d9f2dc', edge: '#2e9e3e' }
 export const SCHOOL_HOLIDAY: Colours = { background: '#d3f0d6', tint: '#eef9ef', edge: '#8fd29a' }
@@ -107,19 +120,31 @@ export function activityLabel(activity: Activity | null | undefined): string | n
 
 export const activityInfo = (activity: Activity): ActivityInfo | undefined => BY_VALUE.get(activity)
 
+/**
+ * Work without a site that is no visit of the offer phase (e.g. the second half of a split day not given to a
+ * site yet): the employee is free then.
+ */
+export function isFree(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): boolean {
+  if (entry.type !== 'Baustelle' || entry.siteName) return false
+  return !entry.activity || BY_VALUE.get(entry.activity)?.phase !== 'Angebot'
+}
+
 /** What an entry is called in the plan: its site, or (planned before the site is known) its activity. */
 export function entryName(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
   if (entry.type !== 'Baustelle') return entry.type
+  if (isFree(entry)) return 'verfügbar'
   return entry.siteName ?? activityLabel(entry.activity) ?? ''
 }
 
-function colours(entry: Pick<Entry, 'type' | 'activity'>): Colours {
+function colours(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, 'siteName'>>): Colours {
   if (entry.type !== 'Baustelle') return ABSENCE
+  // Only a saved entry is free; a row being edited (no site name known) keeps the colour of its activity.
+  if (entry.siteName === null && isFree({ ...entry, siteName: null })) return NO_ACTIVITY
   return (entry.activity && BY_VALUE.get(entry.activity)) || NO_ACTIVITY
 }
 
 /** Inline style that hands the colours of an entry to the CSS (see .chip, .cell-compact, .my-entry). */
-export function entryStyle(entry: Pick<Entry, 'type' | 'activity'>): CSSProperties {
+export function entryStyle(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, 'siteName'>>): CSSProperties {
   const { background, tint, edge } = colours(entry)
   return { '--entry-bg': tint, '--entry-strong': background, '--entry-color': edge } as CSSProperties
 }
@@ -127,6 +152,7 @@ export function entryStyle(entry: Pick<Entry, 'type' | 'activity'>): CSSProperti
 /** Tooltip text: customer and activity, or Urlaub / Krank. */
 export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
   if (entry.type !== 'Baustelle') return entry.type
+  if (isFree(entry)) return 'verfügbar: noch keine Baustelle'
   const activity = activityLabel(entry.activity)
   if (!entry.siteName) return activity ? `${activity} (Baustelle noch offen)` : ''
   return activity ? `${entry.siteName} – ${activity}` : entry.siteName
@@ -155,13 +181,14 @@ export function allowedActivities(employee: Skilled, status?: SiteStatus): Activ
 }
 
 /**
- * Who appears in a phase of the plan. The offer phase: every planner, and whoever can do at least one of
- * its activities (set at the employee). The construction phase: whoever can do something there.
+ * Who appears in a phase of the plan. The offer phase: whoever has at least one of its activities set at
+ * the employee (planners too, being a planner alone is not enough). The construction phase: whoever can do
+ * something there.
  */
 export function worksInPhase(employee: Skilled, phase: 'Angebot' | 'Bauphase'): boolean {
   if (phase === 'Angebot') {
     const offer = activitiesOfStatus('Angebot')
-    return Boolean(employee.isPlaner) || ownActivities(employee).some((activity) => offer.includes(activity))
+    return ownActivities(employee).some((activity) => offer.includes(activity))
   }
   return allowedActivities(employee, phase).length > 0
 }

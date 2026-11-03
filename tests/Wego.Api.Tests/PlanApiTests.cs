@@ -269,17 +269,23 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var site = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
         Assert.Equal("Angebot", site.GetProperty("status").GetString());
 
-        // Not two steps at once, and not back.
+        // Not two steps at once, and not back to the offer.
         Assert.Equal(HttpStatusCode.BadRequest, (await Change("Abgeschlossen")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Change("Bauphase")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Change("Angebot")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Change("Abgeschlossen")).StatusCode);
+        // Done, but more to do after all: back to the construction phase (its activities are not doubled).
+        var reopened = await (await Change("Bauphase")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Bauphase", reopened.GetProperty("status").GetString());
+        var keys = reopened.GetProperty("tasks").EnumerateArray().Select(t => t.GetProperty("activity").GetString()).ToList();
+        Assert.Equal(keys.Count, keys.Distinct().Count());
         Assert.Equal(HttpStatusCode.OK, (await Change("Abgeschlossen")).StatusCode);
         // Cancelled can follow any status, but nothing follows it.
         Assert.Equal(HttpStatusCode.OK, (await Change("Storniert")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Change("Bauphase")).StatusCode);
 
         var history = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}/history");
-        Assert.Equal(["Angebot", "Bauphase", "Abgeschlossen", "Storniert"],
+        Assert.Equal(["Angebot", "Bauphase", "Abgeschlossen", "Bauphase", "Abgeschlossen", "Storniert"],
             history.EnumerateArray().Select(c => c.GetProperty("to").GetString()));
         Assert.Equal(JsonValueKind.Null, history[0].GetProperty("from").ValueKind);
         Assert.Equal("Planer", history[1].GetProperty("changedBy").GetString());
@@ -466,6 +472,98 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             userName = WegoApiFactory.PlanerUserName, role = "PlanerA", password = (string?)null,
         });
         Assert.Equal(HttpStatusCode.BadRequest, demote.StatusCode);
+    }
+
+    [Fact]
+    public async Task Planer_G_keep_the_hourly_rates_and_a_site_report_spans_all_years()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Planer Satz", "planer.satz", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.satz", "planer-a-pw");
+        var employeeId = await CreateEmployeeAsync(g, "Maurer", null, null);
+
+        // The usual rate is kept with the employee.
+        object Maurer(decimal? hourlyRate) => new
+        {
+            name = "Maurer", sortOrder = 0, isActive = true, showInPlan = true, vacationDaysPerYear = 30,
+            userName = (string?)null, role = "Handwerker", password = (string?)null, hourlyRate,
+        };
+        var rate = await g.PutAsJsonAsync($"/api/employees/{employeeId}", Maurer(38.5m));
+        Assert.Equal(HttpStatusCode.OK, rate.StatusCode);
+        Assert.Equal(38.5m, (await rate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("hourlyRate").GetDecimal());
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PutAsJsonAsync($"/api/employees/{employeeId}", Maurer(-1))).StatusCode);
+
+        // A site can have its own rate for an employee; empty goes back to the usual one. Planer G only.
+        var siteId = await CreateSiteAsync(a, "Familie Jahreswechsel");
+        var own = await g.PutAsJsonAsync($"/api/sites/{siteId}/hourly-rates/{employeeId}", new { hourlyRate = 42.255m });
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+        var rates = await g.GetFromJsonAsync<JsonElement>($"/api/sites/{siteId}/hourly-rates");
+        Assert.Equal(42.26m, rates.EnumerateArray().Single().GetProperty("hourlyRate").GetDecimal());
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.GetAsync($"/api/sites/{siteId}/hourly-rates")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await a.PutAsJsonAsync($"/api/sites/{siteId}/hourly-rates/{employeeId}", new { hourlyRate = 10 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await g.PutAsJsonAsync($"/api/sites/{siteId}/hourly-rates/{employeeId}", new { hourlyRate = 1001 })).StatusCode);
+        var cleared = await g.PutAsJsonAsync($"/api/sites/{siteId}/hourly-rates/{employeeId}", new { hourlyRate = (decimal?)null });
+        Assert.Equal(0, (await cleared.Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength());
+        Assert.Equal(38.5m, (await g.GetFromJsonAsync<JsonElement>("/api/employees")).EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == employeeId).GetProperty("hourlyRate").GetDecimal());
+
+        // Without a year the report of a site covers its whole time.
+        await a.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-12-30", new object[] { new { type = "Baustelle", siteId } });
+        await a.PutAsJsonAsync($"/api/plan/{employeeId}/{Year + 1}-01-04", new object[] { new { type = "Baustelle", siteId } });
+        var oneYear = await a.GetFromJsonAsync<JsonElement>($"/api/reports/sites/{siteId}?year={Year}");
+        var whole = await a.GetFromJsonAsync<JsonElement>($"/api/reports/sites/{siteId}");
+        Assert.Equal(1, oneYear.GetProperty("entries").GetArrayLength());
+        Assert.Equal(2, whole.GetProperty("entries").GetArrayLength());
+        Assert.Equal(0, whole.GetProperty("year").GetInt32());
+    }
+
+    [Fact]
+    public async Task Planer_A_delete_a_site_and_with_entries_only_when_asked_again()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Planer Löschen", "planer.loeschen", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.loeschen", "planer-a-pw");
+        var employeeId = await CreateEmployeeAsync(g, "Fliesenleger", null, null);
+
+        var empty = await CreateSiteAsync(a, "Familie Leer");
+        Assert.Equal(HttpStatusCode.NoContent, (await a.DeleteAsync($"/api/sites/{empty}")).StatusCode);
+
+        var used = await CreateSiteAsync(a, "Familie Voll");
+        await a.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-08-03", new object[] { new { type = "Baustelle", siteId = used } });
+        await a.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-08-04", new object[] { new { type = "Baustelle", siteId = used } });
+        var asked = await a.DeleteAsync($"/api/sites/{used}");
+        Assert.Equal(HttpStatusCode.Conflict, asked.StatusCode);
+        Assert.Equal(2, (await asked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("entries").GetInt32());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await a.DeleteAsync($"/api/sites/{used}?withEntries=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync($"/api/sites/{used}")).StatusCode);
+        var plan = await a.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        Assert.DoesNotContain(plan.GetProperty("entries").EnumerateArray(), e => e.GetProperty("employeeId").GetInt32() == employeeId);
+    }
+
+    [Fact]
+    public async Task Only_Planer_G_enter_or_remove_vacation_and_sick_days()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Planer Urlaub", "planer.urlaub", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.urlaub", "planer-a-pw");
+        var employeeId = await CreateEmployeeAsync(g, "Urlauber", null, null);
+        var siteId = await CreateSiteAsync(g, "Familie Ferien");
+        var day = $"/api/plan/{employeeId}/{Year}-07-06";
+        var vacation = new object[] { new { type = "Urlaub" } };
+
+        // Planer A plans sites, but neither enters Urlaub nor replaces it.
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.PutAsJsonAsync(day, vacation)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await g.PutAsJsonAsync(day, vacation)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await a.PutAsJsonAsync(day, new object[] { new { type = "Baustelle", siteId } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.PutAsJsonAsync(day, Array.Empty<object>())).StatusCode);
+        // Next to it a site is fine, the vacation stays as it is.
+        Assert.Equal(HttpStatusCode.OK,
+            (await a.PutAsJsonAsync(day, new object[] { new { type = "Urlaub" }, new { type = "Baustelle", siteId } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await g.PutAsJsonAsync(day, Array.Empty<object>())).StatusCode);
     }
 
     [Fact]

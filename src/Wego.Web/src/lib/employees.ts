@@ -14,6 +14,7 @@ export function toEmployeeInput(employee: Employee): EmployeeInput {
     password: null,
     mainActivity: employee.mainActivity,
     additionalActivities: employee.additionalActivities,
+    hourlyRate: employee.hourlyRate ?? null,
   }
 }
 

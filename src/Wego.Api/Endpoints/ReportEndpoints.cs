@@ -21,12 +21,13 @@ public static class ReportEndpoints
     {
         var group = app.MapGroup("/api/reports");
 
-        group.MapGet("/sites/{id:int}", async (int id, int year, WegoDbContext db) =>
+        // One year, or without a year the whole time of the site (for its costing afterwards; Year is 0 then).
+        group.MapGet("/sites/{id:int}", async (int id, int? year, WegoDbContext db) =>
         {
             var site = await db.Sites.FindAsync(id);
             if (site is null) return Results.NotFound();
 
-            var (from, to) = YearRange(year);
+            var (from, to) = year is { } one ? YearRange(one) : (DateOnly.MinValue, DateOnly.MaxValue);
             var entries = Sort((await EntriesQuery(db)
                     .Where(e => e.SiteId == id && e.Type == EntryType.Baustelle && e.Date >= from && e.Date <= to)
                     .ToListAsync())
@@ -38,7 +39,7 @@ public static class ReportEndpoints
                 .OrderByDescending(r => r.Days).ThenBy(r => r.Name)
                 .ToList();
 
-            return Results.Ok(new SiteReportDto(site.Id, site.Name, year,
+            return Results.Ok(new SiteReportDto(site.Id, site.Name, year ?? 0,
                 rows.Sum(r => r.Days), rows.Sum(r => r.Hours), rows, entries));
         }).RequireAuthorization(Policies.Plan);
 

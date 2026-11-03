@@ -2,7 +2,7 @@ import { Alert, Group, Paper, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, NamedItem, Site } from '../api/types'
+import type { Activity, DayEntryInput, Entry, Site } from '../api/types'
 import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
@@ -111,15 +111,6 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
     return null
   })()
 
-  // Sites of the weeks around the one in view: offered as one-tap buttons in the day editor.
-  const recentSites: NamedItem[] = [
-    ...new Map(
-      own
-        .filter((entry) => entry.siteId !== null && entry.date >= addDays(visible, -7) && entry.date <= addDays(visible, 20))
-        .map((entry) => [entry.siteId!, { id: entry.siteId!, name: entry.siteName ?? '' }]),
-    ).values(),
-  ]
-
   const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
 
   const save = async (changes: DayChange[], message: string) => {
@@ -157,7 +148,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
 
   /** A site's day takes the open activities of that site the employee can do, and the employee's site entries. */
   const acceptsOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee || item.kind === 'employee' || item.kind === 'activity') return false
+    if (!employee || item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return false
     if (item.kind === 'task') return item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
     const { entry } = item
     return (
@@ -169,7 +160,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
   }
 
   const dropOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee || item.kind === 'employee' || item.kind === 'activity') return
+    if (!employee || item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return
     if (item.kind === 'task') {
       planTask(site, item.activity, date).catch(fail)
       return
@@ -339,7 +330,8 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
             reload()
             return site
           }}
-          recentSites={recentSites}
+          // Only Planer G open the report of an employee.
+          canAbsence
           onClose={() => setOpenDay(null)}
           onSave={async (dayEntries) => {
             await save([{ employeeId, date: openDay, entries: dayEntries }], `${employee.name}: Tag gespeichert.`)

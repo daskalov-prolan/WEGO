@@ -25,6 +25,9 @@ public static class SiteEndpoints
 
     public record MergeRequest(int TargetId);
 
+    public record HourlyRateDto(int EmployeeId, decimal HourlyRate);
+    public record HourlyRateInput(decimal? HourlyRate);
+
     public static void MapSiteEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/sites");
@@ -128,12 +131,46 @@ public static class SiteEndpoints
                 .Select(c => new StatusChangeDto(c.From, c.To, c.ChangedAt, c.ChangedBy))
                 .ToListAsync()).RequireAuthorization(Policies.Plan);
 
+        // The wages per hour that differ on this site from the usual ones of the employees (Planer G only).
+        group.MapGet("/{id:int}/hourly-rates", async (int id, WegoDbContext db) =>
+            await HourlyRates(db, id)).RequireAuthorization(Policies.Admin);
+
+        // Changes the wage of an employee on this site only; empty goes back to the usual one.
+        group.MapPut("/{id:int}/hourly-rates/{employeeId:int}", async (int id, int employeeId, HourlyRateInput input,
+            ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            if (input.HourlyRate is < 0 or > 1000) return ApiErrors.BadRequest("Bitte einen Stundensatz zwischen 0 und 1000 € angeben.");
+            var site = await db.Sites.FindAsync(id);
+            var employee = await db.Employees.FindAsync(employeeId);
+            if (site is null || employee is null) return Results.NotFound();
+
+            var rate = await db.SiteHourlyRates.FindAsync(id, employeeId);
+            var before = rate?.HourlyRate;
+            var after = input.HourlyRate is { } value ? Math.Round(value, 2) : (decimal?)null;
+            if (after is { } newRate)
+            {
+                if (rate is null) db.SiteHourlyRates.Add(rate = new SiteHourlyRate { SiteId = id, EmployeeId = employeeId });
+                rate.HourlyRate = newRate;
+            }
+            else if (rate is not null)
+            {
+                db.SiteHourlyRates.Remove(rate);
+            }
+
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Stundensatz", id,
+                new { EmployeeId = employeeId, Employee = employee.Name, HourlyRate = before },
+                new { EmployeeId = employeeId, Employee = employee.Name, HourlyRate = after });
+            await db.SaveChangesAsync();
+            return Results.Ok(await HourlyRates(db, id));
+        }).RequireAuthorization(Policies.Admin);
+
         // Two records for the same site (e.g. typed twice): the entries move over, the duplicate goes.
         group.MapPost("/{id:int}/merge", async (int id, MergeRequest request, ClaimsPrincipal user, WegoDbContext db) =>
         {
             if (id == request.TargetId) return ApiErrors.BadRequest("Eine Baustelle lässt sich nicht mit sich selbst zusammenführen.");
-            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
-            var target = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == request.TargetId);
+            var site = await db.Sites.Include(s => s.Tasks).Include(s => s.HourlyRates).FirstOrDefaultAsync(s => s.Id == id);
+            var target = await db.Sites.Include(s => s.Tasks).Include(s => s.HourlyRates)
+                .FirstOrDefaultAsync(s => s.Id == request.TargetId);
             if (site is null || target is null) return Results.NotFound();
 
             var targetBefore = ToDto(target);
@@ -157,6 +194,9 @@ public static class SiteEndpoints
             target.PlannedStart ??= site.PlannedStart;
             target.PlannedEnd ??= site.PlannedEnd;
             target.UpdateName();
+            // Wages changed on the duplicate stay, unless the remaining site has its own.
+            foreach (var rate in site.HourlyRates.Where(r => target.HourlyRates.All(t => t.EmployeeId != r.EmployeeId)).ToList())
+                target.HourlyRates.Add(new SiteHourlyRate { EmployeeId = rate.EmployeeId, HourlyRate = rate.HourlyRate });
 
             // The plan entries move without a log entry per day: these two entries say which site they came from.
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Zusammengeführt, gelöscht", id, ToDto(site),
@@ -169,19 +209,37 @@ public static class SiteEndpoints
             return Results.Ok(ToDto(target));
         }).RequireAuthorization(Policies.Plan);
 
-        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
+        // A site with entries in the plan goes only when asked again (withEntries): its entries go with it,
+        // each day logged as a change of the plan.
+        group.MapDelete("/{id:int}", async (int id, bool? withEntries, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            if (await db.PlanEntries.AnyAsync(e => e.SiteId == id))
-                return ApiErrors.BadRequest("Die Baustelle ist im Plan eingetragen und kann nicht gelöscht werden.");
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
 
+            var entries = await db.PlanEntries.Where(e => e.SiteId == id).OrderBy(e => e.Date).ToListAsync();
+            if (entries.Count > 0 && withEntries != true)
+                return Results.Conflict(new
+                {
+                    message = $"„{site.Name}“ hat {entries.Count} {(entries.Count == 1 ? "Eintrag" : "Einträge")} im Plan.",
+                    entries = entries.Count,
+                });
+
+            foreach (var entry in entries)
+                ChangeLog.Add(db, user, ChangeArea.Plan, "Gelöscht", entry.EmployeeId,
+                    new { entry.Type, entry.SiteId, SiteName = site.Name, entry.Activity, entry.StartTime, entry.EndTime, entry.Note },
+                    null, entry.Date);
+            db.PlanEntries.RemoveRange(entries);
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Gelöscht", id, ToDto(site), null);
             db.Sites.Remove(site);
             await db.SaveChangesAsync();
             return Results.NoContent();
         }).RequireAuthorization(Policies.Plan);
     }
+
+    private static Task<List<HourlyRateDto>> HourlyRates(WegoDbContext db, int siteId) =>
+        db.SiteHourlyRates.Where(r => r.SiteId == siteId)
+            .Select(r => new HourlyRateDto(r.EmployeeId, r.HourlyRate))
+            .ToListAsync();
 
     public static SiteDto ToDto(Site s) => new(s.Id, s.Name, s.Client, s.Street, s.HouseNumber, s.AddressAddition,
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,

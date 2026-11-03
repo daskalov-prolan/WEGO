@@ -196,6 +196,14 @@ export interface Employee {
   hasPassword: boolean
   mainActivity: Activity | null
   additionalActivities: Activity[]
+  /** Usual wage per hour in euros, for the costing of a site (Planer G only). */
+  hourlyRate?: number | null
+}
+
+/** The wage per hour of an employee on one site, where it differs from the usual one. */
+export interface SiteHourlyRate {
+  employeeId: number
+  hourlyRate: number
 }
 
 export interface EmployeeInput {
@@ -209,4 +217,5 @@ export interface EmployeeInput {
   password: string | null
   mainActivity: Activity | null
   additionalActivities: Activity[]
+  hourlyRate: number | null
 }

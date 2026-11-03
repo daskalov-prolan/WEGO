@@ -68,6 +68,7 @@ const newEmployee: EmployeeInput = {
   password: null,
   mainActivity: null,
   additionalActivities: [],
+  hourlyRate: null,
 }
 
 function EmployeesSection({ year }: { year: number }) {
@@ -192,6 +193,7 @@ function EmployeesSection({ year }: { year: number }) {
               <Table.Th>Rolle</Table.Th>
               <Table.Th>Tätigkeiten</Table.Th>
               <Table.Th ta="right">Urlaubstage</Table.Th>
+              <Table.Th ta="right">Stundensatz</Table.Th>
               <Table.Th ta="right">Reihenfolge</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th />
@@ -217,6 +219,15 @@ function EmployeesSection({ year }: { year: number }) {
                   <ActivityBadges mainActivity={employee.mainActivity} additionalActivities={employee.additionalActivities} />
                 </Table.Td>
                 <Table.Td ta="right">{employee.vacationDaysPerYear}</Table.Td>
+                <Table.Td ta="right">
+                  {employee.hourlyRate == null ? (
+                    <Text size="sm" c="dimmed">
+                      –
+                    </Text>
+                  ) : (
+                    employee.hourlyRate.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+                  )}
+                </Table.Td>
                 <Table.Td ta="right">{employee.sortOrder}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
@@ -305,6 +316,20 @@ function EmployeesSection({ year }: { year: number }) {
                   max={366}
                   value={editing.input.vacationDaysPerYear}
                   onChange={(value) => change({ vacationDaysPerYear: Number(value) || 0 })}
+                />
+                <NumberInput
+                  label="Stundensatz"
+                  description="für die Nachkalkulation, je Baustelle änderbar"
+                  min={0}
+                  max={1000}
+                  decimalScale={2}
+                  decimalSeparator=","
+                  thousandSeparator="."
+                  suffix=" €"
+                  hideControls
+                  placeholder="€ / Std."
+                  value={editing.input.hourlyRate ?? ''}
+                  onChange={(value) => change({ hourlyRate: value === '' ? null : Number(value) })}
                 />
                 <NumberInput
                   label="Reihenfolge im Plan"

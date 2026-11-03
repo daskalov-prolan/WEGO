@@ -3,7 +3,16 @@ import { notifications } from '@mantine/notifications'
 import { Fragment, useState, type CSSProperties } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, PlanEmployee, Site } from '../api/types'
-import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
+import {
+  ACTIVITIES,
+  activitiesOfStatus,
+  activityLabel,
+  allowedActivities,
+  defaultActivity,
+  entryName,
+  entryTitle,
+  isOpen,
+} from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
@@ -87,10 +96,10 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
   const capable = employees.filter((employee) =>
     [employee.mainActivity, ...employee.additionalActivities].some((activity) => activity !== null && openActivities.has(activity)),
   )
-  // The lanes of the calendar: first those with an open main activity, then those who can do one besides.
-  const lanes = [...relevant, ...capable.filter((employee) => !relevant.includes(employee))]
-  const besides = (employee: PlanEmployee) =>
-    employee.additionalActivities.filter((activity) => openActivities.has(activity)).map(activityLabel)
+  // The lanes of the calendar: only what concerns this site, i.e. who works here and who has an open main
+  // activity here.
+  const workedHere = new Set(entries.filter((entry) => entry.siteId === site.id).map((entry) => entry.employeeId))
+  const lanes = employees.filter((employee) => workedHere.has(employee.id) || relevant.includes(employee))
 
   /** Of these, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
   const freeIn = (monday: string): PlanEmployee[] => {
@@ -147,7 +156,7 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
 
   /** A lane's day takes entries the employee can do and the open activities of this site they can do. */
   const accepts = (employee: PlanEmployee, date: string, item: DragItem) =>
-    item.kind === 'employee' || item.kind === 'activity'
+    item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence'
       ? false
       : item.kind === 'task'
       ? item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
@@ -156,7 +165,7 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
 
   /** Dropped there: an entry moves to this employee and day, an open activity is planned there. */
   const dropItem = (employee: PlanEmployee, date: string, item: DragItem) => {
-    if (item.kind === 'employee' || item.kind === 'activity') return
+    if (item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return
     if (item.kind === 'task') {
       plan(item.activity, [employee.id], date).catch(fail)
       return
@@ -266,23 +275,16 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
         {plans.length > 0 && lanes.length === 0 && (
           <Text size="sm" c="dimmed" className="mini-no-lanes">
             {openTasks.length === 0
-              ? 'Alles eingeplant: keine offene Tätigkeit, für die Mitarbeiter gezeigt werden.'
+              ? 'Noch niemand auf dieser Baustelle eingesetzt.'
               : 'Niemand kann eine der offenen Tätigkeiten.'}
           </Text>
         )}
         {lanes.map((employee) => (
           <Fragment key={employee.id}>
-            {relevant.includes(employee) ? (
-              <div className="mini-lane-name">
-                <span className="name">{employee.name}</span>
-                {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
-              </div>
-            ) : (
-              <div className="mini-lane-name besides" title="Kann eine offene Tätigkeit als Zusatztätigkeit">
-                <span className="name">{employee.name}</span>
-                <span className="main">auch {besides(employee).join(', ')}</span>
-              </div>
-            )}
+            <div className="mini-lane-name">
+              <span className="name">{employee.name}</span>
+              {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
+            </div>
             {strip.days.map((day) => (
               <LaneCell
                 key={day.iso}
@@ -299,8 +301,9 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
                       <Chip entry={entry} label={(entry.activity && activityLabel(entry.activity)) || undefined} draggable={canEdit} />
                     </span>
                   ) : (
-                    <span key={entry.id} className="mini-elsewhere">
-                      <Chip entry={entry} draggable={canEdit} />
+                    // Work elsewhere only shows that the day is taken.
+                    <span key={entry.id} className="mini-elsewhere mini-busy" title={entryTitle(entry)}>
+                      {entry.type === 'Baustelle' ? 'belegt' : entry.type}
                     </span>
                   ),
                 )}

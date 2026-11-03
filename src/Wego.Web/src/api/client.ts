@@ -13,6 +13,7 @@ import type {
   Plan,
   SchoolHoliday,
   Site,
+  SiteHourlyRate,
   SiteInput,
   SiteReport,
   SiteStatus,
@@ -87,13 +88,16 @@ export const api = {
   updateSite: (id: number, input: SiteInput) => request<Site>('PUT', `/api/sites/${id}`, input),
   /** Moves the entries of a duplicate to the remaining site and deletes the duplicate. */
   mergeSite: (id: number, targetId: number) => request<Site>('POST', `/api/sites/${id}/merge`, { targetId }),
-  deleteSite: (id: number) => request<void>('DELETE', `/api/sites/${id}`),
+  deleteSite: (id: number, withEntries = false) =>
+    request<void>('DELETE', `/api/sites/${id}${withEntries ? '?withEntries=true' : ''}`),
   changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
   updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
     request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
-  siteReport: (id: number, year: number) => request<SiteReport>('GET', `/api/reports/sites/${id}?year=${year}`),
+  /** One year, or without it the whole time of the site. */
+  siteReport: (id: number, year?: number) =>
+    request<SiteReport>('GET', `/api/reports/sites/${id}${year === undefined ? '' : `?year=${year}`}`),
   employeeReport: (id: number, year: number) =>
     request<EmployeeReport>('GET', `/api/reports/employees/${id}?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
@@ -102,6 +106,10 @@ export const api = {
   employees: () => request<Employee[]>('GET', '/api/employees'),
   createEmployee: (input: EmployeeInput) => request<Employee>('POST', '/api/employees', input),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>('PUT', `/api/employees/${id}`, input),
+  siteHourlyRates: (siteId: number) => request<SiteHourlyRate[]>('GET', `/api/sites/${siteId}/hourly-rates`),
+  /** The wage of an employee on this site only; null goes back to the usual one. */
+  setSiteHourlyRate: (siteId: number, employeeId: number, hourlyRate: number | null) =>
+    request<SiteHourlyRate[]>('PUT', `/api/sites/${siteId}/hourly-rates/${employeeId}`, { hourlyRate }),
 
   createAccess: (id: number) => request<Access>('POST', `/api/employees/${id}/access`),
 

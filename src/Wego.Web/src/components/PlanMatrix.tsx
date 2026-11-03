@@ -34,6 +34,8 @@ export interface MatrixProps {
   foldWeekends?: boolean
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
+  /** Planners: an activity dragged onto an entry becomes its activity. */
+  dropOnEntry?: (entry: Entry) => DropHandlers
   /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
   marked?: { ids: Set<number>; first: number; last: number }
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
@@ -370,6 +372,7 @@ export function TimelineMatrix(props: MatrixProps) {
                           // Marking takes the click; the site opens from the right-click menu then.
                           onSiteClick={props.onMark ? undefined : openSite}
                           draggable={draggable}
+                          drop={props.dropOnEntry?.(entry)}
                           marked={props.marked?.ids.has(entry.id)}
                           stretch={
                             props.onStretchStart && props.marked && (props.marked.first === entry.id || props.marked.last === entry.id)
@@ -430,6 +433,8 @@ interface SiteTimelineProps {
   onOpenSite: (siteId: number) => void
   /** Planners: entries and employees can be dragged onto a cell of a site and a day. */
   dropOn?: (site: Site, date: string) => DropHandlers
+  /** Planners: an activity dragged onto an entry becomes its activity. */
+  dropOnEntry?: (entry: Entry) => DropHandlers
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (site: Site, date: string, at: { x: number; y: number; entryId?: number }) => void
   /** Planners: the marked entries (an employee's stretch of days at a site) and the entries at its ends. */
@@ -494,6 +499,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                         entry={entry}
                         label={entry.employeeName}
                         draggable={draggable}
+                        drop={props.dropOnEntry?.(entry)}
                         marked={marked?.ids.has(entry.id)}
                         stretch={
                           props.onStretchStart && marked && (marked.first === entry.id || marked.last === entry.id)

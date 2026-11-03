@@ -58,6 +58,12 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
+    /// <summary>
+    /// Wage per hour in euros, for the costing of a site afterwards (Planer G only). A site can have its own
+    /// rate for an employee, see <see cref="SiteHourlyRate"/>.
+    /// </summary>
+    public decimal? HourlyRate { get; set; }
+
     /// <summary>What this employee typically does on a site (the key of an <see cref="ActivityType"/>).</summary>
     public string? MainActivity { get; set; }
 
@@ -86,7 +92,10 @@ public enum SiteStatus
 
 public static class SiteStatusFlow
 {
-    /// <summary>The allowed status changes: forward one step, or cancelled from anywhere.</summary>
+    /// <summary>
+    /// The allowed status changes: forward one step, back from done to the construction phase (more to do
+    /// after all), or cancelled from anywhere.
+    /// </summary>
     public static bool CanChange(SiteStatus from, SiteStatus to) =>
         (from, to) switch
         {
@@ -94,6 +103,7 @@ public static class SiteStatusFlow
             (_, SiteStatus.Storniert) => true,
             (SiteStatus.Angebot, SiteStatus.Bauphase) => true,
             (SiteStatus.Bauphase, SiteStatus.Abgeschlossen) => true,
+            (SiteStatus.Abgeschlossen, SiteStatus.Bauphase) => true,
             _ => false,
         };
 }
@@ -182,11 +192,27 @@ public class Site
 
     public List<PlanEntry> Entries { get; set; } = [];
 
+    /// <summary>Wages per hour of employees that differ on this site from their usual one.</summary>
+    public List<SiteHourlyRate> HourlyRates { get; set; } = [];
+
     /// <summary>Sets <see cref="Name"/> from the chosen field; call after changing client, street or source.</summary>
     public void UpdateName() => Name = (NameSource == SiteNameSource.Strasse
         ? $"{Street} {HouseNumber}"
         : Client ?? "").Trim();
 }
+/// <summary>
+/// The wage per hour of an employee on one site, changed in its costing afterwards. It takes the place of
+/// <see cref="Employee.HourlyRate"/> on this site only.
+/// </summary>
+public class SiteHourlyRate
+{
+    public int SiteId { get; set; }
+    public Site? Site { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee? Employee { get; set; }
+    public decimal HourlyRate { get; set; }
+}
+
 /// <summary>
 /// One entry in a day cell of an employee. A day can hold several entries
 /// (split day), each with an optional time window.

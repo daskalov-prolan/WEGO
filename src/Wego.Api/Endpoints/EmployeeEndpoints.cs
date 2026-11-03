@@ -11,7 +11,7 @@ public static class EmployeeEndpoints
     public record EmployeeListItem(int Id, string Name);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
-        IReadOnlyList<string> AdditionalActivities);
+        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
@@ -19,7 +19,7 @@ public static class EmployeeEndpoints
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
         string? UserName, string Role, string? Password, string? MainActivity = null,
-        string[]? AdditionalActivities = null);
+        string[]? AdditionalActivities = null, decimal? HourlyRate = null);
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -131,6 +131,7 @@ public static class EmployeeEndpoints
         if (!Roles.All.Contains(input.Role)) return "Unbekannte Rolle.";
         if (input.VacationDaysPerYear is < 0 or > 366) return "Bitte gültige Urlaubstage pro Jahr angeben.";
         var additional = input.AdditionalActivities ?? [];
+        if (input.HourlyRate is < 0 or > 1000) return "Bitte einen Stundensatz zwischen 0 und 1000 € angeben.";
         var activities = await db.Activities.OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
         if (input.MainActivity is { } main && !activities.Contains(main) || additional.Any(a => !activities.Contains(a)))
             return "Unbekannte Tätigkeit.";
@@ -159,6 +160,7 @@ public static class EmployeeEndpoints
         employee.IsActive = input.IsActive;
         employee.ShowInPlan = input.ShowInPlan;
         employee.VacationDaysPerYear = input.VacationDaysPerYear;
+        employee.HourlyRate = input.HourlyRate is { } rate ? Math.Round(rate, 2) : null;
         employee.UserName = userName;
         employee.Role = input.Role;
         employee.MainActivity = input.MainActivity;
@@ -168,5 +170,6 @@ public static class EmployeeEndpoints
     }
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
-        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities);
+        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities,
+        e.HourlyRate);
 }
