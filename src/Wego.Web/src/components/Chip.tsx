@@ -1,6 +1,6 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import type { Entry } from '../api/types'
-import { activityLabel, entryName, entryStyle, entryTitle } from '../lib/activities'
+import { activityLabel, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange } from '../lib/dates'
 import { ActivityIcon } from './ActivityIcon'
@@ -15,13 +15,15 @@ interface Props {
   label?: string
   /** Planners can drag the entry onto another cell of the plan. */
   draggable?: boolean
+  /** Handlers to take something dropped on this entry (e.g. an activity from above the plan). */
+  drop?: Record<string, unknown>
   /** Marked by a click: framed. */
   marked?: boolean
   /** Ends of a marked stretch: dragging them makes it longer or shorter. */
   stretch?: { left: boolean; right: boolean; onStart: (side: 'left' | 'right', event: PointerEvent) => void }
 }
 
-/** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note. */
+/** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note; pointing at the entry shows the note. */
 export function NoteMark({ important }: { important: boolean }) {
   return important ? (
     <span className="note-mark important" role="img" aria-label="wichtige Notiz">
@@ -36,7 +38,7 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, stretch }: Props) {
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, stretch, drop }: Props) {
   const time = formatTimeRange(entry)
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
@@ -44,12 +46,14 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
     <span
       className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
-      title={entryTitle(entry)}
+      // With a note, pointing at the entry shows the note instead of site and activity.
+      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : entryTitle(entry)}
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable)}
+      {...drop}
     >
       <span className="chip-line">
-        <ActivityIcon activity={entry.activity} type={entry.type} />
+        {!isFree(entry) && <ActivityIcon activity={entry.activity} type={entry.type} />}
         {time && <span className="time">{time}</span>}
         <span className="chip-name">
           {label !== undefined ? (
@@ -66,7 +70,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
         </span>
         {entry.note && <NoteMark important={entry.noteImportant} />}
       </span>
-      {withActivity && entry.activity && <span className="activity">{activityLabel(entry.activity)}</span>}
+      {withActivity && entry.activity && !isFree(entry) && <span className="activity">{activityLabel(entry.activity)}</span>}
       {stretch?.left && (
         <span className="stretch-handle left" title="Ziehen: früher beginnen oder später" onPointerDown={(event) => stretch.onStart('left', event)} />
       )}

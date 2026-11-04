@@ -123,6 +123,9 @@ export const HALF_HOURS = Array.from(
 )
 
 /** Two sites of four hours each on one day: the first in the morning, the second after the break. */
+/** A whole working day, e.g. for widening half a day (the costing counts its hours). */
+export const WHOLE_DAY = { start: '07:00', end: '16:00' }
+
 export const HALF_DAYS = [
   { start: '07:30', end: '11:30' },
   { start: '12:00', end: '16:00' },

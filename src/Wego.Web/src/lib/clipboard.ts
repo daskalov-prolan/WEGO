@@ -113,12 +113,15 @@ export function clipMenuItems({
   pasteLabel = 'Einfügen',
   onPaste,
   onOpenSite,
+  onDelete,
 }: {
   one?: Entry
   all: Entry[]
   pasteLabel?: string
   onPaste: () => void
   onOpenSite?: (siteId: number) => void
+  /** Removes these entries; without it the menu offers no deleting. */
+  onDelete?: (entries: Entry[]) => void
 }): ClipMenuItem[] {
   const copied = (entries: Entry[], cut: boolean) => () => {
     copyEntries(entries, cut)
@@ -141,5 +144,8 @@ export function clipMenuItems({
       { label: one ? 'Ganzen Tag ausschneiden' : 'Ausschneiden', disabled: all.length === 0, onClick: copied(all, true) },
     )
   items.push({ label: pasteLabel, disabled: clip === null, onClick: onPaste })
+  if (onDelete && one) items.push({ label: `Löschen: ${entryName(one)}`, onClick: () => onDelete([one]) })
+  if (onDelete && (!one || all.length > 1))
+    items.push({ label: one ? 'Ganzen Tag löschen' : 'Löschen', disabled: all.length === 0, onClick: () => onDelete(all) })
   return items
 }

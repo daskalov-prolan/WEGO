@@ -18,7 +18,7 @@ export const emptySite: SiteInput = {
 
 export function toSiteInput(site: Site): SiteInput {
   const { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description } = site
-  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone } = site
+  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone, responsiblePlannerId } = site
   return {
     client,
     clientPhone,
@@ -32,6 +32,7 @@ export function toSiteInput(site: Site): SiteInput {
     description,
     plannedStart,
     plannedEnd,
+    responsiblePlannerId,
   }
 }
 

@@ -1,9 +1,10 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
-import type { Activity, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import type { Activity, CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import { CellNotes } from './CalendarNotes'
 import { ActivityIcon } from './ActivityIcon'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { activityLabel, ACTIVITIES, entryName, entryStyle, entryTitle } from '../lib/activities'
+import { entryName, entryStyle, entryTitle, onlyHalfDay } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -12,6 +13,12 @@ import { Chip, NoteMark } from './Chip'
 type DropHandlers = Record<string, unknown>
 
 export interface MatrixProps {
+  /** The notes in the field of an employee and a day. */
+  notesOf?: (employeeId: number, date: string) => CalendarNote[]
+  /** Planners: a right click on a note (change or delete it). */
+  onNoteMenu?: (note: CalendarNote, at: { x: number; y: number }) => void
+  /** Planners: a click on a note opens it to change it. */
+  onOpenNote?: (note: CalendarNote) => void
   days: Day[]
   employees: PlanEmployee[]
   entriesOf: (employeeId: number, date: string) => Entry[]
@@ -34,6 +41,8 @@ export interface MatrixProps {
   foldWeekends?: boolean
   /** Planners: entries and open activities can be dragged onto a cell of an employee and a day. */
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
+  /** Planners: an activity dragged onto an entry becomes its activity. */
+  dropOnEntry?: (entry: Entry) => DropHandlers
   /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
   marked?: { ids: Set<number>; first: number; last: number }
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
@@ -330,19 +339,14 @@ export function TimelineMatrix(props: MatrixProps) {
       corner="Mitarbeiter"
     >
       {employees.map((employee, employeeIndex) => {
-        const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
         return (
           <tr key={employee.id}>
-            <th
-              className="employee"
-              scope="row"
-              title={main ? `${employee.name} – ${activityLabel(employee.mainActivity)}` : employee.name}
-              style={main ? { boxShadow: `inset 5px 0 0 ${main.background}` } : undefined}
-            >
+            <th className="employee" scope="row" title={employee.name}>
               <EmployeeName employee={employee} link={linkNames} />
             </th>
             {days.map((day, dayIndex) => {
               const entries = entriesOf(employee.id, day.iso)
+              const notes = props.notesOf?.(employee.id, day.iso) ?? []
               const first = entries[0]
               const isSelected = selected.has(cellKey(employee.id, day.iso))
               return (
@@ -370,6 +374,7 @@ export function TimelineMatrix(props: MatrixProps) {
                           // Marking takes the click; the site opens from the right-click menu then.
                           onSiteClick={props.onMark ? undefined : openSite}
                           draggable={draggable}
+                          drop={props.dropOnEntry?.(entry)}
                           marked={props.marked?.ids.has(entry.id)}
                           stretch={
                             props.onStretchStart && props.marked && (props.marked.first === entry.id || props.marked.last === entry.id)
@@ -382,6 +387,18 @@ export function TimelineMatrix(props: MatrixProps) {
                           }
                         />
                       ))}
+                      {/* Only half a day on sites: the other half is free. */}
+                      {onlyHalfDay(entries) && (
+                        <span
+                          className="chip chip-baustelle chip-half-free"
+                          style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
+                          title="verfügbar: der Rest des Tages ist frei"
+                        >
+                          <span className="chip-line">
+                            <span className="chip-name">verfügbar</span>
+                          </span>
+                        </span>
+                      )}
                     </span>
                     {first && (
                       <Compact
@@ -390,6 +407,13 @@ export function TimelineMatrix(props: MatrixProps) {
                         dimmed={entries.every(isDimmed)}
                         onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
                         draggable={draggable}
+                      />
+                    )}
+                    {notes.length > 0 && (
+                      <CellNotes
+                        notes={notes}
+                        onOpen={props.onOpenNote}
+                        onMenu={props.onNoteMenu && ((note, event) => props.onNoteMenu!(note, { x: event.clientX, y: event.clientY }))}
                       />
                     )}
                   </button>
@@ -430,6 +454,8 @@ interface SiteTimelineProps {
   onOpenSite: (siteId: number) => void
   /** Planners: entries and employees can be dragged onto a cell of a site and a day. */
   dropOn?: (site: Site, date: string) => DropHandlers
+  /** Planners: an activity dragged onto an entry becomes its activity. */
+  dropOnEntry?: (entry: Entry) => DropHandlers
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (site: Site, date: string, at: { x: number; y: number; entryId?: number }) => void
   /** Planners: the marked entries (an employee's stretch of days at a site) and the entries at its ends. */
@@ -448,7 +474,14 @@ export function SiteTimeline(props: SiteTimelineProps) {
   const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
   const draggable = dropOn !== undefined
   return (
-    <TimelineFrame days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} foldWeekends={foldWeekends} corner="Baustelle">
+    <TimelineFrame
+      days={days}
+      holidayByDate={holidayByDate}
+      today={today}
+      zoom={zoom}
+      foldWeekends={foldWeekends}
+      corner="Baustelle"
+    >
       {rows.map(({ site, byDate }) => (
         <tr key={site.id}>
           <th className="employee site-head" scope="row" title={site.client ?? site.name}>
@@ -494,6 +527,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                         entry={entry}
                         label={entry.employeeName}
                         draggable={draggable}
+                        drop={props.dropOnEntry?.(entry)}
                         marked={marked?.ids.has(entry.id)}
                         stretch={
                           props.onStretchStart && marked && (marked.first === entry.id || marked.last === entry.id)

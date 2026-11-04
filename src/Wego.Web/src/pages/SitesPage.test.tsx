@@ -18,11 +18,7 @@ const sites = [
   site(3, 'Zesch', null, null),
   {
     ...site(4, 'Chung', '2026-03-10', '2026-03-31'),
-    tasks: [
-      { activity: 'Abriss' as const, estimatedDays: 1, notNeeded: false },
-      { activity: 'Trockenbau' as const, estimatedDays: 1, notNeeded: false },
-      { activity: 'Sanitaer' as const, estimatedDays: 1, notNeeded: true },
-    ],
+    street: 'Alt-Karow 53', postalCode: '13125', city: 'Berlin', clientPhone: '030 123 45', responsiblePlannerId: 9,
   },
   site(5, 'Abgesagt', '2026-03-20', '2026-03-25', 'Storniert'),
 ]
@@ -31,18 +27,11 @@ let scrolledTo: string[] = []
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-03-15T09:00:00') })
-  // Abriss at Chung is planned (in the plan of 2026), the other years are empty.
-  const plan = (year: number) => ({
-    year, employees: [], sites, schoolHolidays: [],
-    entries: year === 2026
-      ? [{ id: 1, employeeId: 1, employeeName: 'Anna', date: '2026-03-11', type: 'Baustelle', siteId: 4, siteName: 'Chung', activity: 'Abriss', startTime: null, endTime: null, note: null, noteImportant: false }]
-      : [],
-  })
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) =>
-      url.startsWith('/api/plan?')
-        ? new Response(JSON.stringify(plan(Number(url.split('=').pop()))), { status: 200 })
+      url === '/api/sites/planners'
+        ? new Response(JSON.stringify([{ id: 9, name: 'Planer G', isMe: true }]), { status: 200 })
         : new Response(JSON.stringify(sites), { status: 200 }),
     ),
   )
@@ -59,25 +48,41 @@ afterEach(() => {
 
 const names = () => screen.getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell')[0].textContent)
 
+/** Chooses which sites the list shows. */
+async function choose(label: string) {
+  await userEvent.click(screen.getAllByLabelText('Anzeigen').find((element) => element.tagName === 'INPUT')!)
+  await userEvent.click(await screen.findByRole('option', { name: label, hidden: true }))
+}
+
 describe('SitesPage', () => {
+  it('shows the construction phase first, then the active sites: begun and not done yet', async () => {
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+
+    // Every site in the construction phase, whenever it starts.
+    expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
+    // Today is 15 March 2026: Arndt begins later, Zesch has no start, Abgesagt is cancelled.
+    await choose('Aktive Baustellen')
+    expect(names()).toEqual(['Bäßler', 'Chung'])
+    // All of them; the old cancelled one never shows.
+    await choose('Alle Baustellen')
+    expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
+  })
+
   it('sorts by planned start and opens where the upcoming sites begin', async () => {
     renderWithProviders(<SitesPage />)
-    await screen.findAllByText('Arndt')
+    await screen.findAllByText('Chung')
 
     // Without a planned start at the end.
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
     // Chung has started already; Arndt is the first that starts after today.
     await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
-    // Done and cancelled sites only with "Alle".
-    expect(screen.queryByText('Abgesagt')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('radio', { name: 'Alle' }))
-    expect(screen.getAllByText('Abgesagt').length).toBeGreaterThan(0)
   })
 
   it('sorts by name and back by planned start', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SitesPage />)
-    await screen.findAllByText('Arndt')
+    await screen.findAllByText('Chung')
 
     await user.click(screen.getByRole('button', { name: /^Name/ }))
     expect(names()).toEqual(['Arndt', 'Bäßler', 'Chung', 'Zesch'])
@@ -90,19 +95,89 @@ describe('SitesPage', () => {
     await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
   })
 
-  it('shows name, planned start, status and the activities, those still to plan standing out', async () => {
+  it('shows name, planned start, status, the planner in charge, address and phone of the customer', async () => {
     renderWithProviders(<SitesPage />)
-    await screen.findAllByText('Arndt')
+    await screen.findAllByText('Chung')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Name',
       'Geplanter Start ▲',
       'Status',
-      'Tätigkeiten',
+      'Zuständig',
+      'Adresse',
+      'Telefon Kunde',
+      'Setze auf erledigt',
     ])
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
-    const state = (label: string) => within(chung).getByText(label).closest('.flow-step')!.getAttribute('data-state')
-    await waitFor(() => expect(state('Abriss / Baubeginn')).toBe('planned'))
-    expect(state('Trockenbau')).toBe('open')
-    expect(state('Sanitär')).toBe('cancelled')
+    expect(await within(chung).findByText('Planer G')).toBeInTheDocument()
+    expect(within(chung).getByText('Alt-Karow 53, 13125 Berlin')).toBeInTheDocument()
+    expect(within(chung).getByRole('link', { name: '030 123 45' })).toHaveAttribute('href', 'tel:03012345')
+  })
+
+  it('shows the sites of the chosen view on the map of Berlin', async () => {
+    const fetchMock = vi.mocked(fetch)
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>
+    fetchMock.mockImplementation((async (url: string, init?: RequestInit) =>
+      url === '/api/sites/locations'
+        ? new Response(JSON.stringify({ locations: [{ siteId: 2, latitude: 52.5, longitude: 13.4 }], pending: 0 }), { status: 200 })
+        : base(url, init)) as never)
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Karte' }))
+    expect(await screen.findByRole('region', { name: 'Karte der Baustellen' })).toBeInTheDocument()
+    // The construction phase: four sites, one of them with a place on the map.
+    expect(await screen.findByText(/1 von 4 Baustellen auf der Karte/)).toBeInTheDocument()
+  })
+
+  it('shows the sites in a status, starting in a year or in the last six months', async () => {
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+
+    // There is no cancelling any more: no such status to choose, and the old cancelled site never shows.
+    await userEvent.click(screen.getAllByLabelText('Anzeigen').find((element) => element.tagName === 'INPUT')!)
+    expect(screen.queryByRole('option', { name: 'Status Storniert', hidden: true })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    // Bäßler and Chung started in the last six months.
+    await choose('Start in den letzten 6 Monaten')
+    expect(names()).toEqual(['Bäßler', 'Chung'])
+    await choose('Start im Jahr 2026')
+    expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt'])
+    await choose('Start im Jahr 2027')
+    expect(screen.getAllByRole('row')).toHaveLength(1)
+  })
+
+  it('sets a site in the construction phase done with its switch', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.mocked(fetch)
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>
+    fetchMock.mockImplementation((async (url: string, init?: RequestInit) =>
+      url === '/api/sites/4/status'
+        ? new Response(JSON.stringify({ ...sites[3], status: 'Abgeschlossen' }), { status: 200 })
+        : base(url, init)) as never,
+    )
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+    const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
+    await user.click(within(chung).getByRole('switch', { name: 'Chung erledigt' }))
+
+    // Done, it leaves the construction phase.
+    await waitFor(() => expect(names()).toEqual(['Bäßler', 'Arndt', 'Zesch']))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/sites/4/status')!
+    expect(JSON.parse(String(call[1]!.body))).toEqual({ status: 'Abgeschlossen' })
+  })
+
+  it('groups the sites by the planner in charge or by status', async () => {
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+    await choose('Alle Baustellen')
+    const groupRows = () => [...document.querySelectorAll('.group-row')].map((row) => row.textContent)
+
+    await userEvent.click(screen.getAllByLabelText('Gruppieren').find((element) => element.tagName === 'INPUT')!)
+    await userEvent.click(await screen.findByRole('option', { name: 'nach Zuständigkeit', hidden: true }))
+    await waitFor(() => expect(groupRows()).toEqual(['Planer G (1)', 'Ohne Zuständigkeit (3)']))
+
+    await userEvent.click(screen.getAllByLabelText('Gruppieren').find((element) => element.tagName === 'INPUT')!)
+    await userEvent.click(await screen.findByRole('option', { name: 'nach Status', hidden: true }))
+    expect(groupRows()).toEqual(['Bauphase (4)'])
   })
 })

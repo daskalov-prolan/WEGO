@@ -60,13 +60,13 @@ const batch = () => {
 const laneNames = () => [...document.querySelectorAll('.mini-lane-name .name')].map((name) => name.textContent)
 
 describe('EmployeeMiniPlan', () => {
-  it('has a lane per site: first those worked on, then those with open tasks by main activity and planned start', async () => {
+  it('has a lane per site: first those worked on, then those with open tasks by planned start', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     await screen.findByText('KW 10 · ab 02.03.')
-    // Sanitär at "Fliesen früh" is nothing Bernd does; the open tasks stand at their site.
-    expect(laneNames()).toEqual(['Meier', 'Fliesen früh', 'Fliesen spät', 'Abriss früh'])
-    const early = document.querySelectorAll('.mini-lane-name')[1] as HTMLElement
-    expect(within(early).getAllByRole('button').map((button) => button.textContent)).toEqual(['Fliesenarbeiten'])
+    // A craftsman does every activity of the construction phase; the open tasks stand at their site.
+    expect(laneNames()).toEqual(['Meier', 'Abriss früh', 'Fliesen früh', 'Fliesen spät'])
+    const early = document.querySelectorAll('.mini-lane-name')[2] as HTMLElement
+    expect(within(early).getAllByRole('button').map((button) => button.textContent)).toEqual(['Sanitär', 'Fliesenarbeiten'])
   })
 
   it('opens at the current week, jumps to the next free week and plans a dragged task on a day of its site', async () => {
@@ -79,8 +79,7 @@ describe('EmployeeMiniPlan', () => {
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
 
-    const lane = document.querySelectorAll('.mini-lane-name')[2] as HTMLElement
-    expect(lane.textContent).toContain('Abriss früh')
+    const lane = [...document.querySelectorAll<HTMLElement>('.mini-lane-name')].find((name) => name.textContent?.startsWith('Abriss früh'))!
     const box = within(lane).getByRole('button', { name: 'Abriss / Baubeginn' })
     // Only a day of its own site takes it.
     fireEvent.dragStart(box)

@@ -74,6 +74,16 @@ export interface SiteInput {
   plannedEnd: string | null
   /** Only when a site is created; later the status changes on its own. */
   status?: SiteStatus
+  /** The planner in charge; a new site without one goes to whoever creates it. */
+  responsiblePlannerId?: number | null
+}
+
+/** A planner who can be in charge of a site. */
+export interface Planner {
+  id: number
+  name: string
+  /** The signed-in planner. */
+  isMe: boolean
 }
 
 /** A construction site (Baustelle). The name is derived from the client or the street. */
@@ -89,7 +99,8 @@ export interface Site extends NamedItem, SiteInput {
   tasks: SiteTask[]
 }
 
-export type HolidayKind = 'Schulferien' | 'Feiertag'
+/** Betriebsferien: the company is closed, every craftsman has vacation on its working days. */
+export type HolidayKind = 'Schulferien' | 'Feiertag' | 'Betriebsferien'
 
 /** A school holiday period or a public holiday (Feiertag) in Berlin. */
 export interface SchoolHoliday {
@@ -121,8 +132,61 @@ export interface Entry {
 export interface PlanEmployee extends NamedItem {
   mainActivity: Activity | null
   additionalActivities: Activity[]
-  /** Planer A or G: part of the offer phase whatever their activities. */
+  /** Planer A or G: does all activities of the offer phase. */
   isPlaner?: boolean
+  /** Has a row in the plan: does all activities of the construction phase. Somebody can be both. */
+  isCraftsman?: boolean
+}
+
+/** Where a site is on the map. */
+export interface SiteMapLocation {
+  siteId: number
+  latitude: number
+  longitude: number
+}
+
+/** The places of the sites; `pending`: addresses not looked up yet (the map asks again). */
+export interface SiteMapLocations {
+  locations: SiteMapLocation[]
+  pending: number
+}
+
+/** A stretch of vacation: days one after the other (a weekend in between does not break it). */
+export interface VacationBlock {
+  from: string
+  to: string
+  days: number
+}
+
+/** The own vacation in "Mein Bereich"; counted from `countedFrom` on (`counted` false before). */
+export interface MyVacation {
+  year: number
+  counted: boolean
+  countedFrom: number
+  entitlement: number
+  /** All vacation days entered in the year; `taken`: those up to today. */
+  used: number
+  taken: number
+  remaining: number
+  blocks: VacationBlock[]
+}
+
+/** A note in the field of an employee and a day of the plan, not tied to a site. */
+export interface CalendarNote {
+  id: number
+  employeeId: number
+  date: string
+  /** Short: it stands in the field. */
+  title: string
+  /** The explanation, shown when pointing at the note. */
+  text: string | null
+}
+
+export interface CalendarNoteInput {
+  employeeId: number
+  date: string
+  title: string
+  text: string
 }
 
 export interface Plan {
@@ -135,6 +199,7 @@ export interface Plan {
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
   sites: Site[]
+  notes?: CalendarNote[]
 }
 
 export interface DayEntryInput {
@@ -196,6 +261,18 @@ export interface Employee {
   hasPassword: boolean
   mainActivity: Activity | null
   additionalActivities: Activity[]
+  /** Usual wage per hour in euros, for the costing of a site (Planer G only). */
+  hourlyRate?: number | null
+  phone?: string | null
+}
+
+/** An employee in the list for all planners: no login, no wage. */
+export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone'>
+
+/** The wage per hour of an employee on one site, where it differs from the usual one. */
+export interface SiteHourlyRate {
+  employeeId: number
+  hourlyRate: number
 }
 
 export interface EmployeeInput {
@@ -207,6 +284,6 @@ export interface EmployeeInput {
   userName: string | null
   role: Role
   password: string | null
-  mainActivity: Activity | null
-  additionalActivities: Activity[]
+  hourlyRate: number | null
+  phone: string | null
 }

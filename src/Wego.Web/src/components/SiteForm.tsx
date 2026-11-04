@@ -1,8 +1,8 @@
-import { Alert, Button, Group, Radio, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Alert, Button, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useState, type FormEvent } from 'react'
-import { messageOf } from '../api/client'
-import type { SiteInput, SiteNameSource, SiteStatus } from '../api/types'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { api, messageOf } from '../api/client'
+import type { Planner, SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
 import { Sheet } from './Sheet'
 
@@ -14,11 +14,32 @@ interface Props {
   onSave: (input: SiteInput) => Promise<void>
 }
 
+/** A group of fields on a white card with a petrol edge and a small heading. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="form-section">
+      <h3>{title}</h3>
+      <Stack gap="sm">{children}</Stack>
+    </section>
+  )
+}
+
 /** The record of a construction site: client, address, and which of the two names it in the plan. */
 export function SiteForm({ title, initial, onClose, onSave }: Props) {
-  const [site, setSite] = useState<SiteInput>(initial)
+  // Street and house number are one field; a house number kept apart before joins the street.
+  const [site, setSite] = useState<SiteInput>(() => ({
+    ...initial,
+    street: [initial.street, initial.houseNumber].filter(Boolean).join(' ') || null,
+    houseNumber: null,
+  }))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // The planner in charge must be chosen before the site is saved.
+  const [planners, setPlanners] = useState<Planner[]>([])
+  useEffect(() => {
+    api.planners().then((answer) => setPlanners(Array.isArray(answer) ? answer : []), () => {})
+  }, [])
 
   const field = (key: keyof SiteInput) => ({
     value: site[key] ?? '',
@@ -29,19 +50,45 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
     },
   })
 
+  // Five digits of a postal code fill in the town with its borough; a town typed in by hand stays.
+  const filledCity = useRef<string | null>(null)
+  const changePostalCode = (value: string) => {
+    const code = value.trim() || null
+    setSite((current) => ({ ...current, postalCode: code }))
+    if (!code || !/^\d{5}$/.test(code)) return
+    api.postalCode(code, site.street).then(
+      ({ city }) =>
+        setSite((current) => {
+          if (current.postalCode !== code || (current.city && current.city !== filledCity.current)) return current
+          filledCity.current = city
+          return { ...current, city }
+        }),
+      () => {},
+    )
+  }
+
+  // The name comes from the chosen source; without a client (e.g. a first visit) the street names the site.
+  const other: SiteNameSource = site.nameSource === 'Strasse' ? 'Auftraggeber' : 'Strasse'
+  const named = siteName(site) || !siteName({ ...site, nameSource: other }) ? site : { ...site, nameSource: other }
+  const name = siteName(named)
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    // Opened from the day of an employee, the form is a child of that form in React: its submit stays here.
+    event.stopPropagation()
+    if (!named.responsiblePlannerId) {
+      setError('Bitte den zuständigen Planer wählen.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
-      await onSave(site)
+      await onSave(named)
     } catch (e) {
       setError(messageOf(e))
       setBusy(false)
     }
   }
-
-  const name = siteName(site)
 
   return (
     <Sheet onClose={onClose} title={<Text fw={700}>{title}</Text>}>
@@ -59,82 +106,88 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               />
             </div>
           )}
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+          <Section title="Kunde">
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              <TextInput label="Auftraggeber" maxLength={200} data-autofocus {...field('client')} />
+              <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+            </SimpleGrid>
+          </Section>
+          <Section title="Adresse">
+            <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
             <TextInput
-              label="Auftraggeber"
-              description="Kunde oder Hausverwaltung"
+              label="Adresszusatz"
+              placeholder="z. B. Hinterhaus, 3. OG links, mit oder ohne Aufzug"
               maxLength={200}
-              data-autofocus
-              {...field('client')}
+              {...field('addressAddition')}
             />
-            <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
-            <TextInput
-              label="Projektnummer in Label"
-              description="aus der Warenwirtschaft"
-              maxLength={50}
-              {...field('labelProjectNumber')}
+            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+              <TextInput
+                label="PLZ"
+                maxLength={10}
+                inputMode="numeric"
+                value={site.postalCode ?? ''}
+                onChange={(event) => changePostalCode(event.currentTarget.value)}
+              />
+              <TextInput label="Ort" maxLength={100} style={{ gridColumn: 'span 2' }} {...field('city')} />
+            </SimpleGrid>
+          </Section>
+          <Section title="Name im Plan">
+            <Radio.Group
+              label="Name in den Übersichten"
+              value={site.nameSource}
+              onChange={(value) => setSite((current) => ({ ...current, nameSource: value as SiteNameSource }))}
+            >
+              <Group gap="lg" mt={4}>
+                <Radio value="Auftraggeber" label="Auftraggeber" />
+                <Radio value="Strasse" label="Straße" />
+              </Group>
+            </Radio.Group>
+            <Text size="sm" c={name ? 'wego.9' : 'red.7'}>
+              {name ? (
+                <>
+                  Im Plan steht: <strong>{name}</strong>
+                </>
+              ) : (
+                'Bitte einen Auftraggeber oder eine Straße angeben.'
+              )}
+            </Text>
+          </Section>
+          <Section title="Planung">
+            <Select
+              label="Zuständiger Planer"
+              placeholder="Planer wählen"
+              required
+              error={error && !site.responsiblePlannerId ? 'Bitte wählen' : undefined}
+              maw={320}
+              data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
+              value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
+              onChange={(value) => setSite((current) => ({ ...current, responsiblePlannerId: value ? Number(value) : null }))}
+              allowDeselect={false}
             />
-          </SimpleGrid>
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-            <TextInput label="Straße" maxLength={200} style={{ gridColumn: 'span 2' }} {...field('street')} />
-            <TextInput label="Hausnummer" maxLength={20} {...field('houseNumber')} />
-          </SimpleGrid>
-          <TextInput
-            label="Adresszusatz"
-            placeholder="z. B. Hinterhaus, 3. OG links"
-            maxLength={200}
-            {...field('addressAddition')}
-          />
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-            <TextInput label="PLZ" maxLength={10} {...field('postalCode')} />
-            <TextInput label="Ort" maxLength={100} style={{ gridColumn: 'span 2' }} {...field('city')} />
-          </SimpleGrid>
-          <Radio.Group
-            label="Name in den Übersichten"
-            value={site.nameSource}
-            onChange={(value) => setSite((current) => ({ ...current, nameSource: value as SiteNameSource }))}
-          >
-            <Group gap="lg" mt={4}>
-              <Radio value="Auftraggeber" label="Auftraggeber" />
-              <Radio value="Strasse" label="Straße" />
-            </Group>
-          </Radio.Group>
-          <Text size="sm" c={name ? 'wego.9' : 'red.7'}>
-            {name ? (
-              <>
-                Im Plan steht: <strong>{name}</strong>
-              </>
-            ) : site.nameSource === 'Strasse' ? (
-              'Bitte eine Straße angeben.'
-            ) : (
-              'Bitte einen Auftraggeber angeben.'
-            )}
-          </Text>
-          <SimpleGrid cols={2} spacing="sm">
             <DateInput
               label="Geplanter Start"
               valueFormat="DD.MM.YYYY"
               clearable
+              maw={220}
               value={site.plannedStart}
-              onChange={(value) => setSite((current) => ({ ...current, plannedStart: value }))}
+              // An end set before stays, unless it would now come before the start.
+              onChange={(value) =>
+                setSite((current) => ({
+                  ...current,
+                  plannedStart: value,
+                  plannedEnd: value && current.plannedEnd && current.plannedEnd < value ? null : current.plannedEnd,
+                }))
+              }
             />
-            <DateInput
-              label="Geplantes Ende"
-              valueFormat="DD.MM.YYYY"
-              clearable
-              minDate={site.plannedStart ?? undefined}
-              value={site.plannedEnd}
-              onChange={(value) => setSite((current) => ({ ...current, plannedEnd: value }))}
+            <Textarea
+              label="Beschreibung"
+              description="Art des Umbaus, Fliesen, Hinweise"
+              autosize
+              minRows={2}
+              maxLength={1000}
+              {...field('description')}
             />
-          </SimpleGrid>
-          <Textarea
-            label="Beschreibung"
-            description="Art des Umbaus, Fliesen, Hinweise"
-            autosize
-            minRows={2}
-            maxLength={1000}
-            {...field('description')}
-          />
+          </Section>
           {error && (
             <Alert color="red" variant="light">
               {error}

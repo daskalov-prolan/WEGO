@@ -7,7 +7,7 @@ import { nextStatuses, SITE_STATUSES } from '../lib/activities'
 const ACTION: Record<SiteStatus, string> = {
   Angebot: 'Zur Angebotsphase',
   Bauphase: 'Bauphase beginnen',
-  Abgeschlossen: 'Abschließen',
+  Abgeschlossen: 'Erledigt',
   Storniert: 'Stornieren',
 }
 
@@ -54,11 +54,10 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
             <Button
               key={status}
               size="compact-sm"
-              variant={status === 'Storniert' ? 'subtle' : 'light'}
-              color={status === 'Storniert' ? 'red' : undefined}
+              variant="light"
               onClick={() => change(status)}
             >
-              {ACTION[status]}
+              {site.status === 'Abgeschlossen' && status === 'Bauphase' ? 'Zurück in die Bauphase' : ACTION[status]}
             </Button>
           ))}
         {canEdit && history.length > 0 && (

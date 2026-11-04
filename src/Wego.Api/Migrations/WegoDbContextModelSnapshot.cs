@@ -51,6 +51,36 @@ namespace Wego.Api.Migrations
                     b.ToTable("Activities", (string)null);
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.CalendarNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "Date");
+
+                    b.ToTable("CalendarNotes");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.ChangeLogEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -113,6 +143,10 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)");
 
+                    b.Property<decimal?>("HourlyRate")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -130,6 +164,10 @@ namespace Wego.Api.Migrations
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -264,6 +302,10 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("GeocodedFor")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("HouseNumber")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -271,6 +313,12 @@ namespace Wego.Api.Migrations
                     b.Property<string>("LabelProjectNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -292,6 +340,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int?>("ResponsiblePlannerId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -305,7 +356,28 @@ namespace Wego.Api.Migrations
 
                     b.HasIndex("Name");
 
+                    b.HasIndex("ResponsiblePlannerId");
+
                     b.ToTable("Sites");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.SiteHourlyRate", b =>
+                {
+                    b.Property<int>("SiteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.HasKey("SiteId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("SiteHourlyRates");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.SiteStatusChange", b =>
@@ -374,6 +446,17 @@ namespace Wego.Api.Migrations
                     b.ToTable("SiteTasks");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.CalendarNote", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.HasOne("Wego.Api.Data.ActivityType", null)
@@ -399,6 +482,35 @@ namespace Wego.Api.Migrations
                         .WithMany("Entries")
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.Site", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "ResponsiblePlanner")
+                        .WithMany()
+                        .HasForeignKey("ResponsiblePlannerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ResponsiblePlanner");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.SiteHourlyRate", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany("HourlyRates")
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Employee");
 
@@ -441,6 +553,8 @@ namespace Wego.Api.Migrations
             modelBuilder.Entity("Wego.Api.Data.Site", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("HourlyRates");
 
                     b.Navigation("StatusChanges");
 

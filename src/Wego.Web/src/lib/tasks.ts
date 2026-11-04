@@ -1,6 +1,6 @@
 import type { Activity, Entry, PlanEmployee, Site } from '../api/types'
 import type { OpenTask } from '../components/PlanMatrix'
-import { ACTIVITIES, activitiesOfStatus, isOpen } from './activities'
+import { activitiesOfStatus, allowedActivities, isOpen } from './activities'
 import { addDays } from './dates'
 
 /**
@@ -32,9 +32,8 @@ export function openTasksBySite(sites: Site[], entries: Entry[]): Map<number, Op
 }
 
 /**
- * Every open task an employee can do: those of the main activity first, then those of the additional
- * activities (in the order of the job); within each activity the earliest planned start first, sites
- * without a date last. `keepActivity` and `keepSite` narrow the list (e.g. the filters of the plan).
+ * Every open task an employee can do: the earliest planned start first, sites without a date last; at one
+ * site in the order of the job. `keepActivity` and `keepSite` narrow the list (e.g. the filters of the plan).
  */
 export function tasksForEmployee(
   employee: PlanEmployee,
@@ -43,25 +42,19 @@ export function tasksForEmployee(
   keepActivity: (activity: Activity) => boolean = () => true,
   keepSite: (site: Site) => boolean = () => true,
 ): { site: Site; task: OpenTask }[] {
-  const additional = ACTIVITIES.map((activity) => activity.value).filter((activity) => employee.additionalActivities.includes(activity))
-  const activities = [...new Set([employee.mainActivity, ...additional])].filter(
-    (activity): activity is Activity => activity !== null && keepActivity(activity),
-  )
+  const activities = allowedActivities(employee).filter(keepActivity)
   const result: { site: Site; task: OpenTask }[] = []
-  for (const activity of activities) {
-    const ofActivity: { site: Site; task: OpenTask }[] = []
-    for (const [siteId, tasks] of open) {
-      const site = siteById.get(siteId)
-      const task = tasks.find((candidate) => candidate.activity === activity)
-      if (site && task && keepSite(site)) ofActivity.push({ site, task })
-    }
-    ofActivity.sort(
-      (a, b) =>
-        (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') || a.site.name.localeCompare(b.site.name, 'de'),
-    )
-    result.push(...ofActivity)
+  for (const [siteId, tasks] of open) {
+    const site = siteById.get(siteId)
+    if (!site || !keepSite(site)) continue
+    for (const task of tasks) if (activities.includes(task.activity)) result.push({ site, task })
   }
-  return result
+  return result.sort(
+    (a, b) =>
+      (a.site.plannedStart ?? '9999').localeCompare(b.site.plannedStart ?? '9999') ||
+      a.site.name.localeCompare(b.site.name, 'de') ||
+      activities.indexOf(a.task.activity) - activities.indexOf(b.task.activity),
+  )
 }
 
 /** A stretch of work: the same site and activity on working days one after the other. */

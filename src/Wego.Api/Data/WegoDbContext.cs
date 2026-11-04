@@ -10,7 +10,9 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteStatusChange> SiteStatusChanges => Set<SiteStatusChange>();
     public DbSet<SiteTask> SiteTasks => Set<SiteTask>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
+    public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
+    public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
 
@@ -32,6 +34,8 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.UserName).HasMaxLength(100);
             e.Property(x => x.Role).HasMaxLength(50);
             e.Property(x => x.MainActivity).HasMaxLength(30);
+            e.Property(x => x.HourlyRate).HasPrecision(8, 2);
+            e.Property(x => x.Phone).HasMaxLength(50);
             // A deleted activity is no longer the main activity of anybody.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
             // Stored as a comma separated list of keys, e.g. "Abriss,RenoDeco".
@@ -63,6 +67,8 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Description).HasMaxLength(1000);
             // Not unique: one property management can order jobs at several addresses.
             e.HasIndex(x => x.Name);
+            e.HasOne(x => x.ResponsiblePlanner).WithMany().HasForeignKey(x => x.ResponsiblePlannerId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<SiteTask>(e =>
@@ -97,10 +103,28 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<SiteHourlyRate>(e =>
+        {
+            e.HasKey(x => new { x.SiteId, x.EmployeeId });
+            e.Property(x => x.HourlyRate).HasPrecision(8, 2);
+            e.HasOne(x => x.Site).WithMany(x => x.HourlyRates).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<SchoolHoliday>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Site>().Property(x => x.GeocodedFor).HasMaxLength(500);
+
+        modelBuilder.Entity<CalendarNote>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxTitle);
+            e.Property(x => x.Text).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxText);
+            e.HasIndex(x => new { x.EmployeeId, x.Date });
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ChangeLogEntry>(e =>

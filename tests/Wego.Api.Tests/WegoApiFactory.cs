@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Wego.Api.Data;
+using Wego.Api.Endpoints;
 
 namespace Wego.Api.Tests;
 
@@ -32,5 +35,19 @@ public class WegoApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Seed:PlanerUserName", PlanerUserName);
         builder.UseSetting("Seed:PlanerPassword", PlanerPassword);
         builder.UseSetting("RateLimit:LoginsPerMinute", "1000");
+        // No addresses go to OpenStreetMap from the tests.
+        builder.ConfigureTestServices(services => services.AddSingleton<IGeocoder, FakeGeocoder>());
+    }
+}
+
+/// <summary>Finds every address in Berlin-Mitte, except streets called "Nirgendwo".</summary>
+public class FakeGeocoder : IGeocoder
+{
+    public int Calls;
+
+    public Task<(double Latitude, double Longitude)?> LocateAsync(string street, string? postalCode, string? city)
+    {
+        Interlocked.Increment(ref Calls);
+        return Task.FromResult<(double, double)?>(street.StartsWith("Nirgendwo") ? null : (52.52, 13.405));
     }
 }

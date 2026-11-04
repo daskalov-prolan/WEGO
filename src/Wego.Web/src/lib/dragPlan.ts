@@ -1,17 +1,18 @@
 import type { DragEvent } from 'react'
-import type { Activity, DayEntryInput, Entry } from '../api/types'
-import { toInput } from './ui'
+import type { Activity, DayEntryInput, Entry, EntryType } from '../api/types'
+import { onDay, toInput } from './ui'
 
 /**
  * What can be dragged in a plan: an entry of a cell, an activity of a site that is not planned yet, an
  * employee from the buttons above the plan by site (to put them on a site and day), or an activity from the
- * legend of the offer phase (planned on an employee and day before its site is known).
+ * activities above the plan (planned on an employee and day, the site chosen there), or Urlaub / Krank.
  */
 export type DragItem =
   | { kind: 'entry'; entry: Entry }
   | { kind: 'task'; siteId: number; activity: Activity }
   | { kind: 'employee'; employeeId: number; name: string }
   | { kind: 'activity'; activity: Activity; label: string }
+  | { kind: 'absence'; type: Exclude<EntryType, 'Baustelle'> }
 
 export type DayChange = { employeeId: number; date: string; entries: DayEntryInput[] }
 
@@ -35,7 +36,7 @@ export function dragSource(item: DragItem, enabled: boolean) {
       }
       current = item
       document.body.classList.add('plan-dragging')
-      const text = item.kind === 'entry' ? (item.entry.siteName ?? item.entry.activity ?? item.entry.type) : item.kind === 'task' ? item.activity : item.kind === 'employee' ? item.name : item.label
+      const text = item.kind === 'entry' ? (item.entry.siteName ?? item.entry.activity ?? item.entry.type) : item.kind === 'task' ? item.activity : item.kind === 'employee' ? item.name : item.kind === 'absence' ? item.type : item.label
       event.dataTransfer?.setData('text/plain', text)
       if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
     },
@@ -101,7 +102,7 @@ export function moveChanges(entry: Entry, to: MoveTarget, entriesOf: (employeeId
   const target = sameDay ? rest : entriesOf(to.employeeId, to.date)
   const there =
     entry.type === 'Baustelle' && to.siteId !== null && target.some((other) => other.type === 'Baustelle' && other.siteId === to.siteId)
-  const joined = [...target.map(toInput), ...(there ? [] : [moved])]
+  const joined = [...target.map(toInput), ...(there ? [] : [onDay(moved, target)])]
   if (sameDay) return [{ employeeId: to.employeeId, date: to.date, entries: joined }]
   return [
     { employeeId: entry.employeeId, date: entry.date, entries: rest.map(toInput) },

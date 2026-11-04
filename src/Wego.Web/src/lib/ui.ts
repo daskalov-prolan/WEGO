@@ -1,10 +1,19 @@
 import type { TouchEvent } from 'react'
 import { useRef } from 'react'
 import type { DayEntryInput, Entry, SchoolHoliday } from '../api/types'
-import { daysBetween } from './dates'
+import { daysBetween, WHOLE_DAY } from './dates'
 
 /** Identifies one employee's day, e.g. in a selection of cells. */
 export const cellKey = (employeeId: number, date: string) => `${employeeId}|${date}`
+
+/**
+ * A site entry put on a day by dragging: on a day with nothing else it gets the whole working day,
+ * 07:00 to 16:00 (the costing counts these hours); next to other entries it keeps its times.
+ */
+export function onDay(entry: DayEntryInput, others: DayEntryInput[] | Entry[]): DayEntryInput {
+  if (entry.type !== 'Baustelle' || entry.startTime || others.length > 0) return entry
+  return { ...entry, startTime: `${WHOLE_DAY.start}:00`, endTime: `${WHOLE_DAY.end}:00` }
+}
 
 export function toInput(entry: Entry): DayEntryInput {
   return {

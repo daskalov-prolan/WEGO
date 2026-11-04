@@ -67,26 +67,19 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8 1v1.8M8 13.2V15M1 8h1.8M13.2 8H15M3 3l1.3 1.3M11.7 11.7 13 13M3 13l1.3-1.3M11.7 4.3 13 3" />
     </>
   ),
-  // thermometer
-  Krank: (
-    <>
-      <path d="M6.5 9.5V3a1.5 1.5 0 0 1 3 0v6.5a3 3 0 1 1-3 0z" />
-      <path d="M8 6v5" />
-    </>
-  ),
 }
 
 interface Props {
   activity?: Activity | null
-  /** Urlaub and Krank get a sign of their own. */
+  /** Urlaub gets a sign of its own (Krank none). */
   type?: EntryType
   size?: number
 }
 
-/** A small sign for an activity (or for Urlaub / Krank), shown at the start of an entry. */
+/** A small sign for an activity (or for Urlaub), shown at the start of an entry. */
 export function ActivityIcon({ activity, type = 'Baustelle', size = 12 }: Props) {
   const key = type === 'Baustelle' ? activity : type
-  if (!key) return null
+  if (!key || key === 'Krank') return null
   return (
     <svg
       className="activity-icon"

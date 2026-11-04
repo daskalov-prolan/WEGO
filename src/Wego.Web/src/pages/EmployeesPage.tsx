@@ -1,55 +1,43 @@
-import { Alert, Badge, CloseButton, Group, Switch, Table, Text, TextInput, Title } from '@mantine/core'
-import { useEffect, useMemo, useState } from 'react'
+import { Alert, Anchor, Badge, CloseButton, Group, Select, Table, Text, TextInput, Title } from '@mantine/core'
+import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Employee, Plan } from '../api/types'
-import { Chip } from '../components/Chip'
-import { ActivityBadges } from '../components/EmployeeActivities'
-import { isOpen } from '../lib/activities'
-import { todayIso } from '../lib/dates'
-import { roleLabel } from '../lib/roles'
-import { workRuns, type WorkRun } from '../lib/tasks'
+import type { Employee, EmployeeOverview } from '../api/types'
+import { canPlanRole, roleLabel } from '../lib/roles'
 
-/** How many stretches of work a row shows before "+ N". */
-const FIRST_RUNS = 6
+/** Which employees the list shows; the inactive ones only when asked for. */
+type Show = 'active' | 'craftsmen' | 'planners' | 'inactive' | 'all'
 
-const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
+function shows(employee: EmployeeOverview, show: Show): boolean {
+  if (show === 'all') return true
+  if (show === 'inactive') return !employee.isActive
+  if (!employee.isActive) return false
+  if (show === 'craftsmen') return employee.showInPlan
+  if (show === 'planners') return canPlanRole(employee.role)
+  return true
+}
+
+const euroPerHour = (rate: number) =>
+  `${rate.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/Std.`
 
 /**
- * Planner-only: all employees with their role, what is planned for them on open sites from today on (in
- * the order of the days, each stretch in the colour of its activity) and what they can do; each row opens
- * the page of the employee.
+ * All employees with their role and telephone, for everybody. Planer G see the wage per hour as well and
+ * open an employee in the administration to change them.
  */
-export function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [plans, setPlans] = useState<Plan[]>([])
+export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
+  // Planer G get the full records, with the wage per hour.
+  const [employees, setEmployees] = useState<(EmployeeOverview & Pick<Employee, 'hourlyRate'>)[]>([])
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [activeOnly, setActiveOnly] = useState(true)
-  const today = todayIso()
+  const [show, setShow] = useState<Show>('active')
 
   useEffect(() => {
-    api.employees().then(setEmployees, (e) => setError(messageOf(e)))
-  }, [])
-
-  // From today on: this year and the next.
-  useEffect(() => {
-    const year = Number(today.slice(0, 4))
-    Promise.all([year, year + 1].map((one) => api.plan(one))).then(setPlans, (e) => setError(messageOf(e)))
-  }, [today])
-
-  const runsByEmployee = useMemo(() => {
-    const openSites = new Set(plans.flatMap((plan) => plan.sites ?? []).filter((site) => isOpen(site.status)).map((site) => site.id))
-    const upcoming = plans
-      .flatMap((plan) => plan.entries ?? [])
-      .filter((entry) => entry.date >= today && entry.siteId !== null && openSites.has(entry.siteId))
-    const result = new Map<number, WorkRun[]>()
-    for (const employee of employees) result.set(employee.id, workRuns(upcoming.filter((entry) => entry.employeeId === employee.id)))
-    return result
-  }, [plans, employees, today])
+    const list = canEdit ? api.employees() : api.employeesOverview()
+    list.then(setEmployees, (e) => setError(messageOf(e)))
+  }, [canEdit])
 
   const needle = search.trim().toLowerCase()
   const shown = employees
-    .filter((employee) => !activeOnly || employee.isActive)
+    .filter((employee) => shows(employee, show))
     .filter((employee) => !needle || employee.name.toLowerCase().includes(needle))
 
   return (
@@ -57,7 +45,7 @@ export function EmployeesPage() {
       <Title order={2} mb="md">
         Mitarbeiter
       </Title>
-      <Group gap="md" mb="md">
+      <Group gap="md" mb="md" align="flex-end">
         <TextInput
           placeholder="Name suchen"
           aria-label="Mitarbeiter suchen"
@@ -66,7 +54,20 @@ export function EmployeesPage() {
           rightSection={search ? <CloseButton size="sm" aria-label="Suche leeren" onClick={() => setSearch('')} /> : null}
           w={260}
         />
-        <Switch label="Nur aktive" checked={activeOnly} onChange={(event) => setActiveOnly(event.currentTarget.checked)} />
+        <Select
+          aria-label="Anzeigen"
+          w={220}
+          value={show}
+          onChange={(value) => value && setShow(value as Show)}
+          allowDeselect={false}
+          data={[
+            { value: 'active', label: 'Aktive Mitarbeiter' },
+            { value: 'craftsmen', label: 'Handwerker' },
+            { value: 'planners', label: 'Planer' },
+            { value: 'inactive', label: 'Inaktive Mitarbeiter' },
+            { value: 'all', label: 'Alle Mitarbeiter' },
+          ]}
+        />
         <Text size="sm" c="dimmed">
           {shown.length} von {employees.length}
         </Text>
@@ -76,68 +77,71 @@ export function EmployeesPage() {
           {error}
         </Alert>
       )}
-      <Table.ScrollContainer minWidth={760}>
+      <Table.ScrollContainer minWidth={560}>
         <Table striped highlightOnHover withTableBorder verticalSpacing="xs">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={120}>Rolle</Table.Th>
-              <Table.Th w={170}>Name</Table.Th>
-              <Table.Th>Geplant auf offenen Baustellen</Table.Th>
-              <Table.Th w={300}>Fähigkeiten</Table.Th>
+              <Table.Th w={190}>Rolle</Table.Th>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Telefon</Table.Th>
+              {canEdit && (
+                <Table.Th w={130} ta="right">
+                  Stundensatz
+                </Table.Th>
+              )}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {shown.map((employee) => {
-              const runs = runsByEmployee.get(employee.id) ?? []
-              return (
-                <Table.Tr
-                  key={employee.id}
-                  className="site-row"
-                  opacity={employee.isActive ? 1 : 0.55}
-                  onClick={() => (window.location.hash = `#/mitarbeiter/${employee.id}`)}
-                >
-                  <Table.Td>
+            {shown.map((employee) => (
+              <Table.Tr
+                key={employee.id}
+                className={canEdit ? 'site-row' : undefined}
+                opacity={employee.isActive ? 1 : 0.55}
+                onClick={canEdit ? () => (window.location.hash = `#/verwaltung/${employee.id}`) : undefined}
+              >
+                <Table.Td>
+                  <Group gap={4}>
                     <Badge variant="light" color={employee.role === 'Handwerker' ? 'gray' : 'wego'}>
                       {roleLabel(employee.role)}
                     </Badge>
-                  </Table.Td>
-                  <Table.Td fw={600}>
-                    <a href={`#/mitarbeiter/${employee.id}`} onClick={(event) => event.stopPropagation()}>
-                      {employee.name}
-                    </a>
-                    {!employee.isActive && (
-                      <Badge color="gray" size="xs" ml={6}>
-                        inaktiv
+                    {/* A planner with a row in the plan works on the sites as well. */}
+                    {canPlanRole(employee.role) && employee.showInPlan && (
+                      <Badge variant="light" color="gray">
+                        Handwerker
                       </Badge>
                     )}
-                  </Table.Td>
-                  <Table.Td>
-                    <span className="employee-runs" aria-label={`Geplant für ${employee.name}`}>
-                      {runs.slice(0, FIRST_RUNS).map((run) => (
-                        <Chip
-                          key={run.first.id}
-                          entry={run.first}
-                          label={`${run.from === run.to ? short(run.from) : `${short(run.from)}–${short(run.to)}`}: ${run.first.siteName}`}
-                        />
-                      ))}
-                      {runs.length > FIRST_RUNS && (
-                        <Text span size="xs" c="dimmed">
-                          + {runs.length - FIRST_RUNS}
-                        </Text>
-                      )}
-                      {plans.length > 0 && runs.length === 0 && employee.showInPlan && (
-                        <Text span size="xs" c="dimmed">
-                          nichts geplant
-                        </Text>
-                      )}
-                    </span>
-                  </Table.Td>
-                  <Table.Td>
-                    <ActivityBadges mainActivity={employee.mainActivity} additionalActivities={employee.additionalActivities} />
-                  </Table.Td>
-                </Table.Tr>
-              )
-            })}
+                  </Group>
+                </Table.Td>
+                <Table.Td fw={600}>
+                  {canEdit ? (
+                    <a href={`#/verwaltung/${employee.id}`} onClick={(event) => event.stopPropagation()}>
+                      {employee.name}
+                    </a>
+                  ) : (
+                    employee.name
+                  )}
+                  {!employee.isActive && (
+                    <Badge color="gray" size="xs" ml={6}>
+                      inaktiv
+                    </Badge>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  {employee.phone && (
+                    <Anchor
+                      href={`tel:${employee.phone.replace(/[^+0-9]/g, '')}`}
+                      onClick={(event) => event.stopPropagation()}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      {employee.phone}
+                    </Anchor>
+                  )}
+                </Table.Td>
+                {canEdit && (
+                  <Table.Td ta="right">{employee.hourlyRate == null ? '–' : euroPerHour(employee.hourlyRate)}</Table.Td>
+                )}
+              </Table.Tr>
+            ))}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>

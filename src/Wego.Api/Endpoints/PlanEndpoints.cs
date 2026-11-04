@@ -8,9 +8,13 @@ public static class PlanEndpoints
 {
     public const int MaxEntriesPerDay = 10;
 
-    /// <summary><paramref name="IsPlaner"/>: Planer A or G, who take part in the offer phase whatever their activities.</summary>
+    /// <summary>
+    /// <paramref name="IsPlaner"/>: Planer A or G, who do all activities of the offer phase.
+    /// <paramref name="IsCraftsman"/>: has a row in the plan and does all activities of the construction phase.
+    /// Somebody can be both.
+    /// </summary>
     public record PlanEmployeeDto(int Id, string Name, string? MainActivity, IReadOnlyList<string> AdditionalActivities,
-        bool IsPlaner);
+        bool IsPlaner, bool IsCraftsman);
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? SiteId, string? SiteName, string? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -19,10 +23,11 @@ public static class PlanEndpoints
     /// <paramref name="Planners"/>: the active planners not shown in the plan otherwise, for the offer phase.
     /// <paramref name="OfferPhase"/>: whether the viewer may see the offer phase (see <see cref="OfferAccess"/>);
     /// without it the plan holds no offer sites and no offer work of others.
+    /// <paramref name="Notes"/>: the notes in the fields of the employees shown, for everybody.
     /// </summary>
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites,
-        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase);
+        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase, IReadOnlyList<CalendarNoteEndpoints.CalendarNoteDto> Notes);
 
     /// <summary>A site entry names its construction site by <paramref name="SiteId"/>.</summary>
     public record DayEntryInput(EntryType Type, int? SiteId, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -40,6 +45,7 @@ public static class PlanEndpoints
         app.MapGet("/api/plan", async (int year, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var (from, to) = YearRange(year);
+            await SiteEndpoints.StartDueSitesAsync(db);
             var access = await OfferAccess.ForAsync(user, db);
             var allSites = await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync();
             var siteStatus = allSites.ToDictionary(s => s.Id, s => s.Status);
@@ -71,7 +77,16 @@ public static class PlanEndpoints
 
             var sites = allSites.Where(access.Shows).Select(SiteEndpoints.ToDto).ToList();
 
-            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers);
+            var employeeIds = employees.Concat(planners).Select(e => e.Id).ToList();
+            var notes = (await db.CalendarNotes.AsNoTracking()
+                    .Where(n => n.Date >= from && n.Date <= to)
+                    .Where(n => employeeIds.Contains(n.EmployeeId))
+                    .OrderBy(n => n.Date).ThenBy(n => n.Id)
+                    .ToListAsync())
+                .Select(CalendarNoteEndpoints.ToDto)
+                .ToList();
+
+            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers, notes);
         });
 
         // Replaces all entries of one employee on one day, so a split day is always saved as a whole.
@@ -153,6 +168,10 @@ public static class PlanEndpoints
                     entry.StartTime, entry.EndTime, entry.Note, entry.NoteImportant));
             }
 
+            // Urlaub and Krank are entered, changed and removed by Planer G only (everybody sees them).
+            if (!user.IsPlanerG() && ChangeLog.ToJson(Absences(before)) != ChangeLog.ToJson(Absences(after)))
+                return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: Urlaub und Krank trägt nur Planer G ein.");
+
             // Saving a day unchanged (e.g. a selection that covers it) is no change worth logging.
             if (ChangeLog.ToJson(before) == ChangeLog.ToJson(after)) continue;
             var action = before.Count == 0 ? "Eingetragen" : after.Count == 0 ? "Gelöscht" : "Geändert";
@@ -174,6 +193,9 @@ public static class PlanEndpoints
     }
 
 
+    private static List<LoggedEntry> Absences(IEnumerable<LoggedEntry> entries) =>
+        entries.Where(e => e.Type != EntryType.Baustelle).ToList();
+
     public static (DateOnly From, DateOnly To) YearRange(int year) =>
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
 
@@ -181,7 +203,7 @@ public static class PlanEndpoints
         db.PlanEntries.AsNoTracking().Include(e => e.Site).Include(e => e.Employee);
 
     private static PlanEmployeeDto ToPlanEmployee(Employee e) =>
-        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role));
+        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role), e.ShowInPlan);
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
         e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant);
@@ -202,9 +224,8 @@ public static class PlanEndpoints
             if (!Enum.IsDefined(input.Type)) return "Unbekannte Art des Eintrags.";
             if (input.Activity is { } activity && !activities.Contains(activity)) return "Unbekannte Tätigkeit.";
 
-            // A Besichtigung can be planned before it is known where: then the activity says what it is.
-            if (input.Type == EntryType.Baustelle && input.SiteId is null && input.Activity is null)
-                return "Bitte für jeden Einsatz eine Baustelle oder eine Tätigkeit wählen.";
+            // Without a site an entry is a Besichtigung planned before it is known where (the activity says
+            // so), or, without an activity as well, time kept free: "verfügbar" (e.g. the other half of a day).
 
             if ((input.StartTime is null) != (input.EndTime is null))
                 return "Bitte Beginn und Ende des Zeitfensters angeben oder beide leer lassen.";

@@ -17,19 +17,19 @@ describe('AppShell', () => {
         <p>Inhalt</p>
       </AppShell>,
     )
-    expect(menu()).toEqual(['Mein Plan', 'Planung Angebotsphase', 'Planung Bauphase', 'Baustellen', 'Mitarbeiter', 'Verwaltung'])
+    expect(menu()).toEqual(['Mein Plan', 'Planung Angebotsphase', 'Planung Bauphase', 'Baustellen', 'Mitarbeiter', 'Verwaltung', 'Mein Bereich'])
     expect(screen.getByRole('link', { name: 'Planung Angebotsphase' })).toHaveAttribute('aria-current', 'page')
     // The records start the group on the right.
     expect(screen.getByRole('link', { name: 'Baustellen' })).toHaveClass('nav-right')
     expect(screen.getByRole('link', { name: 'Mitarbeiter' })).not.toHaveClass('nav-right')
   })
 
-  it('offers no offer phase to a craftsman who does no offer work', () => {
+  it('offers a craftsman no offer phase, but the list of employees', () => {
     renderWithProviders(
       <AppShell user={user('Handwerker', false)} page="bauphase" year={2026} onYearChange={() => {}} onLogout={() => {}}>
         <p>Inhalt</p>
       </AppShell>,
     )
-    expect(menu()).toEqual(['Mein Plan', 'Planung Bauphase'])
+    expect(menu()).toEqual(['Mein Plan', 'Planung Bauphase', 'Mitarbeiter', 'Mein Bereich'])
   })
 })

@@ -9,9 +9,10 @@ namespace Wego.Api.Endpoints;
 public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
+    public record EmployeeOverviewDto(int Id, string Name, string Role, bool IsActive, bool ShowInPlan, string? Phone);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
-        IReadOnlyList<string> AdditionalActivities);
+        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
@@ -19,7 +20,7 @@ public static class EmployeeEndpoints
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
         string? UserName, string Role, string? Password, string? MainActivity = null,
-        string[]? AdditionalActivities = null);
+        string[]? AdditionalActivities = null, decimal? HourlyRate = null, string? Phone = null);
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -30,6 +31,12 @@ public static class EmployeeEndpoints
                 .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
                 .Select(e => new EmployeeListItem(e.Id, e.Name))
                 .ToListAsync()).RequireAuthorization(Policies.Admin);
+
+        // The list of employees for everybody: role and telephone, nothing of login or wage.
+        app.MapGet("/api/employees/overview", async (WegoDbContext db) =>
+            await db.Employees.OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
+                .Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone))
+                .ToListAsync()).RequireAuthorization();
 
         var group = app.MapGroup("/api/employees").RequireAuthorization(Policies.Admin);
 
@@ -131,6 +138,8 @@ public static class EmployeeEndpoints
         if (!Roles.All.Contains(input.Role)) return "Unbekannte Rolle.";
         if (input.VacationDaysPerYear is < 0 or > 366) return "Bitte gültige Urlaubstage pro Jahr angeben.";
         var additional = input.AdditionalActivities ?? [];
+        if (input.HourlyRate is < 0 or > 1000) return "Bitte einen Stundensatz zwischen 0 und 1000 € angeben.";
+        if (input.Phone?.Trim().Length > 50) return "Die Telefonnummer darf höchstens 50 Zeichen lang sein.";
         var activities = await db.Activities.OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
         if (input.MainActivity is { } main && !activities.Contains(main) || additional.Any(a => !activities.Contains(a)))
             return "Unbekannte Tätigkeit.";
@@ -159,6 +168,8 @@ public static class EmployeeEndpoints
         employee.IsActive = input.IsActive;
         employee.ShowInPlan = input.ShowInPlan;
         employee.VacationDaysPerYear = input.VacationDaysPerYear;
+        employee.Phone = string.IsNullOrWhiteSpace(input.Phone) ? null : input.Phone.Trim();
+        employee.HourlyRate = input.HourlyRate is { } rate ? Math.Round(rate, 2) : null;
         employee.UserName = userName;
         employee.Role = input.Role;
         employee.MainActivity = input.MainActivity;
@@ -168,5 +179,6 @@ public static class EmployeeEndpoints
     }
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
-        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities);
+        e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities,
+        e.HourlyRate, e.Phone);
 }

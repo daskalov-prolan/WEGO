@@ -16,7 +16,7 @@ import { theme } from './theme'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="light">
-      <DatesProvider settings={{ locale: 'de', firstDayOfWeek: 1 }}>
+      <DatesProvider settings={{ locale: 'de', firstDayOfWeek: 1, consistentWeeks: true }}>
         <Notifications position="bottom-center" />
         <ErrorBoundary>
           <App />

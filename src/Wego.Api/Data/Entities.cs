@@ -58,6 +58,15 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
+    /// <summary>Telephone number, shown in the list of employees to everybody.</summary>
+    public string? Phone { get; set; }
+
+    /// <summary>
+    /// Wage per hour in euros, for the costing of a site afterwards (Planer G only). A site can have its own
+    /// rate for an employee, see <see cref="SiteHourlyRate"/>.
+    /// </summary>
+    public decimal? HourlyRate { get; set; }
+
     /// <summary>What this employee typically does on a site (the key of an <see cref="ActivityType"/>).</summary>
     public string? MainActivity { get; set; }
 
@@ -75,7 +84,7 @@ public class Employee
     public List<PlanEntry> Entries { get; set; } = [];
 }
 
-/// <summary>Where a construction site stands. Storniert can follow any status; otherwise in this order.</summary>
+/// <summary>Where a construction site stands, in this order. Storniert is no longer offered; old sites may still have it.</summary>
 public enum SiteStatus
 {
     Angebot,
@@ -86,14 +95,16 @@ public enum SiteStatus
 
 public static class SiteStatusFlow
 {
-    /// <summary>The allowed status changes: forward one step, or cancelled from anywhere.</summary>
+    /// <summary>
+    /// The allowed status changes: forward one step, or back from done to the construction phase (more to do
+    /// after all). Cancelling is no longer possible.
+    /// </summary>
     public static bool CanChange(SiteStatus from, SiteStatus to) =>
         (from, to) switch
         {
-            (SiteStatus.Storniert, _) => false,
-            (_, SiteStatus.Storniert) => true,
             (SiteStatus.Angebot, SiteStatus.Bauphase) => true,
             (SiteStatus.Bauphase, SiteStatus.Abgeschlossen) => true,
+            (SiteStatus.Abgeschlossen, SiteStatus.Bauphase) => true,
             _ => false,
         };
 }
@@ -162,6 +173,17 @@ public class Site
     public SiteNameSource NameSource { get; set; } = SiteNameSource.Auftraggeber;
 
     public SiteStatus Status { get; set; } = SiteStatus.Angebot;
+
+    /// <summary>The planner (Planer A or G) in charge of the site.</summary>
+    public int? ResponsiblePlannerId { get; set; }
+    public Employee? ResponsiblePlanner { get; set; }
+
+    /// <summary>The place of the address on the map, looked up for <see cref="GeocodedFor"/> (null: not found).</summary>
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    /// <summary>The address the place was looked up for; when the address changes, it is looked up again.</summary>
+    public string? GeocodedFor { get; set; }
+
     public List<SiteStatusChange> StatusChanges { get; set; } = [];
     public List<SiteTask> Tasks { get; set; } = [];
 
@@ -182,11 +204,27 @@ public class Site
 
     public List<PlanEntry> Entries { get; set; } = [];
 
+    /// <summary>Wages per hour of employees that differ on this site from their usual one.</summary>
+    public List<SiteHourlyRate> HourlyRates { get; set; } = [];
+
     /// <summary>Sets <see cref="Name"/> from the chosen field; call after changing client, street or source.</summary>
     public void UpdateName() => Name = (NameSource == SiteNameSource.Strasse
         ? $"{Street} {HouseNumber}"
         : Client ?? "").Trim();
 }
+/// <summary>
+/// The wage per hour of an employee on one site, changed in its costing afterwards. It takes the place of
+/// <see cref="Employee.HourlyRate"/> on this site only.
+/// </summary>
+public class SiteHourlyRate
+{
+    public int SiteId { get; set; }
+    public Site? Site { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee? Employee { get; set; }
+    public decimal HourlyRate { get; set; }
+}
+
 /// <summary>
 /// One entry in a day cell of an employee. A day can hold several entries
 /// (split day), each with an optional time window.
@@ -214,6 +252,22 @@ public enum HolidayKind
 {
     Schulferien,
     Feiertag,
+    /// <summary>The company is closed: every craftsman has vacation on its working days.</summary>
+    Betriebsferien,
+}
+
+/// <summary>
+/// A note in the field of an employee and a day of the plan, not tied to a site: the short title shows in
+/// the field, the explanation when pointing at it.
+/// </summary>
+public class CalendarNote
+{
+    public int Id { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public required string Title { get; set; }
+    public string? Text { get; set; }
 }
 
 /// <summary>Berlin school holidays and public holidays (Feiertage), shown in the plan.</summary>

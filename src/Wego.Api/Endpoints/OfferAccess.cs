@@ -5,8 +5,8 @@ using Wego.Api.Data;
 namespace Wego.Api.Endpoints;
 
 /// <summary>
-/// Who may see the offer phase: planners, and craftsmen who do at least one of its activities (set at the
-/// employee). Everybody else gets neither the sites in the offer phase nor the offer work of others.
+/// Who may see the offer phase: the planners, who do all of its activities. Craftsmen get neither the sites in
+/// the offer phase nor the offer work of others.
 /// </summary>
 public static class OfferAccess
 {
@@ -15,23 +15,14 @@ public static class OfferAccess
     public static async Task<Rules> ForAsync(ClaimsPrincipal user, WegoDbContext db)
     {
         var offerActivities = await OfferActivitiesAsync(db);
-        var id = user.EmployeeId();
-        if (user.CanPlan()) return new Rules(true, id, offerActivities);
-
-        var employee = await db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
-        return new Rules(employee is not null && Sees(employee, offerActivities), id, offerActivities);
+        return new Rules(user.CanPlan(), user.EmployeeId(), offerActivities);
     }
 
     /// <summary>For the signed-in user: whether the menu offers the plan of the offer phase.</summary>
-    public static async Task<bool> SeesOffersAsync(Employee employee, WegoDbContext db) =>
-        Roles.CanPlan(employee.Role) || Sees(employee, await OfferActivitiesAsync(db));
+    public static Task<bool> SeesOffersAsync(Employee employee, WegoDbContext db) => Task.FromResult(Roles.CanPlan(employee.Role));
 
     private static async Task<HashSet<string>> OfferActivitiesAsync(WegoDbContext db) =>
         (await db.Activities.Where(a => a.Phase == SiteStatus.Angebot).Select(a => a.Key).ToListAsync()).ToHashSet();
-
-    private static bool Sees(Employee employee, IReadOnlySet<string> offerActivities) =>
-        Roles.CanPlan(employee.Role) ||
-        employee.AdditionalActivities.Append(employee.MainActivity).Any(a => a is not null && offerActivities.Contains(a));
 
     public static bool Shows(this Rules rules, Site site) => rules.SeesOffers || site.Status != SiteStatus.Angebot;
 

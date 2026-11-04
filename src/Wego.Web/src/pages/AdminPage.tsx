@@ -20,10 +20,9 @@ import {
 } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Access, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
-import { ActivitiesEditor, ActivityBadges } from '../components/EmployeeActivities'
 import { toEmployeeInput } from '../lib/employees'
 import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
@@ -31,7 +30,14 @@ import { formatDate } from '../lib/dates'
 import { roleLabel, ROLES } from '../lib/roles'
 
 /** Planer G only: employees and their rights, activities, school and public holidays. Sites have their own page. */
-export function AdminPage({ year, onActivitiesChanged }: { year: number; onActivitiesChanged: () => Promise<void> }) {
+interface AdminPageProps {
+  year: number
+  /** An employee to open right away, e.g. from the list of employees. */
+  employeeId?: number | null
+  onActivitiesChanged: () => Promise<void>
+}
+
+export function AdminPage({ year, employeeId = null, onActivitiesChanged }: AdminPageProps) {
   return (
     <div className="page">
       <Title order={2} mb="md">
@@ -44,7 +50,7 @@ export function AdminPage({ year, onActivitiesChanged }: { year: number; onActiv
           <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
-          <EmployeesSection year={year} />
+          <EmployeesSection openId={employeeId} />
         </Tabs.Panel>
         <Tabs.Panel value="activities">
           <ActivitiesAdmin onChanged={onActivitiesChanged} />
@@ -66,11 +72,11 @@ const newEmployee: EmployeeInput = {
   userName: null,
   role: 'Handwerker',
   password: null,
-  mainActivity: null,
-  additionalActivities: [],
+  hourlyRate: null,
+  phone: null,
 }
 
-function EmployeesSection({ year }: { year: number }) {
+function EmployeesSection({ openId = null }: { openId?: number | null }) {
   const [employees, setEmployees] = useState<Employee[]>([])
   // id 0 = new employee
   const [editing, setEditing] = useState<{ id: number; input: EmployeeInput } | null>(null)
@@ -83,6 +89,15 @@ function EmployeesSection({ year }: { year: number }) {
     api.employees().then(setEmployees, (e) => setError(messageOf(e)))
   }, [])
   useEffect(load, [load])
+
+  // Opened from the list of employees: that employee's form, once.
+  const opened = useRef(false)
+  useEffect(() => {
+    const employee = employees.find((candidate) => candidate.id === openId)
+    if (!employee || opened.current) return
+    opened.current = true
+    setEditing({ id: employee.id, input: toEmployeeInput(employee) })
+  }, [employees, openId])
 
   const createAccesses = async (targets: Employee[]) => {
     setError('')
@@ -190,8 +205,9 @@ function EmployeesSection({ year }: { year: number }) {
               <Table.Th>Name</Table.Th>
               <Table.Th>Benutzername</Table.Th>
               <Table.Th>Rolle</Table.Th>
-              <Table.Th>Tätigkeiten</Table.Th>
+              <Table.Th>Telefon</Table.Th>
               <Table.Th ta="right">Urlaubstage</Table.Th>
+              <Table.Th ta="right">Stundensatz</Table.Th>
               <Table.Th ta="right">Reihenfolge</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th />
@@ -213,10 +229,17 @@ function EmployeesSection({ year }: { year: number }) {
                     {roleLabel(employee.role)}
                   </Badge>
                 </Table.Td>
-                <Table.Td>
-                  <ActivityBadges mainActivity={employee.mainActivity} additionalActivities={employee.additionalActivities} />
-                </Table.Td>
+                <Table.Td>{employee.phone}</Table.Td>
                 <Table.Td ta="right">{employee.vacationDaysPerYear}</Table.Td>
+                <Table.Td ta="right">
+                  {employee.hourlyRate == null ? (
+                    <Text size="sm" c="dimmed">
+                      –
+                    </Text>
+                  ) : (
+                    `${employee.hourlyRate.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/Std.`
+                  )}
+                </Table.Td>
                 <Table.Td ta="right">{employee.sortOrder}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
@@ -299,6 +322,13 @@ function EmployeesSection({ year }: { year: number }) {
                   data={ROLES.map((role) => ({ value: role.value, label: `${role.label} – ${role.description}` }))}
                   allowDeselect={false}
                 />
+                <TextInput
+                  label="Telefon"
+                  type="tel"
+                  maxLength={50}
+                  value={editing.input.phone ?? ''}
+                  onChange={(e) => change({ phone: e.currentTarget.value || null })}
+                />
                 <NumberInput
                   label="Urlaubstage pro Jahr"
                   min={0}
@@ -307,21 +337,28 @@ function EmployeesSection({ year }: { year: number }) {
                   onChange={(value) => change({ vacationDaysPerYear: Number(value) || 0 })}
                 />
                 <NumberInput
+                  label="Stundensatz"
+                  description="für die Nachkalkulation, je Baustelle änderbar"
+                  min={0}
+                  max={1000}
+                  decimalScale={2}
+                  decimalSeparator=","
+                  thousandSeparator="."
+                  suffix=" €/Std."
+                  hideControls
+                  placeholder="€/Std."
+                  value={editing.input.hourlyRate ?? ''}
+                  onChange={(value) => change({ hourlyRate: value === '' ? null : Number(value) })}
+                />
+                <NumberInput
                   label="Reihenfolge im Plan"
                   value={editing.input.sortOrder}
                   onChange={(value) => change({ sortOrder: Number(value) || 0 })}
                 />
               </SimpleGrid>
-              <Paper withBorder p="sm">
-                <ActivitiesEditor
-                  employeeId={editing.id === 0 ? null : editing.id}
-                  year={year}
-                  value={editing.input}
-                  onChange={(skills) => change(skills)}
-                />
-              </Paper>
+              {/* Craftsmen do all activities of the construction phase, planners all of the offer phase. */}
               <Checkbox
-                label="Zeile in der Planung (wird auf Baustellen eingeplant)"
+                label="Handwerker: Zeile im Kalender, kann alle Tätigkeiten der Bauphase (Planer können alle der Angebotsphase)"
                 checked={editing.input.showInPlan}
                 onChange={(e) => change({ showInPlan: e.currentTarget.checked })}
               />
@@ -380,11 +417,17 @@ function SchoolHolidaysSection({ year }: { year: number }) {
     event.preventDefault()
     const [start, end] = range
     if (!start || !end) return
+    const closure = kind === 'Betriebsferien'
+    if (
+      closure &&
+      !window.confirm('Betriebsferien: Alle Handwerker bekommen an den Werktagen Urlaub eingetragen. Was an diesen Tagen geplant ist, wird ersetzt. Fortfahren?')
+    )
+      return
     void run(async () => {
       await api.addSchoolHoliday(name, start, end, kind)
       setName('')
       setRange([null, null])
-      return 'Ferien eingetragen.'
+      return closure ? 'Betriebsferien eingetragen: Urlaub für alle Handwerker.' : 'Ferien eingetragen.'
     })
   }
 
@@ -440,12 +483,15 @@ function SchoolHolidaysSection({ year }: { year: number }) {
                     size="compact-sm"
                     color="red"
                     variant="subtle"
-                    onClick={() =>
-                      run(async () => {
+                    onClick={() => {
+                      // Betriebsferien take the vacation they gave with them.
+                      if (holiday.kind === 'Betriebsferien' && !window.confirm('Betriebsferien löschen? Der Urlaub aller Handwerker an diesen Tagen wird wieder entfernt.'))
+                        return
+                      void run(async () => {
                         await api.deleteSchoolHoliday(holiday.id)
                         return ''
                       })
-                    }
+                    }}
                   >
                     Löschen
                   </Button>
@@ -463,7 +509,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 
       <Paper withBorder p="sm" component="form" onSubmit={add}>
         <Text fw={600} size="sm" mb="xs">
-          Von Hand eintragen (z. B. Brückentag, Betriebsferien)
+          Von Hand eintragen (z. B. Brückentag, Betriebsferien: Urlaub für alle Handwerker)
         </Text>
         <Group align="flex-end" gap="sm">
           <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
@@ -471,7 +517,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             label="Art"
             value={kind}
             onChange={(value) => value && setKind(value as HolidayKind)}
-            data={['Feiertag', 'Schulferien']}
+            data={['Feiertag', 'Schulferien', 'Betriebsferien']}
             allowDeselect={false}
             w={150}
           />

@@ -3,17 +3,25 @@ import type {
   Activity,
   ActivityDef,
   ActivityInput,
+  CalendarNote,
+  CalendarNoteInput,
   DayEntryInput,
   Employee,
   EmployeeInput,
+  EmployeeOverview,
   EmployeeReport,
+  MyVacation,
   Entry,
   HolidayKind,
   NamedItem,
   Plan,
+  Planner,
   SchoolHoliday,
   Site,
+  SiteHourlyRate,
   SiteInput,
+  SiteMapLocation,
+  SiteMapLocations,
   SiteReport,
   SiteStatus,
   StatusChange,
@@ -81,27 +89,49 @@ export const api = {
   /** Replaces the entries of several employee days in one transaction. */
   saveDays: (days: { employeeId: number; date: string; entries: DayEntryInput[] }[]) =>
     request<Entry[]>('PUT', '/api/plan/batch', days),
+  createNote: (input: CalendarNoteInput) => request<CalendarNote>('POST', '/api/plan/notes', input),
+  updateNote: (id: number, input: CalendarNoteInput) => request<CalendarNote>('PUT', `/api/plan/notes/${id}`, input),
+  deleteNote: (id: number) => request<void>('DELETE', `/api/plan/notes/${id}`),
 
   sites: () => request<Site[]>('GET', '/api/sites'),
+  /** The places of the sites for the map; a few addresses more are looked up with every call. */
+  siteLocations: () => request<SiteMapLocations>('GET', '/api/sites/locations'),
+  siteLocation: (id: number) => request<SiteMapLocation>('GET', `/api/sites/${id}/location`),
+  planners: () => request<Planner[]>('GET', '/api/sites/planners'),
+  /** The town of a postal code, in Berlin with the borough ("Berlin-Pankow"). */
+  postalCode: (code: string, street: string | null) =>
+    request<{ postalCode: string; city: string }>(
+      'GET',
+      `/api/postal-codes/${code}${street ? `?street=${encodeURIComponent(street)}` : ''}`,
+    ),
   createSite: (input: SiteInput) => request<Site>('POST', '/api/sites', input),
   updateSite: (id: number, input: SiteInput) => request<Site>('PUT', `/api/sites/${id}`, input),
   /** Moves the entries of a duplicate to the remaining site and deletes the duplicate. */
   mergeSite: (id: number, targetId: number) => request<Site>('POST', `/api/sites/${id}/merge`, { targetId }),
-  deleteSite: (id: number) => request<void>('DELETE', `/api/sites/${id}`),
+  deleteSite: (id: number, withEntries = false) =>
+    request<void>('DELETE', `/api/sites/${id}${withEntries ? '?withEntries=true' : ''}`),
   changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
   updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
     request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
-  siteReport: (id: number, year: number) => request<SiteReport>('GET', `/api/reports/sites/${id}?year=${year}`),
+  /** One year, or without it the whole time of the site. */
+  siteReport: (id: number, year?: number) =>
+    request<SiteReport>('GET', `/api/reports/sites/${id}${year === undefined ? '' : `?year=${year}`}`),
   employeeReport: (id: number, year: number) =>
     request<EmployeeReport>('GET', `/api/reports/employees/${id}?year=${year}`),
+  myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
 
   employeeNames: () => request<NamedItem[]>('GET', '/api/employees/names'),
   employees: () => request<Employee[]>('GET', '/api/employees'),
+  employeesOverview: () => request<EmployeeOverview[]>('GET', '/api/employees/overview'),
   createEmployee: (input: EmployeeInput) => request<Employee>('POST', '/api/employees', input),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>('PUT', `/api/employees/${id}`, input),
+  siteHourlyRates: (siteId: number) => request<SiteHourlyRate[]>('GET', `/api/sites/${siteId}/hourly-rates`),
+  /** The wage of an employee on this site only; null goes back to the usual one. */
+  setSiteHourlyRate: (siteId: number, employeeId: number, hourlyRate: number | null) =>
+    request<SiteHourlyRate[]>('PUT', `/api/sites/${siteId}/hourly-rates/${employeeId}`, { hourlyRate }),
 
   createAccess: (id: number) => request<Access>('POST', `/api/employees/${id}/access`),
 

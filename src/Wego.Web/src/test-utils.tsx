@@ -10,7 +10,7 @@ export function renderWithProviders(ui: ReactElement) {
   return render(ui, {
     wrapper: ({ children }) => (
       <MantineProvider theme={theme}>
-        <DatesProvider settings={{ locale: 'de', firstDayOfWeek: 1 }}>
+        <DatesProvider settings={{ locale: 'de', firstDayOfWeek: 1, consistentWeeks: true }}>
           <Notifications />
           {children}
         </DatesProvider>
