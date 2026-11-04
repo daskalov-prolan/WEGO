@@ -34,6 +34,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Role).HasMaxLength(50);
             e.Property(x => x.MainActivity).HasMaxLength(30);
             e.Property(x => x.HourlyRate).HasPrecision(8, 2);
+            e.Property(x => x.Phone).HasMaxLength(50);
             // A deleted activity is no longer the main activity of anybody.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
             // Stored as a comma separated list of keys, e.g. "Abriss,RenoDeco".
@@ -65,6 +66,8 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Description).HasMaxLength(1000);
             // Not unique: one property management can order jobs at several addresses.
             e.HasIndex(x => x.Name);
+            e.HasOne(x => x.ResponsiblePlanner).WithMany().HasForeignKey(x => x.ResponsiblePlannerId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<SiteTask>(e =>

@@ -135,6 +135,10 @@ namespace Wego.Api.Migrations
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -296,6 +300,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int?>("ResponsiblePlannerId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -308,6 +315,8 @@ namespace Wego.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("ResponsiblePlannerId");
 
                     b.ToTable("Sites");
                 });
@@ -426,6 +435,16 @@ namespace Wego.Api.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.Site", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "ResponsiblePlanner")
+                        .WithMany()
+                        .HasForeignKey("ResponsiblePlannerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ResponsiblePlanner");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.SiteHourlyRate", b =>

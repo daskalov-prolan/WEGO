@@ -8,9 +8,13 @@ public static class PlanEndpoints
 {
     public const int MaxEntriesPerDay = 10;
 
-    /// <summary><paramref name="IsPlaner"/>: Planer A or G, who take part in the offer phase whatever their activities.</summary>
+    /// <summary>
+    /// <paramref name="IsPlaner"/>: Planer A or G, who do all activities of the offer phase.
+    /// <paramref name="IsCraftsman"/>: has a row in the plan and does all activities of the construction phase.
+    /// Somebody can be both.
+    /// </summary>
     public record PlanEmployeeDto(int Id, string Name, string? MainActivity, IReadOnlyList<string> AdditionalActivities,
-        bool IsPlaner);
+        bool IsPlaner, bool IsCraftsman);
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? SiteId, string? SiteName, string? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -188,7 +192,7 @@ public static class PlanEndpoints
         db.PlanEntries.AsNoTracking().Include(e => e.Site).Include(e => e.Employee);
 
     private static PlanEmployeeDto ToPlanEmployee(Employee e) =>
-        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role));
+        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role), e.ShowInPlan);
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
         e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant);

@@ -18,15 +18,20 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * What is known of a site, in the groups of its form: the customer, the address and the planning, each on a
- * white card with a petrol edge.
+ * white card with a petrol edge. The planner in charge (Bearbeiter) only where it is known, i.e. for planners.
  */
-export function SiteSummary({ site, withStatus = true }: { site: Site; withStatus?: boolean }) {
+export function SiteSummary({ site, withStatus = true, planner }: { site: Site; withStatus?: boolean; planner?: string | null }) {
   const address = formatAddress(site)
   return (
     <div className="site-summary">
       <section className="form-section">
         <h3>Kunde</h3>
         <Fact label="Auftraggeber">{site.client ?? '–'}</Fact>
+        {planner !== undefined && <Fact label="Bearbeiter">{planner ?? '–'}</Fact>}
+      </section>
+      <section className="form-section">
+        <h3>Adresse</h3>
+        {address ? <SiteLocation location={address} /> : <Text>–</Text>}
         <Fact label="Telefon Kunde">
           {site.clientPhone ? (
             <Anchor href={`tel:${site.clientPhone.replace(/[^+0-9]/g, '')}`}>{site.clientPhone}</Anchor>
@@ -34,10 +39,6 @@ export function SiteSummary({ site, withStatus = true }: { site: Site; withStatu
             '–'
           )}
         </Fact>
-      </section>
-      <section className="form-section">
-        <h3>Adresse</h3>
-        {address ? <SiteLocation location={address} /> : <Text>–</Text>}
       </section>
       <section className="form-section">
         <h3>Planung</h3>
@@ -48,11 +49,10 @@ export function SiteSummary({ site, withStatus = true }: { site: Site; withStatu
         )}
         <Fact label="Geplanter Start">{site.plannedStart ? formatDate(site.plannedStart) : '–'}</Fact>
         {site.description && (
-          <Fact label="Beschreibung">
-            <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {site.description}
-            </Text>
-          </Fact>
+          // The description speaks for itself, without a label.
+          <Text size="sm" mt={6} style={{ whiteSpace: 'pre-wrap' }}>
+            {site.description}
+          </Text>
         )}
       </section>
     </div>

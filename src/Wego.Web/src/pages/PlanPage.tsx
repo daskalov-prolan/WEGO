@@ -325,7 +325,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       .filter((site): site is Site => site !== undefined && isOpen(site.status))
   }, [plan, anchor, siteById])
 
-  const view = chosenView
+  // On a phone always a week, with narrow weekends: there is no room for the switches.
+  const view: View = isPhone ? 'week' : chosenView
+  const weekendsFolded = isPhone || foldWeekends
   const inYear = (iso: string) => iso >= first && iso <= last
   const clamp = (iso: string) => (iso < first ? first : iso > last ? last : iso)
 
@@ -392,7 +394,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     const observer = new ResizeObserver(keep)
     for (const child of element.querySelectorAll('table, th.corner')) observer.observe(child)
     return () => observer.disconnect()
-  }, [plan, perspective, chosenView, foldWeekends])
+  }, [plan, perspective, view, weekendsFolded])
 
   // Another phase from the menu: what was selected or marked belongs to the other one.
   const [shownPhase, setShownPhase] = useState(phase)
@@ -915,47 +917,70 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               </Button>
             </Tooltip>
           )}
-          {/* Zoom, paging and the shown weeks at the right, before the switches. */}
-          <Group gap="sm" wrap="nowrap" ml="auto">
-            <SegmentedControl
-              size="sm"
-              value={view}
-              onChange={(value) => changeZoom(value as View)}
-              data={[
-                { value: 'week', label: 'Woche' },
-                { value: 'month', label: 'Monat' },
-              ]}
-            />
-            <Button size="sm" color="wegoRed.6" onClick={goToday}>
-              Heute
-            </Button>
-            <Text fw={700} c="wego.9" className="plan-title">
-              {title}
-            </Text>
-            {/* The arrows right after the weeks they move. */}
-            <Group gap={4} wrap="nowrap">
+          {/* Zoom, paging and the shown weeks at the right, before the switches. On a phone only ‹ Heute ›. */}
+          {isPhone ? (
+            <Group gap={4} wrap="nowrap" ml="auto" className="phone-paging">
               <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
                 ‹
               </ActionIcon>
+              <Button size="sm" color="wegoRed.6" onClick={goToday}>
+                Heute
+              </Button>
               <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
                 ›
               </ActionIcon>
             </Group>
-            {perspective === 'sites' && (
+          ) : (
+            <Group gap="sm" wrap="nowrap" ml="auto">
+              <SegmentedControl
+                size="sm"
+                value={view}
+                onChange={(value) => changeZoom(value as View)}
+                data={[
+                  { value: 'week', label: 'Woche' },
+                  { value: 'month', label: 'Monat' },
+                ]}
+              />
+              <Button size="sm" color="wegoRed.6" onClick={goToday}>
+                Heute
+              </Button>
+              <Text fw={700} c="wego.9" className="plan-title">
+                {title}
+              </Text>
+              {/* The arrows right after the weeks they move. */}
+              <Group gap={4} wrap="nowrap">
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
+                  ‹
+                </ActionIcon>
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
+                  ›
+                </ActionIcon>
+              </Group>
+              {perspective === 'sites' && (
+                <Switch
+                  size="sm"
+                  label="Nur aktive"
+                  checked={openOnly}
+                  onChange={(event) => setOpenOnly(event.currentTarget.checked)}
+                />
+              )}
               <Switch
                 size="sm"
-                label="Nur unerledigte"
-                checked={openOnly}
-                onChange={(event) => setOpenOnly(event.currentTarget.checked)}
+                label="Wochenenden ausblenden"
+                checked={foldWeekends}
+                onChange={(event) => toggleWeekends(event.currentTarget.checked)}
               />
-            )}
+            </Group>
+          )}
+          {/* On a phone "Nur aktive" gets a line of its own. */}
+          {isPhone && perspective === 'sites' && (
             <Switch
               size="sm"
-              label="Wochenenden ausblenden"
-              checked={foldWeekends}
-              onChange={(event) => toggleWeekends(event.currentTarget.checked)}
+              label="Nur aktive"
+              checked={openOnly}
+              onChange={(event) => setOpenOnly(event.currentTarget.checked)}
             />
-          </Group>
+          )}
         </Group>
 
         {/* Undo and redo, the activities of the phase right above the plan, Urlaub and Krank at the right end (Planer G). */}
@@ -988,12 +1013,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               </Tooltip>
             </Group>
           )}
-          <PhaseActivities
-            phase={phase}
-            // The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
-            // change what the employee does there.
-            draggable={canEdit && !isPhone}
-          />
+          {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
+              change what the employee does there; a phone cannot drag them, so they stay away there. */}
+          {!isPhone && <PhaseActivities phase={phase} draggable={canEdit} />}
           {canAbsence && perspective === 'employees' && (
             <span className="flow-steps absence-steps" role="group" aria-label="Abwesenheit eintragen">
               {(['Urlaub', 'Krank'] as const).map((type) => (
@@ -1030,13 +1052,11 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               Auf eine Baustelle ziehen:
             </Text>
             {employees.map((employee) => {
-              const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
               return (
                 <span
                   key={employee.id}
                   className="palette-employee drag-source"
                   title={`${employee.name} auf einen Tag einer Baustelle ziehen`}
-                  style={main ? { borderColor: main.background } : undefined}
                   {...dragSource({ kind: 'employee', employeeId: employee.id, name: employee.name }, true)}
                 >
                   {employee.name}
@@ -1084,7 +1104,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           <TimelineMatrix
             days={yearDays}
             zoom={view}
-            foldWeekends={foldWeekends}
+            foldWeekends={weekendsFolded}
             dropOn={canEdit ? dropOnEmployee : undefined}
             dropOnEntry={canEdit ? dropOnEntry : undefined}
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
@@ -1100,7 +1120,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             holidayByDate={holidayByDate}
             today={today}
             zoom={view}
-            foldWeekends={foldWeekends}
+            foldWeekends={weekendsFolded}
             onOpenCell={(site, date) => setSiteDay({ siteId: site.id, date })}
             onOpenSite={shared.onOpenSite}
             dropOn={canEdit ? dropOnSite : undefined}
@@ -1182,7 +1202,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
             const changes = [...selected].map(parseKey).map(({ employeeId, date }) => {
-              // Everybody gets their main activity, or the chosen one if they can do it.
+              // Everybody gets the chosen activity if they can do it, else the first one they can do.
               const employee = everyone.find((e) => e.id === employeeId)!
               const status = template.siteId === null ? undefined : siteById.get(template.siteId)?.status
               const activity =

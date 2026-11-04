@@ -6,11 +6,13 @@ import type {
   DayEntryInput,
   Employee,
   EmployeeInput,
+  EmployeeOverview,
   EmployeeReport,
   Entry,
   HolidayKind,
   NamedItem,
   Plan,
+  Planner,
   SchoolHoliday,
   Site,
   SiteHourlyRate,
@@ -84,6 +86,13 @@ export const api = {
     request<Entry[]>('PUT', '/api/plan/batch', days),
 
   sites: () => request<Site[]>('GET', '/api/sites'),
+  planners: () => request<Planner[]>('GET', '/api/sites/planners'),
+  /** The town of a postal code, in Berlin with the borough ("Berlin-Pankow"). */
+  postalCode: (code: string, street: string | null) =>
+    request<{ postalCode: string; city: string }>(
+      'GET',
+      `/api/postal-codes/${code}${street ? `?street=${encodeURIComponent(street)}` : ''}`,
+    ),
   createSite: (input: SiteInput) => request<Site>('POST', '/api/sites', input),
   updateSite: (id: number, input: SiteInput) => request<Site>('PUT', `/api/sites/${id}`, input),
   /** Moves the entries of a duplicate to the remaining site and deletes the duplicate. */
@@ -104,6 +113,7 @@ export const api = {
 
   employeeNames: () => request<NamedItem[]>('GET', '/api/employees/names'),
   employees: () => request<Employee[]>('GET', '/api/employees'),
+  employeesOverview: () => request<EmployeeOverview[]>('GET', '/api/employees/overview'),
   createEmployee: (input: EmployeeInput) => request<Employee>('POST', '/api/employees', input),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>('PUT', `/api/employees/${id}`, input),
   siteHourlyRates: (siteId: number) => request<SiteHourlyRate[]>('GET', `/api/sites/${siteId}/hourly-rates`),

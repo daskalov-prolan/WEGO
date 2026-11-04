@@ -94,7 +94,7 @@ describe('SitePage costing', () => {
     const costing = await screen.findByRole('region', { name: 'Nachkalkulation' })
     // 12 hours at 40 €: the row of Bernd and the total.
     expect(await within(costing).findAllByText(/480,00/)).toHaveLength(2)
-    expect(within(costing).getByLabelText('Stundensatz Bernd')).toHaveValue('40 €')
+    expect(within(costing).getByLabelText('Stundensatz Bernd')).toHaveValue('40 €/Std.')
     expect(screen.getByText('Arbeitstage gesamt').previousElementSibling).toHaveTextContent('2')
   })
 

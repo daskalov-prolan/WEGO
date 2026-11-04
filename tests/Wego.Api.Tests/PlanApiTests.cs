@@ -458,6 +458,15 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.DoesNotContain(plan.GetProperty("employees").EnumerateArray(), e => e.GetProperty("name").GetString() == "Planer");
         Assert.False(plan.GetProperty("employees").EnumerateArray()
             .Single(e => e.GetProperty("name").GetString() == "Handwerker H").GetProperty("isPlaner").GetBoolean());
+        Assert.True(plan.GetProperty("employees").EnumerateArray()
+            .Single(e => e.GetProperty("name").GetString() == "Handwerker H").GetProperty("isCraftsman").GetBoolean());
+        Assert.False(planner.GetProperty("isCraftsman").GetBoolean());
+
+        // The list of employees with their telephone is for everybody, the wage is not in it.
+        var overview = await h.GetFromJsonAsync<JsonElement>("/api/employees/overview");
+        var craftsman = overview.EnumerateArray().Single(e => e.GetProperty("name").GetString() == "Handwerker H");
+        Assert.True(craftsman.TryGetProperty("phone", out _));
+        Assert.False(craftsman.TryGetProperty("hourlyRate", out _));
 
         // Handwerker only read.
         Assert.Equal(HttpStatusCode.OK, (await h.GetAsync($"/api/plan?year={Year}")).StatusCode);
@@ -493,6 +502,12 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(38.5m, (await rate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("hourlyRate").GetDecimal());
         Assert.Equal(HttpStatusCode.BadRequest, (await g.PutAsJsonAsync($"/api/employees/{employeeId}", Maurer(-1))).StatusCode);
 
+        // Planer A see the list of employees, but neither the wage nor the full records.
+        var overview = await a.GetFromJsonAsync<JsonElement>("/api/employees/overview");
+        var maurer = overview.EnumerateArray().Single(e => e.GetProperty("id").GetInt32() == employeeId);
+        Assert.False(maurer.TryGetProperty("hourlyRate", out _));
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.GetAsync("/api/employees")).StatusCode);
+
         // A site can have its own rate for an employee; empty goes back to the usual one. Planer G only.
         var siteId = await CreateSiteAsync(a, "Familie Jahreswechsel");
         var own = await g.PutAsJsonAsync($"/api/sites/{siteId}/hourly-rates/{employeeId}", new { hourlyRate = 42.255m });
@@ -517,6 +532,31 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(1, oneYear.GetProperty("entries").GetArrayLength());
         Assert.Equal(2, whole.GetProperty("entries").GetArrayLength());
         Assert.Equal(0, whole.GetProperty("year").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_site_has_a_planner_in_charge_who_creates_it_unless_chosen()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var plannerA = await CreateEmployeeAsync(g, "Planer Zuständig", "planer.zustaendig", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.zustaendig", "planer-a-pw");
+        var craftsman = await CreateEmployeeAsync(g, "Fliesenleger Z", null, null);
+
+        var planners = await a.GetFromJsonAsync<JsonElement>("/api/sites/planners");
+        Assert.Contains(planners.EnumerateArray(), p => p.GetProperty("id").GetInt32() == plannerA && p.GetProperty("isMe").GetBoolean());
+        Assert.DoesNotContain(planners.EnumerateArray(), p => p.GetProperty("id").GetInt32() == craftsman);
+
+        // Created without a choice: the one who creates it is in charge.
+        var siteId = await CreateSiteAsync(a, "Familie Zuständig");
+        var site = await a.GetFromJsonAsync<JsonElement>($"/api/sites/{siteId}");
+        Assert.Equal(plannerA, site.GetProperty("responsiblePlannerId").GetInt32());
+
+        var me = (await g.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("id").GetInt32();
+        var changed = await a.PutAsJsonAsync($"/api/sites/{siteId}",
+            new { client = "Familie Zuständig", nameSource = "Auftraggeber", responsiblePlannerId = me });
+        Assert.Equal(me, (await changed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("responsiblePlannerId").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.PutAsJsonAsync($"/api/sites/{siteId}",
+            new { client = "Familie Zuständig", nameSource = "Auftraggeber", responsiblePlannerId = craftsman })).StatusCode);
     }
 
     [Fact]
@@ -609,11 +649,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
-    public async Task Only_who_does_offer_work_sees_the_offer_phase()
+    public async Task Only_planners_see_the_offer_phase()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var offerSite = await CreateSiteAsync(g, "Familie Angebot");
-        var visitor = await CreateEmployeeAsync(g, "Besucherin", "besucherin", "besucherin-pw", mainActivity: "Besichtigung");
+        var visitor = await CreateEmployeeAsync(g, "Besucherin", "besucherin", "besucherin-pw", "PlanerA");
         await CreateEmployeeAsync(g, "Bauer", "bauer", "bauer-pw", mainActivity: "Fliesen");
         await g.PutAsJsonAsync($"/api/plan/{visitor}/{Year}-07-01", new object[] { new { type = "Baustelle", siteId = offerSite, activity = "Besichtigung" } });
         await g.PutAsJsonAsync($"/api/plan/{visitor}/{Year}-07-02", new object[] { new { type = "Baustelle", activity = "Objektauswahl" } });
@@ -636,12 +676,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.True(seen.GetProperty("offerPhase").GetBoolean());
         Assert.Contains(offerSite, SiteIds(seen));
 
-        // Without any offer activity: neither the offer site nor the visits of others, but still the vacation.
+        // A craftsman, whatever activity was set at him before: neither the offer site nor the visits of others, but still the vacation.
         var hidden = await PlanOf("bauer", "bauer-pw");
         Assert.False(hidden.GetProperty("offerPhase").GetBoolean());
         Assert.DoesNotContain(offerSite, SiteIds(hidden));
         Assert.Equal([$"{Year}-07-03"], DaysOf(hidden, visitor));
-        Assert.Empty(hidden.GetProperty("planners").EnumerateArray());
         var client = await LoginAsync("bauer", "bauer-pw");
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/sites/{offerSite}")).StatusCode);
     }

@@ -8,7 +8,7 @@ import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
 import { TimeSelect } from './TimeSelect'
 
-/** 'main': every employee gets their own main activity. */
+/** 'main': every employee gets the first activity they can do in the status of the site. */
 export type ActivityChoice = Activity | 'main'
 
 interface Props {
@@ -33,9 +33,9 @@ export function AssignSite(props: Props) {
   // Only what at least one of the selected employees can do (in the status of the chosen site).
   const ofStatus = status ? activitiesOfStatus(status) : ACTIVITIES.map((a) => a.value)
   const offered = ofStatus.filter((value) => employees.some((employee) => allowedActivities(employee, status).includes(value)))
-  // Another site may not offer the chosen activity: then everybody gets their main activity.
+  // Another site may not offer the chosen activity: then everybody gets the first one they can do.
   const activity: ActivityChoice = chosenActivity === 'main' || offered.includes(chosenActivity) ? chosenActivity : 'main'
-  // Who cannot do the chosen activity keeps their main activity.
+  // Who cannot do the chosen activity gets the first one they can do.
   const unable = activity === 'main' ? [] : employees.filter((e) => !allowedActivities(e, status).includes(activity))
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -84,7 +84,7 @@ export function AssignSite(props: Props) {
             onChange={(value) => setActivity((value ?? 'main') as ActivityChoice)}
             allowDeselect={false}
             data={[
-              { value: 'main', label: 'Passende Haupttätigkeit des jeweiligen Mitarbeiters' },
+              { value: 'main', label: 'Erste passende Tätigkeit des jeweiligen Mitarbeiters' },
               ...ACTIVITIES.filter((a) => offered.includes(a.value)).map((a) => ({ value: a.value, label: a.label })),
             ]}
             leftSection={
@@ -97,7 +97,7 @@ export function AssignSite(props: Props) {
             <Alert color="yellow" variant="light">
               {unable.map((e) => e.name).join(', ')} {unable.length === 1 ? 'führt' : 'führen'} keine{' '}
               {activityLabel(activity as Activity)} aus und {unable.length === 1 ? 'bekommt' : 'bekommen'} die eigene
-              passende Haupttätigkeit.
+              erste passende Tätigkeit.
             </Alert>
           )}
           {recentSites.length > 0 && (

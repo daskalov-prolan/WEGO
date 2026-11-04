@@ -67,4 +67,30 @@ describe('SiteForm without a client', () => {
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ street: 'Lindenweg 4', nameSource: 'Strasse' }))
   })
+
+  it('fills in the town with its borough from the postal code, but keeps a town typed in by hand', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string) =>
+      url.startsWith('/api/postal-codes/13507')
+        ? new Response(JSON.stringify({ postalCode: '13507', city: 'Berlin-Reinickendorf' }), { status: 200 })
+        : new Response('[]', { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      renderWithProviders(<SiteForm title="Neue Baustelle" initial={emptySite} onClose={() => {}} onSave={async () => {}} />)
+      await user.type(input(/^Straße und Hausnummer/), 'Stockumer Straße 23')
+      await user.type(input(/^PLZ/), '13507')
+      await vi.waitFor(() => expect(input(/^Ort/)).toHaveValue('Berlin-Reinickendorf'))
+      expect(fetchMock).toHaveBeenCalledWith('/api/postal-codes/13507?street=Stockumer%20Stra%C3%9Fe%2023', expect.anything())
+
+      await user.clear(input(/^Ort/))
+      await user.type(input(/^Ort/), 'Tegel')
+      await user.clear(input(/^PLZ/))
+      await user.type(input(/^PLZ/), '13507')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(input(/^Ort/)).toHaveValue('Tegel')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

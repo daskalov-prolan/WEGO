@@ -99,9 +99,15 @@ export default function App() {
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
     content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage />
-  else if (page === 'mitarbeiter' && isAdmin)
-    content = selectedId ? <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} /> : <EmployeesPage />
-  else if (page === 'verwaltung' && isAdmin) content = <AdminPage year={year} onActivitiesChanged={reloadActivities} />
+  else if (page === 'mitarbeiter')
+    content =
+      selectedId && isAdmin ? (
+        <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} />
+      ) : (
+        <EmployeesPage canEdit={isAdmin} />
+      )
+  else if (page === 'verwaltung' && isAdmin)
+    content = <AdminPage key={selectedId ?? 0} year={year} employeeId={selectedId} onActivitiesChanged={reloadActivities} />
   else
     content = (
       <PlanPage

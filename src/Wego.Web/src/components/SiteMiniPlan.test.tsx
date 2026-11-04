@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, Site } from '../api/types'
 import { renderWithProviders } from '../test-utils'
@@ -65,24 +64,6 @@ describe('SiteMiniPlan', () => {
     expect(await screen.findByText('KW 14 · ab 30.03.')).toBeInTheDocument()
   })
 
-  it('shows the course of the site: open activities stand out, planned ones are greyed, all can be dragged', async () => {
-    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
-    const flow = screen.getByRole('group', { name: 'Ablauf der Baustelle' })
-
-    // Only the current status is opened up: the activities of the Bauphase, none of the Angebot.
-    expect(within(flow).queryByText('Besichtigung')).not.toBeInTheDocument()
-    // Fliesen is still open: a box that stands out and can be dragged.
-    const fliesen = within(flow).getByRole('button', { name: 'Fliesenarbeiten' })
-    expect(fliesen).toHaveAttribute('draggable', 'true')
-    // Abriss is planned: greyed, but it can still be dragged to plan it once more.
-    const abriss = within(flow).getByRole('button', { name: 'Abriss / Baubeginn' })
-    expect(abriss).toHaveClass('task-box', 'planned')
-    expect(abriss).toHaveAttribute('draggable', 'true')
-    // No filter any more: nothing in the flow switches the calendar.
-    expect(within(flow).queryAllByRole('button', { pressed: true })).toHaveLength(0)
-  })
-
   it('moves by week and jumps to the next week in which someone who can do open work is free', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
@@ -100,18 +81,20 @@ describe('SiteMiniPlan', () => {
     expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
   })
 
-  it('counts additional activities for the free week, and any entry makes the week taken', async () => {
+  it('counts every craftsman for the free week, and any entry makes the week taken', async () => {
     const user = userEvent.setup()
     const busier: Plan = {
       ...plan,
       employees: [
         ...plan.employees,
-        // Carla lays tiles as well (additional activity); Dora does not.
-        { id: 3, name: 'Carla', mainActivity: 'Sanitaer', additionalActivities: ['Fliesen'] },
-        { id: 4, name: 'Dora', mainActivity: 'Sanitaer', additionalActivities: [] },
+        // Carla is a craftsman as well; Dora only plans (no row in the plan), she does no tiles.
+        { id: 3, name: 'Carla', mainActivity: null, additionalActivities: [] },
+        { id: 4, name: 'Dora', mainActivity: null, additionalActivities: [], isPlaner: true, isCraftsman: false },
       ],
       entries: [
         ...plan.entries,
+        entry(6, 1, 'Anna', '2026-03-11', 11, 'Familie Meier', 'Abriss'),
+        entry(7, 1, 'Anna', '2026-03-17', 11, 'Familie Meier', 'Abriss'),
         entry(3, 2, 'Bernd', '2026-03-09', 11, 'Familie Meier', 'Fliesen'),
         entry(4, 2, 'Bernd', '2026-03-16', 11, 'Familie Meier', 'Fliesen'),
         entry(5, 3, 'Carla', '2026-03-10', 11, 'Familie Meier', 'Sanitaer'),
@@ -123,59 +106,27 @@ describe('SiteMiniPlan', () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
 
-    // KW 11: Bernd and Carla have an entry, Dora is free but cannot lay tiles. KW 12: Carla is free.
+    // KW 11: Anna, Bernd and Carla have an entry, Dora is free but does no work on sites. KW 12: Carla is free.
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
     expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
-    // Lanes only for what concerns this site: Anna worked here, Bernd's main activity is open here. Carla
-    // counts for the free week, but has no lane: she has not worked here.
-    expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual([
-      'AnnaAbriss / Baubeginn',
-      'BerndFliesenarbeiten',
-    ])
+    // Lanes only for who worked here: Anna. Carla counts for the free week, but has no lane.
+    expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual(['Anna'])
   })
 
-  it('shows a lane per employee with an open main activity, the weekly load and the open activities', async () => {
-    const user = userEvent.setup()
+  it('shows a lane per employee who worked here and the weekly load of all craftsmen', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
 
     // The first entry is on Thursday 5 March: the weeks begin on Monday 2 March.
-    // Bernd (main activity Fliesen, still open) works one of five days in KW 10, none in KW 11.
+    // Anna and Bernd can both do the open work; each works one of five days in KW 10, none in KW 11.
     expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
     expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()
 
-    // A lane for who worked here (Anna) and whose main activity is still open here (Bernd, Fliesen).
+    // A lane only for who worked here: Anna, not Bernd.
     expect(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).toBeInTheDocument()
-    // Bernd's work elsewhere only shows that the day is taken.
-    const thursday = screen.getByRole('button', { name: 'Bernd, 2026-03-05' })
-    expect(within(thursday).getAllByText('belegt')[0]).toHaveAttribute('title', 'Familie Meier – Fliesenarbeiten')
-    expect(within(thursday).queryByText('Familie Meier')).not.toBeInTheDocument()
-
-    // Abriss is planned already, Fliesen is still open.
-    const open = screen.getAllByRole('button').filter((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))
-    expect(open.map((button) => button.textContent)).toEqual(['Fliesenarbeiten'])
-
-    // Planning it: only who can do it is offered (Bernd lays tiles, Anna does not).
-    await user.click(open[0])
-    expect(await screen.findByText('Fliesenarbeiten einplanen')).toBeInTheDocument()
-    const picker = screen.getAllByLabelText(/^Mitarbeiter/).find((element) => element.tagName === 'INPUT')!
-    await user.click(picker)
-    const options = (await screen.findAllByRole('option', { hidden: true })).map((option) => option.textContent)
-    expect(options).toEqual(['Bernd'])
-    await user.click(screen.getByRole('option', { name: 'Bernd', hidden: true }))
-    await user.click(screen.getByRole('button', { name: 'Einplanen', hidden: true }))
-
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
-    expect(JSON.parse(String(call[1].body))).toEqual([
-      expect.objectContaining({
-        employeeId: 2,
-        date: '2026-03-02',
-        entries: expect.arrayContaining([expect.objectContaining({ siteId: 10, activity: 'Fliesen' })]),
-      }),
-    ])
+    expect(screen.queryByRole('button', { name: 'Bernd, 2026-03-05' })).not.toBeInTheDocument()
   })
 
-  it('plans an open activity and moves its entries by dragging them onto a day of a lane', async () => {
+  it('moves its entries by dragging them onto a day of a lane', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
     expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
     const batch = () => {
@@ -190,18 +141,6 @@ describe('SiteMiniPlan', () => {
       return taken
     }
 
-    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))!
-    expect(dropOn(box, screen.getByRole('button', { name: 'Bernd, 2026-03-04' }))).toBe(true)
-    await waitFor(() => expect(batch()).not.toBeNull())
-    expect(batch()).toEqual([
-      expect.objectContaining({
-        employeeId: 2,
-        date: '2026-03-04',
-        entries: [expect.objectContaining({ siteId: 10, activity: 'Fliesen' })],
-      }),
-    ])
-    fetchMock.mockClear()
-
     // Anna's day here moves to Friday; her own cell does not take it.
     const chip = within(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).getAllByText('Abriss / Baubeginn')[0].closest('.chip')!
     expect(dropOn(chip, screen.getByRole('button', { name: 'Anna, 2026-03-05' }))).toBe(false)
@@ -213,56 +152,4 @@ describe('SiteMiniPlan', () => {
     ])
   })
 
-  it('cancels an open activity: it is then only listed as cancelled here, and can be brought back', async () => {
-    const user = userEvent.setup()
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.startsWith('/api/sites/10/tasks/')) {
-        const { notNeeded } = JSON.parse(String(init?.body)) as { notNeeded: boolean }
-        const activity = url.split('/').pop()
-        return new Response(
-          JSON.stringify({ ...site, tasks: site.tasks.map((task) => (task.activity === activity ? { ...task, notNeeded } : task)) }),
-          { status: 200 },
-        )
-      }
-      return new Response(JSON.stringify(plan), { status: 200 })
-    })
-    // The site page keeps the site; the plan reports the saved one back to it.
-    function Page() {
-      const [shown, setShown] = useState(site)
-      return <SiteMiniPlan site={shown} canEdit onSiteChange={setShown} />
-    }
-    renderWithProviders(<Page />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
-
-    const taskBoxes = () => screen.queryAllByRole('button').filter((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))
-    await user.click(taskBoxes()[0])
-    await user.click(await screen.findByRole('button', { name: 'Stornieren', hidden: true }))
-    await waitFor(() => expect(taskBoxes()).toHaveLength(0))
-    const cancelled = screen.getByText('Fliesenarbeiten').closest('.flow-step')! as HTMLElement
-    expect(cancelled).toHaveClass('cancelled')
-    const put = fetchMock.mock.calls.find(([url]) => url === '/api/sites/10/tasks/Fliesen')!
-    expect(JSON.parse(String(put[1].body))).toEqual({ estimatedDays: 1, notNeeded: true })
-
-    await user.click(within(cancelled).getByRole('button', { name: 'Wiederherstellen' }))
-    await waitFor(() => expect(taskBoxes().map((button) => button.textContent)).toEqual(['Fliesenarbeiten']))
-    expect(document.querySelector('.flow-step.cancelled')).toBeNull()
-  })
-
-  it('stays in the week in view after planning', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Woche vor' }))
-    await user.click(screen.getByRole('button', { name: 'Woche vor' }))
-    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
-
-    const box = screen.getAllByRole('button').find((button) => button.classList.contains('task-box') && !button.classList.contains('planned'))!
-    fireEvent.dragStart(box)
-    fireEvent.dragOver(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))
-    fireEvent.drop(screen.getByRole('button', { name: 'Bernd, 2026-03-17' }))
-    fireEvent.dragEnd(box)
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url !== '/api/plan/batch').length).toBeGreaterThan(1))
-    // Planned and loaded again: still KW 12; the next free week is the planner's own step.
-    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
-  })
 })

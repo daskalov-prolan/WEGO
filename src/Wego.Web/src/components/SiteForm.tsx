@@ -1,8 +1,8 @@
-import { Alert, Button, Group, Radio, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Alert, Button, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { messageOf } from '../api/client'
-import type { SiteInput, SiteNameSource, SiteStatus } from '../api/types'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { api, messageOf } from '../api/client'
+import type { Planner, SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
 import { Sheet } from './Sheet'
 
@@ -35,6 +35,17 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // The planner in charge: a new site goes to whoever creates it, unless another one is chosen.
+  const [planners, setPlanners] = useState<Planner[]>([])
+  useEffect(() => {
+    api.planners().then((answer) => {
+      const list = Array.isArray(answer) ? answer : []
+      setPlanners(list)
+      const me = list.find((planner) => planner.isMe)
+      setSite((current) => (current.responsiblePlannerId || !me ? current : { ...current, responsiblePlannerId: me.id }))
+    }, () => {})
+  }, [])
+
   const field = (key: keyof SiteInput) => ({
     value: site[key] ?? '',
     onChange: (event: { currentTarget: { value: string } }) => {
@@ -43,6 +54,23 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
       setSite((current) => ({ ...current, [key]: value }))
     },
   })
+
+  // Five digits of a postal code fill in the town with its borough; a town typed in by hand stays.
+  const filledCity = useRef<string | null>(null)
+  const changePostalCode = (value: string) => {
+    const code = value.trim() || null
+    setSite((current) => ({ ...current, postalCode: code }))
+    if (!code || !/^\d{5}$/.test(code)) return
+    api.postalCode(code, site.street).then(
+      ({ city }) =>
+        setSite((current) => {
+          if (current.postalCode !== code || (current.city && current.city !== filledCity.current)) return current
+          filledCity.current = city
+          return { ...current, city }
+        }),
+      () => {},
+    )
+  }
 
   // The name comes from the chosen source; without a client (e.g. a first visit) the street names the site.
   const other: SiteNameSource = site.nameSource === 'Strasse' ? 'Auftraggeber' : 'Strasse'
@@ -94,7 +122,13 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               {...field('addressAddition')}
             />
             <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-              <TextInput label="PLZ" maxLength={10} {...field('postalCode')} />
+              <TextInput
+                label="PLZ"
+                maxLength={10}
+                inputMode="numeric"
+                value={site.postalCode ?? ''}
+                onChange={(event) => changePostalCode(event.currentTarget.value)}
+              />
               <TextInput label="Ort" maxLength={100} style={{ gridColumn: 'span 2' }} {...field('city')} />
             </SimpleGrid>
           </Section>
@@ -120,6 +154,15 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
             </Text>
           </Section>
           <Section title="Planung">
+            <Select
+              label="Zuständiger Planer"
+              placeholder="Planer wählen"
+              maw={320}
+              data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
+              value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
+              onChange={(value) => setSite((current) => ({ ...current, responsiblePlannerId: value ? Number(value) : null }))}
+              allowDeselect={false}
+            />
             <DateInput
               label="Geplanter Start"
               valueFormat="DD.MM.YYYY"

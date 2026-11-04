@@ -7,7 +7,7 @@ import { nextStatuses, SITE_STATUSES } from '../lib/activities'
 const ACTION: Record<SiteStatus, string> = {
   Angebot: 'Zur Angebotsphase',
   Bauphase: 'Bauphase beginnen',
-  Abgeschlossen: 'Abschließen',
+  Abgeschlossen: 'Erledigt',
   Storniert: 'Stornieren',
 }
 

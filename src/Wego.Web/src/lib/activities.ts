@@ -86,7 +86,7 @@ export function setActivities(defs: ActivityDef[]) {
 export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; hex: string }[] = [
   { value: 'Angebot', label: 'Angebotsphase', color: 'cyan', hex: '#1098ad' },
   { value: 'Bauphase', label: 'Bauphase', color: 'orange', hex: '#e8590c' },
-  { value: 'Abgeschlossen', label: 'Abgeschlossen', color: 'green', hex: '#2f9e44' },
+  { value: 'Abgeschlossen', label: 'Erledigt', color: 'green', hex: '#2f9e44' },
   { value: 'Storniert', label: 'Storniert', color: 'red', hex: '#e03131' },
 ]
 
@@ -158,50 +158,30 @@ export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>)
   return activity ? `${entry.siteName} – ${activity}` : entry.siteName
 }
 
-type Skilled = { mainActivity: Activity | null; additionalActivities: Activity[]; isPlaner?: boolean }
-
-const ownActivities = (employee: Skilled) =>
-  [employee.mainActivity, ...employee.additionalActivities].filter((a): a is Activity => a !== null)
+/** A craftsman unless said otherwise; a planner when said so. */
+type Skilled = { isPlaner?: boolean; isCraftsman?: boolean }
 
 /**
- * The activities the plan offers for an employee: the main activity first, then the additional ones.
- * Somebody without any configured activity can be planned for everything; planners can do all
- * activities of the offer phase as well.
+ * The activities the plan offers for an employee: a craftsman (a row in the plan) does all activities of the
+ * construction phase, a planner all of the offer phase; somebody can be both.
  */
 export function allowedActivities(employee: Skilled, status?: SiteStatus): Activity[] {
-  const own = ownActivities(employee)
-  const all =
-    own.length > 0
-      ? [...new Set([...own, ...(employee.isPlaner ? activitiesOfStatus('Angebot') : [])])]
-      : ACTIVITIES.map((activity) => activity.value)
+  const all = [
+    ...(employee.isPlaner ? activitiesOfStatus('Angebot') : []),
+    ...(employee.isCraftsman !== false ? activitiesOfStatus('Bauphase') : []),
+  ]
   if (!status) return all
   // On a site only the activities of its status: what the employee can do of them.
   const ofStatus = activitiesOfStatus(status)
   return all.filter((activity) => ofStatus.includes(activity))
 }
 
-/**
- * Who appears in a phase of the plan. The offer phase: whoever has at least one of its activities set at
- * the employee (planners too, being a planner alone is not enough). The construction phase: whoever can do
- * something there.
- */
+/** Who appears in a phase of the plan: the planners in the offer phase, the craftsmen in the construction phase. */
 export function worksInPhase(employee: Skilled, phase: 'Angebot' | 'Bauphase'): boolean {
-  if (phase === 'Angebot') {
-    const offer = activitiesOfStatus('Angebot')
-    return ownActivities(employee).some((activity) => offer.includes(activity))
-  }
   return allowedActivities(employee, phase).length > 0
 }
 
-/**
- * The activity a new entry gets: the employee's main activity if it fits the status of the site,
- * otherwise the first of the employee's activities for that status, otherwise none.
- */
-export function defaultActivity(
-  employee: { mainActivity: Activity | null; additionalActivities: Activity[] },
-  status?: SiteStatus,
-): Activity | null {
-  const allowed = allowedActivities(employee, status)
-  if (employee.mainActivity && allowed.includes(employee.mainActivity)) return employee.mainActivity
-  return allowed[0] ?? null
+/** The activity a new entry gets: the first the employee can do in the status of the site, otherwise none. */
+export function defaultActivity(employee: Skilled, status?: SiteStatus): Activity | null {
+  return allowedActivities(employee, status)[0] ?? null
 }

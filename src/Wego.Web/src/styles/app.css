@@ -1776,3 +1776,83 @@ body.stretching * {
   background: #fff;
   box-shadow: var(--shadow);
 }
+
+/* The sites on a phone: one card each, name and status on top. */
+.site-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--wego-teal);
+  border-radius: 8px;
+  background: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  scroll-margin-top: 12px;
+}
+
+.site-card.first-upcoming {
+  border-left-color: var(--wego-aqua);
+}
+
+.site-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-weight: 700;
+}
+
+.site-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 2px;
+  color: #3d5054;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .plan-controls {
+    row-gap: 6px;
+  }
+
+  .activity-row {
+    gap: 6px;
+  }
+
+  .vacation-line {
+    margin: 0 6px 8px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+  }
+
+  .site-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A group of sites in the list: by the planner in charge or by status. */
+.sites-table .group-row td {
+  background: color-mix(in srgb, var(--wego-teal) 12%, white);
+  color: var(--wego-teal);
+  font-weight: 700;
+}
+
+.site-group {
+  margin: 10px 0 2px;
+  color: var(--wego-teal);
+  font-size: 0.95rem;
+}
+
+.site-card-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

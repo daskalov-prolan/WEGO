@@ -14,7 +14,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import { api, ApiError, messageOf } from '../api/client'
-import type { Site, SiteReport } from '../api/types'
+import type { Planner, Site, SiteReport } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteMiniPlan } from '../components/SiteMiniPlan'
 import { SiteStatusPanel } from '../components/SiteStatus'
@@ -41,6 +41,12 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
   const [editing, setEditing] = useState(false)
   const [mergeTarget, setMergeTarget] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
+
+  // The planners, for the name of the one in charge (Bearbeiter).
+  const [planners, setPlanners] = useState<Planner[]>([])
+  useEffect(() => {
+    api.planners().then(setPlanners, () => {})
+  }, [])
 
   useEffect(() => {
     api.sites().then(setSites, (e) => setError(messageOf(e)))
@@ -137,7 +143,13 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
         )}
       </div>
 
-      {site && <SiteSummary site={site} withStatus={false} />}
+      {site && (
+        <SiteSummary
+          site={site}
+          withStatus={false}
+          planner={planners.find((planner) => planner.id === site.responsiblePlannerId)?.name ?? null}
+        />
+      )}
 
       {error && (
         <Alert color="red" variant="light" my="sm">
@@ -188,11 +200,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
       )}
 
       {site && (
-        <SiteMiniPlan
-          site={site}
-          canEdit
-          onSiteChange={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
-        />
+        <SiteMiniPlan site={site} canEdit />
       )}
 
       {current && (

@@ -3,7 +3,7 @@ import type { Activity, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } fr
 import { ActivityIcon } from './ActivityIcon'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { activityLabel, ACTIVITIES, entryName, entryStyle, entryTitle } from '../lib/activities'
+import { entryName, entryStyle, entryTitle } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -332,15 +332,9 @@ export function TimelineMatrix(props: MatrixProps) {
       corner="Mitarbeiter"
     >
       {employees.map((employee, employeeIndex) => {
-        const main = ACTIVITIES.find((activity) => activity.value === employee.mainActivity)
         return (
           <tr key={employee.id}>
-            <th
-              className="employee"
-              scope="row"
-              title={main ? `${employee.name} – ${activityLabel(employee.mainActivity)}` : employee.name}
-              style={main ? { boxShadow: `inset 5px 0 0 ${main.background}` } : undefined}
-            >
+            <th className="employee" scope="row" title={employee.name}>
               <EmployeeName employee={employee} link={linkNames} />
             </th>
             {days.map((day, dayIndex) => {

@@ -23,7 +23,7 @@ const NAV = [
   { page: 'angebotsphase', label: 'Planung Angebotsphase', visible: (user: User) => user.seesOffers !== false },
   { page: 'bauphase', label: 'Planung Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
-  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: (user: User) => user.role === 'PlanerG', right: true },
+  { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
   { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'PlanerG', right: true },
 ]
 

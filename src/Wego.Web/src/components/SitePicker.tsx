@@ -22,7 +22,7 @@ interface Props {
 export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label = 'Baustelle', required }: Props) {
   const [creating, setCreating] = useState(false)
   // The record of the chosen site, opened on top; closing it leads back here.
-  const [viewing, setViewing] = useState<'record' | 'edit' | null>(null)
+  const [viewing, setViewing] = useState<'record' | 'edit' | 'quick-edit' | null>(null)
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
   const chosenAddress = chosen && formatAddress(chosen)
@@ -98,9 +98,17 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
               '–'
             )}
           </Text>
-          <Anchor size="xs" fw={600} onClick={() => setViewing('record')}>
-            Datensatz öffnen: {chosen.name}
-          </Anchor>
+          <Group gap="md" mt={2}>
+            <Anchor size="xs" fw={600} onClick={() => setViewing('record')}>
+              Datensatz öffnen: {chosen.name}
+            </Anchor>
+            {/* Straight into the form, to add or correct the details of the site. */}
+            {onUpdate && (
+              <Button size="compact-xs" variant="light" onClick={() => setViewing('quick-edit')}>
+                Baustelle bearbeiten
+              </Button>
+            )}
+          </Group>
         </div>
       )}
       {chosen && viewing === 'record' && (
@@ -112,14 +120,15 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
           onClose={() => setViewing(null)}
         />
       )}
-      {chosen && viewing === 'edit' && onUpdate && (
+      {chosen && (viewing === 'edit' || viewing === 'quick-edit') && onUpdate && (
         <SiteForm
           title="Baustelle bearbeiten"
           initial={toSiteInput(chosen)}
-          onClose={() => setViewing('record')}
+          // From the record back to it; straight from the day back to the day.
+          onClose={() => setViewing(viewing === 'edit' ? 'record' : null)}
           onSave={async (input) => {
             await onUpdate(chosen.id, input)
-            setViewing('record')
+            setViewing(viewing === 'edit' ? 'record' : null)
           }}
         />
       )}

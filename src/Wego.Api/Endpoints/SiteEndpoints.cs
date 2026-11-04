@@ -10,7 +10,7 @@ public static class SiteEndpoints
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
-        string? LabelProjectNumber, string? ClientPhone);
+        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -18,12 +18,15 @@ public static class SiteEndpoints
     public record SiteInput(string? Client, string? Street, string? HouseNumber, string? AddressAddition,
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
-        string? LabelProjectNumber = null, string? ClientPhone = null);
+        string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null);
 
     public record StatusRequest(SiteStatus Status);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
 
     public record MergeRequest(int TargetId);
+
+    /// <summary>A planner who can be in charge of a site; <paramref name="IsMe"/> marks the signed-in one.</summary>
+    public record PlannerDto(int Id, string Name, bool IsMe);
 
     public record HourlyRateDto(int EmployeeId, decimal HourlyRate);
     public record HourlyRateInput(decimal? HourlyRate);
@@ -41,6 +44,15 @@ public static class SiteEndpoints
                 .Where(access.Shows).Select(ToDto);
         });
 
+        // The planners who can be in charge of a site: the active Planer A and G.
+        group.MapGet("/planners", async (ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var me = user.EmployeeId();
+            return (await db.Employees.Where(e => e.IsActive && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
+                    .OrderBy(e => e.Name).ToListAsync())
+                .Select(e => new PlannerDto(e.Id, e.Name, e.Id == me));
+        }).RequireAuthorization(Policies.Plan);
+
         group.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
@@ -55,8 +67,10 @@ public static class SiteEndpoints
             var site = new Site { Status = input.Status ?? SiteStatus.Angebot };
             if (site.Status is not (SiteStatus.Angebot or SiteStatus.Bauphase))
                 return ApiErrors.BadRequest("Eine neue Baustelle beginnt im Angebot oder in der Bauphase.");
-            var error = Apply(site, input);
+            var error = Apply(site, input) ?? await PlannerError(db, input.ResponsiblePlannerId);
             if (error is not null) return ApiErrors.BadRequest(error);
+            // Without a choice, whoever creates the site is in charge of it.
+            site.ResponsiblePlannerId = input.ResponsiblePlannerId ?? user.EmployeeId();
 
             site.StatusChanges.Add(new SiteStatusChange
             {
@@ -79,8 +93,9 @@ public static class SiteEndpoints
             if (site is null) return Results.NotFound();
 
             var before = ToDto(site);
-            var error = Apply(site, input);
+            var error = Apply(site, input) ?? await PlannerError(db, input.ResponsiblePlannerId);
             if (error is not null) return ApiErrors.BadRequest(error);
+            site.ResponsiblePlannerId = input.ResponsiblePlannerId;
 
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Geändert", id, before, ToDto(site));
             await db.SaveChangesAsync();
@@ -180,6 +195,7 @@ public static class SiteEndpoints
 
             // The remaining site keeps its own details and takes over only what it is missing.
             target.Client ??= site.Client;
+            target.ResponsiblePlannerId ??= site.ResponsiblePlannerId;
             target.ClientPhone ??= site.ClientPhone;
             if (target.Street is null)
             {
@@ -245,7 +261,12 @@ public static class SiteEndpoints
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
-        s.LabelProjectNumber, s.ClientPhone);
+        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId);
+
+    private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
+        plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
+            ? "Zuständig kann nur ein Planer sein."
+            : null;
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

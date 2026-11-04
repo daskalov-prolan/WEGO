@@ -27,6 +27,12 @@ builder.Services.AddHttpClient(SchoolHolidayEndpoints.OpenHolidaysClient, client
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
+builder.Services.AddHttpClient(PostalCodeEndpoints.OpenPlzClient, client =>
+{
+    client.BaseAddress = new Uri("https://openplzapi.org/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -128,6 +134,7 @@ app.MapReportEndpoints();
 app.MapEmployeeEndpoints();
 app.MapSchoolHolidayEndpoints();
 app.MapActivityEndpoints();
+app.MapPostalCodeEndpoints();
 
 app.Run();
 

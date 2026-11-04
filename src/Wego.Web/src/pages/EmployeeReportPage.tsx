@@ -5,7 +5,9 @@ import type { Activity, Employee, EmployeeReport, Vacation } from '../api/types'
 import { ActivityBadges } from '../components/EmployeeActivities'
 import { EmployeeMiniPlan } from '../components/EmployeeMiniPlan'
 import { Stat } from '../components/Stat'
+import { allowedActivities } from '../lib/activities'
 import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
+import { canPlanRole } from '../lib/roles'
 
 interface Props {
   year: number
@@ -52,10 +54,10 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
         </Title>
         {employee && (
           <span className="site-page-head-facts">
-            {/* The activities filter the planning below: several at a time, a second click lifts one. */}
+            {/* What the employee can do filters the planning below: several at a time, a second click lifts one. */}
             <ActivityBadges
-              mainActivity={employee.mainActivity}
-              additionalActivities={employee.additionalActivities}
+              mainActivity={null}
+              additionalActivities={allowedActivities({ isPlaner: canPlanRole(employee.role), isCraftsman: employee.showInPlan })}
               selected={filter}
               onToggle={(activity) =>
                 setFilter((current) => {

@@ -1,10 +1,9 @@
 import { Alert, Button, Group, Paper, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Fragment, useState, type CSSProperties } from 'react'
+import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, PlanEmployee, Site } from '../api/types'
 import {
-  ACTIVITIES,
   activitiesOfStatus,
   activityLabel,
   allowedActivities,
@@ -16,29 +15,24 @@ import {
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { toInput } from '../lib/ui'
-import { ActivityIcon } from './ActivityIcon'
-import { SiteFlow } from './ActivityPicker'
 import { Chip } from './Chip'
 import { LaneCell, StripGrid, StripNav } from './DayStrip'
 import { percent, useDayStrip, workdaysOf } from '../lib/useDayStrip'
 import type { OpenTask } from './PlanMatrix'
 import { SiteDayDialog } from './SiteDayDialog'
-import { TaskBox } from './TaskBox'
 
 interface Props {
   site: Site
   canEdit: boolean
-  /** The site as saved after one of its activities was cancelled or brought back. */
-  onSiteChange?: (site: Site) => void
 }
 
 /**
- * Planning on the page of a site: the course of the site with the activities still to plan, below it one
- * lane per employee who can do one of them (main activity first, then additional), with the days as columns
+ * Planning on the page of a site: one lane per employee who works there or whose main activity is still open
+ * there, with the days as columns
  * that scroll sideways (about a week in view, one and a half when there is room; weekends narrow). The work
  * at this site stands out.
  */
-export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
+export function SiteMiniPlan({ site, canEdit }: Props) {
   const today = todayIso()
   const buildStart = weekOf(site.plannedStart ?? today)[0].iso
   const strip = useDayStrip(buildStart, site.id)
@@ -72,15 +66,11 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
       .filter((task) => task.planned < task.estimated)
   })()
 
-  const setCancelled = async (activity: Activity, cancelled: boolean) => {
-    const estimated = site.tasks.find((task) => task.activity === activity)?.estimatedDays ?? 1
-    onSiteChange?.(await api.updateSiteTask(site.id, activity, estimated, cancelled))
-    notifications.show({ message: `${activityLabel(activity)} ${cancelled ? 'storniert' : 'wieder offen'}.` })
-  }
-
-  // Who counts for how full a week is: everybody whose main activity is still to plan at this site.
+  // Who counts for how full a week is: everybody who can do an activity still to plan at this site.
   const openActivities = new Set(openTasks.map((task) => task.activity))
-  const relevant = employees.filter((employee) => employee.mainActivity && openActivities.has(employee.mainActivity))
+  const relevant = employees.filter((employee) =>
+    allowedActivities(employee, site.status).some((activity) => openActivities.has(activity)),
+  )
   const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
 
   /** Share of the working days (Mon–Fri, no public holidays) on which these people are planned anywhere. */
@@ -92,14 +82,11 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
     return taken / (workdays.length * relevant.length)
   }
 
-  // Who can take one of the open activities, as main or as additional activity.
-  const capable = employees.filter((employee) =>
-    [employee.mainActivity, ...employee.additionalActivities].some((activity) => activity !== null && openActivities.has(activity)),
-  )
-  // The lanes of the calendar: only what concerns this site, i.e. who works here and who has an open main
-  // activity here.
+  // Who can take one of the open activities.
+  const capable = relevant
+  // The lanes of the calendar: only what concerns this site, i.e. who works here.
   const workedHere = new Set(entries.filter((entry) => entry.siteId === site.id).map((entry) => entry.employeeId))
-  const lanes = employees.filter((employee) => workedHere.has(employee.id) || relevant.includes(employee))
+  const lanes = employees.filter((employee) => workedHere.has(employee.id))
 
   /** Of these, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
   const freeIn = (monday: string): PlanEmployee[] => {
@@ -175,64 +162,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
     save(changes, `${entryName(entry)} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
   }
 
-  /** An activity of the site's status in the flow: open, planned already, or cancelled for this site. */
-  const step = (activity: Activity) => {
-    const open = openTasks.find((task) => task.activity === activity)
-    if (open)
-      return (
-        <TaskBox
-          task={open}
-          employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(activity))}
-          defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
-          minDate={`${years[0]}-01-01`}
-          maxDate={`${years[years.length - 1]}-12-31`}
-          onPlan={canEdit ? (employeeIds, date) => plan(activity, employeeIds, date) : undefined}
-          siteId={site.id}
-          onCancel={canEdit ? () => setCancelled(activity, true) : undefined}
-        />
-      )
-    const task = site.tasks.find((candidate) => candidate.activity === activity)
-    const info = ACTIVITIES.find((candidate) => candidate.value === activity)!
-    const colours = { '--entry-bg': info.tint, '--entry-strong': info.background } as CSSProperties
-    // Planned already: greyed, and still to drag onto another day or person.
-    if (task && !task.notNeeded && isOpen(site.status))
-      return (
-        <TaskBox
-          planned
-          task={{
-            activity,
-            planned: entries.filter((entry) => entry.siteId === site.id && entry.activity === activity).length,
-            estimated: task.estimatedDays,
-          }}
-          employees={employees.filter((employee) => allowedActivities(employee, site.status).includes(activity))}
-          defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
-          minDate={`${years[0]}-01-01`}
-          maxDate={`${years[years.length - 1]}-12-31`}
-          onPlan={canEdit ? (employeeIds, date) => plan(activity, employeeIds, date) : undefined}
-          siteId={site.id}
-        />
-      )
-    if (task?.notNeeded)
-      return (
-        <span className="flow-step cancelled" style={colours} title="Storniert: für diese Baustelle nicht relevant">
-          <ActivityIcon activity={activity} size={11} />
-          <span className="task-name">{info.label}</span>
-          {canEdit && (
-            <button type="button" className="flow-restore" onClick={() => setCancelled(activity, false)}>
-              Wiederherstellen
-            </button>
-          )}
-        </span>
-      )
-    return (
-      <span className="flow-step planned" style={colours} title={task ? 'Eingeplant' : 'Für diese Baustelle nicht vorgesehen'}>
-        <ActivityIcon activity={activity} size={11} />
-        {info.label}
-        {task && ' ✓'}
-      </span>
-    )
-  }
-
   return (
     <Paper withBorder p="md" mb="lg" className="mini-plan">
       <Group justify="space-between" mb="xs" gap="xs">
@@ -256,9 +185,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
           )}
         </StripNav>
       </Group>
-      {/* The course of the site: in its status the open activities stand out (planners drag them onto a day),
-          planned ones are greyed, cancelled ones struck through. */}
-      <SiteFlow current={site.status} renderStep={step} />
       {error && (
         <Alert color="red" variant="light" mt="xs">
           {error}
@@ -283,7 +209,6 @@ export function SiteMiniPlan({ site, canEdit, onSiteChange }: Props) {
           <Fragment key={employee.id}>
             <div className="mini-lane-name">
               <span className="name">{employee.name}</span>
-              {employee.mainActivity && <span className="main">{activityLabel(employee.mainActivity)}</span>}
             </div>
             {strip.days.map((day) => (
               <LaneCell

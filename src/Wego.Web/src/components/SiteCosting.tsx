@@ -165,16 +165,16 @@ export function SiteCosting({ report, canCost }: { report: SiteReport; canCost: 
                             key={`${row.id}-${rate}`}
                             aria-label={`Stundensatz ${row.name}`}
                             size="xs"
-                            w={110}
+                            w={130}
                             ml="auto"
                             min={0}
                             max={1000}
                             decimalScale={2}
                             decimalSeparator=","
                             thousandSeparator="."
-                            suffix=" €"
+                            suffix=" €/Std."
                             hideControls
-                            placeholder="€ / Std."
+                            placeholder="€/Std."
                             defaultValue={rate ?? ''}
                             onBlur={(event) => {
                               const text = event.currentTarget.value.replace(/[^0-9,]/g, '').replace(',', '.')
@@ -184,7 +184,7 @@ export function SiteCosting({ report, canCost }: { report: SiteReport; canCost: 
                         )}
                         {differs && (
                           <Text size="xs" c="orange.8" mt={2}>
-                            nur hier · üblich {usual === null ? 'keiner' : euro(usual)}{' '}
+                            nur hier · üblich {usual === null ? 'keiner' : `${euro(usual)}/Std.`}{' '}
                             <Anchor component="button" type="button" size="xs" onClick={() => saveRate(row, null)}>
                               zurücksetzen
                             </Anchor>

@@ -74,6 +74,16 @@ export interface SiteInput {
   plannedEnd: string | null
   /** Only when a site is created; later the status changes on its own. */
   status?: SiteStatus
+  /** The planner in charge; a new site without one goes to whoever creates it. */
+  responsiblePlannerId?: number | null
+}
+
+/** A planner who can be in charge of a site. */
+export interface Planner {
+  id: number
+  name: string
+  /** The signed-in planner. */
+  isMe: boolean
 }
 
 /** A construction site (Baustelle). The name is derived from the client or the street. */
@@ -121,8 +131,10 @@ export interface Entry {
 export interface PlanEmployee extends NamedItem {
   mainActivity: Activity | null
   additionalActivities: Activity[]
-  /** Planer A or G: part of the offer phase whatever their activities. */
+  /** Planer A or G: does all activities of the offer phase. */
   isPlaner?: boolean
+  /** Has a row in the plan: does all activities of the construction phase. Somebody can be both. */
+  isCraftsman?: boolean
 }
 
 export interface Plan {
@@ -198,7 +210,11 @@ export interface Employee {
   additionalActivities: Activity[]
   /** Usual wage per hour in euros, for the costing of a site (Planer G only). */
   hourlyRate?: number | null
+  phone?: string | null
 }
+
+/** An employee in the list for all planners: no login, no wage. */
+export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone'>
 
 /** The wage per hour of an employee on one site, where it differs from the usual one. */
 export interface SiteHourlyRate {
@@ -215,7 +231,6 @@ export interface EmployeeInput {
   userName: string | null
   role: Role
   password: string | null
-  mainActivity: Activity | null
-  additionalActivities: Activity[]
   hourlyRate: number | null
+  phone: string | null
 }

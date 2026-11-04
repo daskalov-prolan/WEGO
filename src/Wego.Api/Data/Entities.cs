@@ -58,6 +58,9 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
+    /// <summary>Telephone number, shown in the list of employees to everybody.</summary>
+    public string? Phone { get; set; }
+
     /// <summary>
     /// Wage per hour in euros, for the costing of a site afterwards (Planer G only). A site can have its own
     /// rate for an employee, see <see cref="SiteHourlyRate"/>.
@@ -172,6 +175,11 @@ public class Site
     public SiteNameSource NameSource { get; set; } = SiteNameSource.Auftraggeber;
 
     public SiteStatus Status { get; set; } = SiteStatus.Angebot;
+
+    /// <summary>The planner (Planer A or G) in charge of the site.</summary>
+    public int? ResponsiblePlannerId { get; set; }
+    public Employee? ResponsiblePlanner { get; set; }
+
     public List<SiteStatusChange> StatusChanges { get; set; } = [];
     public List<SiteTask> Tasks { get; set; } = [];
 

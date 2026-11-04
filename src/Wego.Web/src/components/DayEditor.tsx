@@ -72,8 +72,8 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
   const { employee, date, entries, sites, onCreateSite, onUpdateSite, canAbsence = false, onClose, onSave, onCopy } = props
-  // A new site row starts with what the employee typically does.
-  const main = employee.mainActivity
+  // A new site row starts without an activity: it follows the site chosen.
+  const main = null
   // The activities offered follow the status of an open site. On a done or cancelled site (entries from
   // before it was closed) the employee's own activities are offered, whatever the status was then.
   const statusOf = (siteId: number | null) => {
