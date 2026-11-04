@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Site } from '../api/types'
-import { emptySite, toSiteInput } from '../lib/sites'
+import { emptySite } from '../lib/sites'
 import { renderWithProviders } from '../test-utils'
 import { SitePicker } from './SitePicker'
 
@@ -31,20 +31,14 @@ describe('SitePicker', () => {
     expect(names).toEqual(['Mertens', 'Müller', 'Albers'])
   })
 
-  it('opens the form of the chosen site straight from the day, to add or correct its details', async () => {
+  it('goes from the day straight to the page of the chosen site, to add or correct its details', async () => {
     const user = userEvent.setup()
     const sites = [{ ...site(1, 'Samarai', 'Samarai', 'Stockumer Straße 23'), clientPhone: null }]
-    const onUpdate = vi.fn(async (_id: number, input: Parameters<typeof toSiteInput>[0] | object) => ({ ...sites[0], ...input }))
+    const onGoToSite = vi.fn()
     renderWithProviders(
-      <SitePicker sites={sites} value={1} onChange={() => {}} onCreate={async () => sites[0]} onUpdate={onUpdate as never} />,
+      <SitePicker sites={sites} value={1} onChange={() => {}} onCreate={async () => sites[0]} onGoToSite={onGoToSite} />,
     )
-    await user.click(screen.getByRole('button', { name: 'Baustelle bearbeiten' }))
-    const phone = await screen.findByLabelText('Telefon Kunde')
-    await user.type(phone, '0162 301')
-    await user.click(screen.getByRole('button', { name: 'Speichern' }))
-
-    expect(onUpdate).toHaveBeenCalledWith(1, expect.objectContaining({ clientPhone: '0162 301' }))
-    // Saved, the day is shown again.
-    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Zur Baustelle' }))
+    expect(onGoToSite).toHaveBeenCalledWith(1)
   })
 })

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { emptySite } from '../lib/sites'
@@ -9,12 +9,23 @@ import { SiteForm } from './SiteForm'
 const input = (label: RegExp) =>
   screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT' && element.getAttribute('type') !== 'radio')!
 
+// A site needs its planner in charge before it is saved.
+const withPlanner = { ...emptySite, responsiblePlannerId: 7 }
+
 describe('SiteForm', () => {
   it('takes what is typed and shows the name the plan will use', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn(async () => {})
     renderWithProviders(<SiteForm title="Neue Baustelle" initial={emptySite} onClose={() => {}} onSave={onSave} />)
 
+    await screen.findAllByLabelText(/^Auftraggeber/)
+    await user.type(input(/^Auftraggeber/), 'Hausverwaltung Nord')
+    // Not without the planner in charge.
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(screen.getByText('Bitte den zuständigen Planer wählen.')).toBeInTheDocument()
+    expect(onSave).not.toHaveBeenCalled()
+    cleanup()
+    renderWithProviders(<SiteForm title="Neue Baustelle" initial={withPlanner} onClose={() => {}} onSave={onSave} />)
     await screen.findAllByLabelText(/^Auftraggeber/)
     await user.type(input(/^Auftraggeber/), 'Hausverwaltung Nord')
     await user.type(input(/^Straße und Hausnummer/), 'Hauptstraße 12')
@@ -47,7 +58,7 @@ describe('SiteForm with a site kept before', () => {
   it('joins a separate house number into the street', async () => {
     const onSave = vi.fn(async () => {})
     renderWithProviders(
-      <SiteForm title="Baustelle bearbeiten" initial={{ ...emptySite, client: 'Meier', street: 'Musterweg', houseNumber: '3' }} onClose={() => {}} onSave={onSave} />,
+      <SiteForm title="Baustelle bearbeiten" initial={{ ...withPlanner, client: 'Meier', street: 'Musterweg', houseNumber: '3' }} onClose={() => {}} onSave={onSave} />,
     )
     expect(await screen.findByDisplayValue('Musterweg 3')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -59,7 +70,7 @@ describe('SiteForm without a client', () => {
   it('names the site by its street, so a first visit with only an address can be saved', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn(async () => {})
-    renderWithProviders(<SiteForm title="Neue Baustelle" initial={emptySite} onClose={() => {}} onSave={onSave} />)
+    renderWithProviders(<SiteForm title="Neue Baustelle" initial={withPlanner} onClose={() => {}} onSave={onSave} />)
     await screen.findAllByLabelText(/^Auftraggeber/)
     expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
     await user.type(input(/^Straße und Hausnummer/), 'Lindenweg 4')

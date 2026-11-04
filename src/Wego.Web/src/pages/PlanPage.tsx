@@ -14,7 +14,7 @@ import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
+import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
@@ -36,7 +36,8 @@ import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
 import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
-import { ClipMenu } from '../components/CellMenu'
+import { CellMenu, ClipMenu } from '../components/CellMenu'
+import { NoteDialog } from '../components/CalendarNotes'
 import { useStretch } from '../lib/stretch'
 import { copyEntries, pasteChanges, setClip, useClip, type PasteTarget } from '../lib/clipboard'
 import { dragSource, dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
@@ -51,7 +52,7 @@ import {
   weekOf,
 } from '../lib/dates'
 import { openTasksBySite as openTasks } from '../lib/tasks'
-import { cellKey, holidaysByDate, toInput } from '../lib/ui'
+import { cellKey, holidaysByDate, onDay, toInput } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -162,8 +163,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const pinned = useRef(anchor)
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
-  // Plan by site: by default only sites that are not done or cancelled.
-  const [openOnly, setOpenOnly] = useState(true)
   // The phase from the menu: the employees who work in it, and its sites and activities. Who does no offer
   // work does not see the offer phase (the server leaves it out of the plan, too).
   const phase: Phase = plan?.offerPhase === false ? 'Bauphase' : chosenPhase
@@ -219,6 +218,38 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }, [])
 
   const closeCellMenu = useCallback(() => setCellMenu(null), [])
+  // Notes in the fields of the employees: the menu of a right click on one, and the note being written.
+  const [noteMenu, setNoteMenu] = useState<{ note: CalendarNote; x: number; y: number } | null>(null)
+  const closeNoteMenu = useCallback(() => setNoteMenu(null), [])
+  const [noteDialog, setNoteDialog] = useState<{ employee: { id: number; name: string }; date: string; note?: CalendarNote } | null>(null)
+  const notesByCell = useMemo(() => {
+    const result = new Map<string, CalendarNote[]>()
+    for (const note of plan?.notes ?? []) {
+      const key = cellKey(note.employeeId, note.date)
+      result.set(key, [...(result.get(key) ?? []), note])
+    }
+    return result
+  }, [plan])
+  const employeeOfNote = (note: CalendarNote) => ({
+    id: note.employeeId,
+    name: [...(plan?.employees ?? []), ...(plan?.planners ?? [])].find((employee) => employee.id === note.employeeId)?.name ?? '',
+  })
+  const keepNote = (note: CalendarNote) =>
+    setPlan((current) =>
+      current && {
+        ...current,
+        notes: [...(current.notes ?? []).filter((other) => other.id !== note.id), note].sort(
+          (a, b) => a.date.localeCompare(b.date) || a.id - b.id,
+        ),
+      },
+    )
+  const dropNote = (id: number) =>
+    setPlan((current) => current && { ...current, notes: (current.notes ?? []).filter((note) => note.id !== id) })
+  const noteProps = {
+    notesOf: (employeeId: number, date: string) => notesByCell.get(cellKey(employeeId, date)) ?? [],
+    onNoteMenu: canEdit ? (note: CalendarNote, at: { x: number; y: number }) => setNoteMenu({ note, ...at }) : undefined,
+    onOpenNote: canEdit ? (note: CalendarNote) => setNoteDialog({ employee: employeeOfNote(note), date: note.date, note }) : undefined,
+  }
 
   useWindowEvent('keydown', (event) => {
     if (event.key !== 'Escape') return
@@ -272,7 +303,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     const shown = new Set(phaseEmployees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
     const rows = new Map<number, SiteRow & { start: string }>()
     for (const site of plan.sites) {
-      if (site.status !== phase) continue
+      // The construction phase shows the done sites as well; cancelled ones nowhere.
+      if (site.status !== phase && !(phase === 'Bauphase' && site.status === 'Abgeschlossen')) continue
       const plannedThisYear =
         site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
       // Planned for this year, or with activities still to plan (sites without dates go last).
@@ -283,7 +315,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     for (const entry of plan.entries) {
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
-      if (!site || (openOnly && !isOpen(site.status)) || !inPhase(entry, site, phase)) continue
+      if (!site || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date, openTasks: openTasksBySite.get(site.id) ?? [] }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
@@ -292,7 +324,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       rows.set(site.id, row)
     }
     return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
-  }, [plan, phase, phaseEmployees, hidden, siteById, year, openOnly, openTasksBySite])
+  }, [plan, phase, phaseEmployees, hidden, siteById, year, openTasksBySite])
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
   const earlierWork = useMemo(() => {
@@ -563,15 +595,18 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         date,
         entries: [
           ...entriesOf(employeeId, date).map(toInput),
-          {
-            type: 'Baustelle' as const,
-            siteId: site.id,
-            activity: defaultActivity(employee, site.status),
-            startTime: null,
-            endTime: null,
-            note: null,
-            noteImportant: false,
-          },
+          onDay(
+            {
+              type: 'Baustelle' as const,
+              siteId: site.id,
+              activity: defaultActivity(employee, site.status),
+              startTime: null,
+              endTime: null,
+              note: null,
+              noteImportant: false,
+            },
+            entriesOf(employeeId, date),
+          ),
         ],
       }
     })
@@ -634,7 +669,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       changes.push({
         employeeId: entry.employeeId,
         date: iso,
-        entries: [...there.map(toInput), { ...toInput(entry), note: null, noteImportant: false }],
+        entries: [...there.map(toInput), onDay({ ...toInput(entry), note: null, noteImportant: false }, there)],
       })
     }
     for (let iso = current.from; iso <= current.to; iso = addDays(iso, 1)) {
@@ -782,15 +817,35 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
    * An activity from above the plan dropped on an entry of a site: the employee does that there instead, if it
    * is one of theirs and fits the site.
    */
+  /** Two entries of a day change places, with their times: the one above goes below. */
+  const swapEntries = (a: Entry, b: Entry) => {
+    const day = entriesOf(a.employeeId, a.date)
+    const inputs = day.map(toInput)
+    const ia = day.findIndex((entry) => entry.id === a.id)
+    const ib = day.findIndex((entry) => entry.id === b.id)
+    const swapped = inputs.map((input, i) =>
+      i === ia
+        ? { ...inputs[ib], startTime: input.startTime, endTime: input.endTime }
+        : i === ib
+          ? { ...inputs[ia], startTime: input.startTime, endTime: input.endTime }
+          : input,
+    )
+    save([{ employeeId: a.employeeId, date: a.date, entries: swapped }], `${a.employeeName}: Reihenfolge getauscht.`).catch(fail)
+  }
+
   const dropOnEntry = (entry: Entry) =>
     dropTarget(
       (item: DragItem) => {
+        // Another entry of the same day dragged onto this one: the two change places.
+        if (item.kind === 'entry')
+          return item.entry.id !== entry.id && item.entry.employeeId === entry.employeeId && item.entry.date === entry.date
         if (item.kind !== 'activity' || entry.type !== 'Baustelle' || item.activity === entry.activity) return false
         const employee = everyone.find((candidate) => candidate.id === entry.employeeId)
         const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
         return employee !== undefined && canDo(employee, item.activity, site && isOpen(site.status) ? site.status : undefined)
       },
       (item: DragItem) => {
+        if (item.kind === 'entry') return swapEntries(item.entry, entry)
         if (item.kind !== 'activity') return
         const entries = entriesOf(entry.employeeId, entry.date).map((other) =>
           other.id === entry.id ? { ...toInput(other), activity: item.activity } : toInput(other),
@@ -956,14 +1011,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                   ›
                 </ActionIcon>
               </Group>
-              {perspective === 'sites' && (
-                <Switch
-                  size="sm"
-                  label="Nur aktive"
-                  checked={openOnly}
-                  onChange={(event) => setOpenOnly(event.currentTarget.checked)}
-                />
-              )}
               <Switch
                 size="sm"
                 label="Wochenenden ausblenden"
@@ -971,15 +1018,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                 onChange={(event) => toggleWeekends(event.currentTarget.checked)}
               />
             </Group>
-          )}
-          {/* On a phone "Nur aktive" gets a line of its own. */}
-          {isPhone && perspective === 'sites' && (
-            <Switch
-              size="sm"
-              label="Nur aktive"
-              checked={openOnly}
-              onChange={(event) => setOpenOnly(event.currentTarget.checked)}
-            />
           )}
         </Group>
 
@@ -1112,6 +1150,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('e')}
             {...shared}
+            {...noteProps}
           />
         ) : (
           <SiteTimeline
@@ -1235,6 +1274,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             sites={plan.sites}
             onCreateSite={createSite}
             onUpdateSite={updateSite}
+            onGoToSite={canEdit ? shared.onOpenSite : undefined}
             canAbsence={canAbsence}
             onClose={() => setOpen(null)}
             onSave={async (entries) => {
@@ -1320,9 +1360,40 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               }}
               onOpenSite={shared.onOpenSite}
               onDelete={(entries) => remove(entries).catch(fail)}
+              extra={employee ? [{ label: 'Notiz einfügen', onClick: () => setNoteDialog({ employee, date }) }] : []}
             />
           )
         })()}
+      {noteMenu && (
+        <CellMenu
+          x={noteMenu.x}
+          y={noteMenu.y}
+          onClose={closeNoteMenu}
+          items={[
+            {
+              label: `Notiz bearbeiten: ${noteMenu.note.title}`,
+              onClick: () => setNoteDialog({ employee: employeeOfNote(noteMenu.note), date: noteMenu.note.date, note: noteMenu.note }),
+            },
+            {
+              label: `Notiz löschen: ${noteMenu.note.title}`,
+              onClick: () => {
+                const { id } = noteMenu.note
+                api.deleteNote(id).then(() => dropNote(id), fail)
+              },
+            },
+          ]}
+        />
+      )}
+      {noteDialog && (
+        <NoteDialog
+          employee={noteDialog.employee}
+          date={noteDialog.date}
+          note={noteDialog.note}
+          onSaved={keepNote}
+          onDeleted={dropNote}
+          onClose={() => setNoteDialog(null)}
+        />
+      )}
       {siteDay && siteById.get(siteDay.siteId) && (
         <SiteDayDialog
           site={siteById.get(siteDay.siteId)!}

@@ -14,7 +14,7 @@ import {
 } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
-import { toInput } from '../lib/ui'
+import { onDay, toInput } from '../lib/ui'
 import { Chip } from './Chip'
 import { LaneCell, StripGrid, StripNav } from './DayStrip'
 import { percent, useDayStrip, workdaysOf } from '../lib/useDayStrip'
@@ -123,15 +123,18 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         date,
         entries: [
           ...entriesOf(employeeId, date).map(toInput),
-          {
-            type: 'Baustelle' as const,
-            siteId: site.id,
-            activity: activity ?? defaultActivity(employee, site.status),
-            startTime: null,
-            endTime: null,
-            note: null,
-            noteImportant: false,
-          },
+          onDay(
+            {
+              type: 'Baustelle' as const,
+              siteId: site.id,
+              activity: activity ?? defaultActivity(employee, site.status),
+              startTime: null,
+              endTime: null,
+              note: null,
+              noteImportant: false,
+            },
+            entriesOf(employeeId, date),
+          ),
         ],
       }
     })

@@ -12,6 +12,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
+    public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
 
@@ -114,6 +115,16 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         {
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Site>().Property(x => x.GeocodedFor).HasMaxLength(500);
+
+        modelBuilder.Entity<CalendarNote>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxTitle);
+            e.Property(x => x.Text).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxText);
+            e.HasIndex(x => new { x.EmployeeId, x.Date });
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ChangeLogEntry>(e =>

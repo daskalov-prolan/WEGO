@@ -1,9 +1,10 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
-import type { Activity, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import type { Activity, CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import { CellNotes } from './CalendarNotes'
 import { ActivityIcon } from './ActivityIcon'
 import type { Day } from '../lib/dates'
 import { formatDateLong, MONTHS } from '../lib/dates'
-import { entryName, entryStyle, entryTitle } from '../lib/activities'
+import { entryName, entryStyle, entryTitle, onlyHalfDay } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -12,6 +13,12 @@ import { Chip, NoteMark } from './Chip'
 type DropHandlers = Record<string, unknown>
 
 export interface MatrixProps {
+  /** The notes in the field of an employee and a day. */
+  notesOf?: (employeeId: number, date: string) => CalendarNote[]
+  /** Planners: a right click on a note (change or delete it). */
+  onNoteMenu?: (note: CalendarNote, at: { x: number; y: number }) => void
+  /** Planners: a click on a note opens it to change it. */
+  onOpenNote?: (note: CalendarNote) => void
   days: Day[]
   employees: PlanEmployee[]
   entriesOf: (employeeId: number, date: string) => Entry[]
@@ -339,6 +346,7 @@ export function TimelineMatrix(props: MatrixProps) {
             </th>
             {days.map((day, dayIndex) => {
               const entries = entriesOf(employee.id, day.iso)
+              const notes = props.notesOf?.(employee.id, day.iso) ?? []
               const first = entries[0]
               const isSelected = selected.has(cellKey(employee.id, day.iso))
               return (
@@ -379,6 +387,18 @@ export function TimelineMatrix(props: MatrixProps) {
                           }
                         />
                       ))}
+                      {/* Only half a day on sites: the other half is free. */}
+                      {onlyHalfDay(entries) && (
+                        <span
+                          className="chip chip-baustelle chip-half-free"
+                          style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
+                          title="verfügbar: der Rest des Tages ist frei"
+                        >
+                          <span className="chip-line">
+                            <span className="chip-name">verfügbar</span>
+                          </span>
+                        </span>
+                      )}
                     </span>
                     {first && (
                       <Compact
@@ -387,6 +407,13 @@ export function TimelineMatrix(props: MatrixProps) {
                         dimmed={entries.every(isDimmed)}
                         onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
                         draggable={draggable}
+                      />
+                    )}
+                    {notes.length > 0 && (
+                      <CellNotes
+                        notes={notes}
+                        onOpen={props.onOpenNote}
+                        onMenu={props.onNoteMenu && ((note, event) => props.onNoteMenu!(note, { x: event.clientX, y: event.clientY }))}
                       />
                     )}
                   </button>
@@ -447,7 +474,14 @@ export function SiteTimeline(props: SiteTimelineProps) {
   const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
   const draggable = dropOn !== undefined
   return (
-    <TimelineFrame days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} foldWeekends={foldWeekends} corner="Baustelle">
+    <TimelineFrame
+      days={days}
+      holidayByDate={holidayByDate}
+      today={today}
+      zoom={zoom}
+      foldWeekends={foldWeekends}
+      corner="Baustelle"
+    >
       {rows.map(({ site, byDate }) => (
         <tr key={site.id}>
           <th className="employee site-head" scope="row" title={site.client ?? site.name}>

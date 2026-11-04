@@ -54,8 +54,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
             <Button
               key={status}
               size="compact-sm"
-              variant={status === 'Storniert' ? 'subtle' : 'light'}
-              color={status === 'Storniert' ? 'red' : undefined}
+              variant="light"
               onClick={() => change(status)}
             >
               {site.status === 'Abgeschlossen' && status === 'Bauphase' ? 'Zurück in die Bauphase' : ACTION[status]}

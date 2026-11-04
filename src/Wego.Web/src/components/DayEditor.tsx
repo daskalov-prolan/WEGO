@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Alert,
   Button,
   Checkbox,
@@ -13,8 +14,9 @@ import {
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, PlanEmployee, Site, SiteInput } from '../api/types'
-import { activityLabel, allowedActivities, defaultActivity, entryStyle, isOpen } from '../lib/activities'
-import { formatDateLong, HALF_DAYS } from '../lib/dates'
+import { activityLabel, allowedActivities, defaultActivity, entryStyle, isFree, isOpen } from '../lib/activities'
+import { formatDateLong, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
+import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
 import { TimeSelect } from './TimeSelect'
@@ -26,6 +28,8 @@ interface Props {
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
   onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
+  /** Planners: goes to the page of a site (the day is left without saving). */
+  onGoToSite?: (siteId: number) => void
   /** Urlaub and Krank are for Planer G: without it such a row stays as it is. */
   canAbsence?: boolean
   onClose: () => void
@@ -41,6 +45,8 @@ interface Row {
   type: EntryType
   siteId: number | null
   activity: Activity | null
+  /** Kept free, no site: "verfügbar" (e.g. the other half of a split day). */
+  free: boolean
   start: string
   end: string
   note: string
@@ -51,6 +57,7 @@ const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activ
   type,
   siteId,
   activity: type === 'Baustelle' ? activity : null,
+  free: false,
   start: '',
   end: '',
   note: '',
@@ -60,8 +67,8 @@ const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activ
 function toInputs(rows: Row[]): DayEntryInput[] {
   return rows.map((row) => ({
     type: row.type,
-    siteId: row.type === 'Baustelle' ? row.siteId : null,
-    activity: row.type === 'Baustelle' ? row.activity : null,
+    siteId: row.type === 'Baustelle' && !row.free ? row.siteId : null,
+    activity: row.type === 'Baustelle' && !row.free ? row.activity : null,
     startTime: row.start ? `${row.start}:00` : null,
     endTime: row.end ? `${row.end}:00` : null,
     note: row.note.trim() || null,
@@ -71,7 +78,7 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
-  const { employee, date, entries, sites, onCreateSite, onUpdateSite, canAbsence = false, onClose, onSave, onCopy } = props
+  const { employee, date, entries, sites, onCreateSite, onUpdateSite, onGoToSite, canAbsence = false, onClose, onSave, onCopy } = props
   // A new site row starts without an activity: it follows the site chosen.
   const main = null
   // The activities offered follow the status of an open site. On a done or cancelled site (entries from
@@ -84,7 +91,9 @@ export function DayEditor(props: Props) {
   // A site row is titled with its activity (there is no field for it: it comes from what was dragged in, the
   // employee and the site) and its site.
   const rowTitle = (row: Row) =>
-    [activityLabel(row.activity), siteName(row.siteId) ?? (row.siteId === null ? 'Baustelle wählen oder neu anlegen' : null)]
+    row.free
+      ? 'verfügbar'
+      : [activityLabel(row.activity), siteName(row.siteId) ?? (row.siteId === null ? 'Baustelle wählen oder neu anlegen' : null)]
       .filter(Boolean)
       .join(' · ')
   const [rows, setRows] = useState<Row[]>(() => {
@@ -92,6 +101,7 @@ export function DayEditor(props: Props) {
       type: e.type,
       siteId: e.siteId,
       activity: e.activity,
+      free: isFree(e),
       start: e.startTime?.slice(0, 5) ?? '',
       end: e.endTime?.slice(0, 5) ?? '',
       note: e.note ?? '',
@@ -114,6 +124,16 @@ export function DayEditor(props: Props) {
 
   const update = (index: number, change: Partial<Row>) =>
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...change } : row)))
+
+  // Two entries change places; the time windows stay where they are (the morning stays the morning).
+  const swap = (index: number) =>
+    setRows((current) =>
+      current.map((row, i) => {
+        if (i !== index && i !== index + 1) return row
+        const other = current[i === index ? index + 1 : index]
+        return { ...other, start: row.start, end: row.end }
+      }),
+    )
 
   // Urlaub and Krank rows that may not be changed here (see canAbsence).
   const kept = (current: Row[]) => (canAbsence ? [] : current.filter((row) => row.type !== 'Baustelle'))
@@ -169,7 +189,7 @@ export function DayEditor(props: Props) {
             </Text>
           )}
 
-          {rows.map((row, index) => (
+          {rows.map((row, index) => [
             // Each entry in the colour of its activity (or of Urlaub / Krank), every second one a bit stronger,
             // and titled with its site, so the entries of a day stand apart.
             <Paper
@@ -177,7 +197,8 @@ export function DayEditor(props: Props) {
               p="sm"
               key={index}
               className={index % 2 === 1 ? 'day-row second' : 'day-row'}
-              style={entryStyle(row)}
+              // A row kept free in the green of "verfügbar".
+              style={entryStyle(row.free ? { ...row, activity: null, siteName: null } : row)}
             >
               <Stack gap="xs">
                 <Group justify="space-between" wrap="nowrap">
@@ -191,7 +212,15 @@ export function DayEditor(props: Props) {
                     />
                   )}
                 </Group>
-                {row.type === 'Baustelle' && (
+                {/* A row without a site yet can stay free, e.g. the other half of the day. */}
+                {row.type === 'Baustelle' && (row.free || row.siteId === null) && (
+                  <Checkbox
+                    label="Bleibt verfügbar (keine Baustelle)"
+                    checked={row.free}
+                    onChange={(e) => update(index, { free: e.currentTarget.checked, siteId: null })}
+                  />
+                )}
+                {row.type === 'Baustelle' && !row.free && (
                   <SitePicker
                     sites={sites}
                     value={row.siteId}
@@ -203,6 +232,9 @@ export function DayEditor(props: Props) {
                     }}
                     onCreate={createSite}
                     onUpdate={onUpdateSite}
+                    onGoToSite={onGoToSite}
+                    // A new site for the start of the construction (Abriss / Baubeginn) begins on this day.
+                    newSite={row.activity === 'Abriss' ? { ...emptySite, plannedStart: date } : undefined}
                     // An offer visit can be planned before its site is known: then the activity is enough.
                     required={row.activity === null}
                   />
@@ -215,6 +247,32 @@ export function DayEditor(props: Props) {
                     onChange={(start) => update(index, { start, ...(row.end && start && row.end <= start ? { end: '' } : {}) })}
                   />
                   <TimeSelect label="bis" value={row.end} onChange={(end) => update(index, { end })} after={row.start} />
+                </Group>
+                {/* Quick times: half a day in the morning or the afternoon, or the whole day (a half kept free goes then). */}
+                <Group gap={6}>
+                  {HALF_DAYS.map((half, i) => (
+                    <Button
+                      key={half.start}
+                      size="compact-xs"
+                      variant={row.start === half.start && row.end === half.end ? 'filled' : 'light'}
+                      onClick={() => update(index, half)}
+                    >
+                      ½ Tag {i === 0 ? 'vormittags' : 'nachmittags'}
+                    </Button>
+                  ))}
+                  {!row.free && (row.start !== WHOLE_DAY.start || row.end !== WHOLE_DAY.end) && (
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      onClick={() =>
+                        setRows((current) =>
+                          current.filter((other, i) => i === index || !other.free).map((other) => (other === row ? { ...other, ...WHOLE_DAY } : other)),
+                        )
+                      }
+                    >
+                      Auf den ganzen Tag ausweiten
+                    </Button>
+                  )}
                 </Group>
                 <Group gap="sm" align="flex-end" wrap="nowrap">
                   <TextInput
@@ -235,14 +293,24 @@ export function DayEditor(props: Props) {
                   />
                 </Group>
               </Stack>
-            </Paper>
-          ))}
+            </Paper>,
+            // Between two entries: change their order.
+            index < rows.length - 1 && (
+              <Group key={`swap-${index}`} justify="center" my={-6}>
+                <Tooltip label="Reihenfolge tauschen (die Uhrzeiten bleiben)">
+                  <ActionIcon variant="light" radius="xl" aria-label={`Eintrag ${index + 1} und ${index + 2} tauschen`} onClick={() => swap(index)}>
+                    ⇅
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+            ),
+          ])}
 
           <Group gap="xs">
             <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
               + Baustelle
             </Button>
-            <Tooltip label="Zwei Baustellen je 4 Stunden: 07:30–11:30 und 12:00–16:00">
+            <Tooltip label="Zwei Hälften: 07:30–11:30 und 12:00–16:00; die zweite kann eine Baustelle bekommen oder verfügbar bleiben">
               <Button size="xs" variant="light" onClick={splitDay}>
                 ½ Tag
               </Button>

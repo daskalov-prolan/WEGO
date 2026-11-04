@@ -51,6 +51,36 @@ namespace Wego.Api.Migrations
                     b.ToTable("Activities", (string)null);
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.CalendarNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "Date");
+
+                    b.ToTable("CalendarNotes");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.ChangeLogEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -272,6 +302,10 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("GeocodedFor")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("HouseNumber")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -279,6 +313,12 @@ namespace Wego.Api.Migrations
                     b.Property<string>("LabelProjectNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -404,6 +444,17 @@ namespace Wego.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("SiteTasks");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.CalendarNote", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>

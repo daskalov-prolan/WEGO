@@ -137,6 +137,57 @@ export interface PlanEmployee extends NamedItem {
   isCraftsman?: boolean
 }
 
+/** Where a site is on the map. */
+export interface SiteMapLocation {
+  siteId: number
+  latitude: number
+  longitude: number
+}
+
+/** The places of the sites; `pending`: addresses not looked up yet (the map asks again). */
+export interface SiteMapLocations {
+  locations: SiteMapLocation[]
+  pending: number
+}
+
+/** A stretch of vacation: days one after the other (a weekend in between does not break it). */
+export interface VacationBlock {
+  from: string
+  to: string
+  days: number
+}
+
+/** The own vacation in "Mein Bereich"; counted from `countedFrom` on (`counted` false before). */
+export interface MyVacation {
+  year: number
+  counted: boolean
+  countedFrom: number
+  entitlement: number
+  /** All vacation days entered in the year; `taken`: those up to today. */
+  used: number
+  taken: number
+  remaining: number
+  blocks: VacationBlock[]
+}
+
+/** A note in the field of an employee and a day of the plan, not tied to a site. */
+export interface CalendarNote {
+  id: number
+  employeeId: number
+  date: string
+  /** Short: it stands in the field. */
+  title: string
+  /** The explanation, shown when pointing at the note. */
+  text: string | null
+}
+
+export interface CalendarNoteInput {
+  employeeId: number
+  date: string
+  title: string
+  text: string
+}
+
 export interface Plan {
   year: number
   employees: PlanEmployee[]
@@ -147,6 +198,7 @@ export interface Plan {
   entries: Entry[]
   schoolHolidays: SchoolHoliday[]
   sites: Site[]
+  notes?: CalendarNote[]
 }
 
 export interface DayEntryInput {

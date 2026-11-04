@@ -23,10 +23,11 @@ public static class PlanEndpoints
     /// <paramref name="Planners"/>: the active planners not shown in the plan otherwise, for the offer phase.
     /// <paramref name="OfferPhase"/>: whether the viewer may see the offer phase (see <see cref="OfferAccess"/>);
     /// without it the plan holds no offer sites and no offer work of others.
+    /// <paramref name="Notes"/>: the notes in the fields of the employees shown, for everybody.
     /// </summary>
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites,
-        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase);
+        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase, IReadOnlyList<CalendarNoteEndpoints.CalendarNoteDto> Notes);
 
     /// <summary>A site entry names its construction site by <paramref name="SiteId"/>.</summary>
     public record DayEntryInput(EntryType Type, int? SiteId, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -44,6 +45,7 @@ public static class PlanEndpoints
         app.MapGet("/api/plan", async (int year, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var (from, to) = YearRange(year);
+            await SiteEndpoints.StartDueSitesAsync(db);
             var access = await OfferAccess.ForAsync(user, db);
             var allSites = await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync();
             var siteStatus = allSites.ToDictionary(s => s.Id, s => s.Status);
@@ -75,7 +77,16 @@ public static class PlanEndpoints
 
             var sites = allSites.Where(access.Shows).Select(SiteEndpoints.ToDto).ToList();
 
-            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers);
+            var employeeIds = employees.Concat(planners).Select(e => e.Id).ToList();
+            var notes = (await db.CalendarNotes.AsNoTracking()
+                    .Where(n => n.Date >= from && n.Date <= to)
+                    .Where(n => employeeIds.Contains(n.EmployeeId))
+                    .OrderBy(n => n.Date).ThenBy(n => n.Id)
+                    .ToListAsync())
+                .Select(CalendarNoteEndpoints.ToDto)
+                .ToList();
+
+            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers, notes);
         });
 
         // Replaces all entries of one employee on one day, so a split day is always saved as a whole.
@@ -213,9 +224,8 @@ public static class PlanEndpoints
             if (!Enum.IsDefined(input.Type)) return "Unbekannte Art des Eintrags.";
             if (input.Activity is { } activity && !activities.Contains(activity)) return "Unbekannte Tätigkeit.";
 
-            // A Besichtigung can be planned before it is known where: then the activity says what it is.
-            if (input.Type == EntryType.Baustelle && input.SiteId is null && input.Activity is null)
-                return "Bitte für jeden Einsatz eine Baustelle oder eine Tätigkeit wählen.";
+            // Without a site an entry is a Besichtigung planned before it is known where (the activity says
+            // so), or, without an activity as well, time kept free: "verfügbar" (e.g. the other half of a day).
 
             if ((input.StartTime is null) != (input.EndTime is null))
                 return "Bitte Beginn und Ende des Zeitfensters angeben oder beide leer lassen.";

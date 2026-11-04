@@ -93,13 +93,10 @@ export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; h
 /** Done or cancelled: nothing is planned there any more. */
 export const isOpen = (status: SiteStatus) => status === 'Angebot' || status === 'Bauphase'
 
-/** The status a site may change to: one step forward, or cancelled from anywhere but cancelled. */
+/** The status a site may change to: one step forward. Cancelling is no longer offered. */
 export function nextStatuses(status: SiteStatus): SiteStatus[] {
-  if (status === 'Storniert') return []
   // A done site can go back to the construction phase when there is more to do after all.
-  const next: SiteStatus[] =
-    status === 'Angebot' ? ['Bauphase'] : status === 'Bauphase' ? ['Abgeschlossen'] : status === 'Abgeschlossen' ? ['Bauphase'] : []
-  return [...next, 'Storniert']
+  return status === 'Angebot' ? ['Bauphase'] : status === 'Bauphase' ? ['Abgeschlossen'] : status === 'Abgeschlossen' ? ['Bauphase'] : []
 }
 
 /** The activities of a site in this status; none once it is done or cancelled. */
@@ -109,6 +106,8 @@ export function activitiesOfStatus(status: SiteStatus): Activity[] {
 
 
 export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', edge: '#8fa3a8' }
+/** Free ("verfügbar"): a fresh green, stronger than the green of the holidays behind the days. */
+export const FREE: Colours = { background: '#40c057', tint: '#c3f0ca', edge: '#2b8a3e' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
 export const ABSENCE: Colours = { background: '#ffc61a', tint: '#ffe27a', edge: '#e0a000' }
 /** Feiertage are green, school holidays a lighter green. */
@@ -129,6 +128,23 @@ export function isFree(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): bo
   return !entry.activity || BY_VALUE.get(entry.activity)?.phase !== 'Angebot'
 }
 
+/**
+ * Work on sites for half a day at most (every entry with its time window, together no more than 4.5 hours)
+ * and nothing else that day: the rest of the day the employee is free. A day with Urlaub or Krank, with a
+ * row kept free already or without times is not.
+ */
+export function onlyHalfDay(entries: Pick<Entry, 'type' | 'activity' | 'siteName' | 'startTime' | 'endTime'>[]): boolean {
+  if (entries.length === 0) return false
+  let hours = 0
+  for (const entry of entries) {
+    if (entry.type !== 'Baustelle' || isFree(entry) || !entry.startTime || !entry.endTime) return false
+    const [startH, startM] = entry.startTime.split(':').map(Number)
+    const [endH, endM] = entry.endTime.split(':').map(Number)
+    hours += endH + endM / 60 - (startH + startM / 60)
+  }
+  return hours <= 4.5
+}
+
 /** What an entry is called in the plan: its site, or (planned before the site is known) its activity. */
 export function entryName(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
   if (entry.type !== 'Baustelle') return entry.type
@@ -139,7 +155,7 @@ export function entryName(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>):
 function colours(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, 'siteName'>>): Colours {
   if (entry.type !== 'Baustelle') return ABSENCE
   // Only a saved entry is free; a row being edited (no site name known) keeps the colour of its activity.
-  if (entry.siteName === null && isFree({ ...entry, siteName: null })) return NO_ACTIVITY
+  if (entry.siteName === null && isFree({ ...entry, siteName: null })) return FREE
   return (entry.activity && BY_VALUE.get(entry.activity)) || NO_ACTIVITY
 }
 

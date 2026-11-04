@@ -62,7 +62,8 @@ export function ClipMenu({
   x,
   y,
   onClose,
+  extra = [],
   ...options
-}: { x: number; y: number; onClose: () => void } & Parameters<typeof clipMenuItems>[0]) {
-  return <CellMenu x={x} y={y} onClose={onClose} items={clipMenuItems(options)} />
+}: { x: number; y: number; onClose: () => void; extra?: CellMenuItem[] } & Parameters<typeof clipMenuItems>[0]) {
+  return <CellMenu x={x} y={y} onClose={onClose} items={[...clipMenuItems(options), ...extra]} />
 }

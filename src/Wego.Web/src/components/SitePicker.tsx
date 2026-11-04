@@ -5,6 +5,7 @@ import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress, toSiteInput } from '../lib/sites'
 import { SiteForm } from './SiteForm'
 import { SiteSheet } from './SiteSheet'
+import { SiteMapLink } from './SitesMap'
 
 interface Props {
   sites: Site[]
@@ -14,15 +15,19 @@ interface Props {
   onCreate: (input: SiteInput) => Promise<Site>
   /** Saves changes made in the record of the chosen site. */
   onUpdate?: (id: number, input: SiteInput) => Promise<Site>
+  /** Planners: goes to the page of the chosen site, to add or correct its details. */
+  onGoToSite?: (siteId: number) => void
+  /** What a new site starts with, e.g. the day as its start; empty without it. */
+  newSite?: SiteInput
   label?: string
   required?: boolean
 }
 
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
-export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label = 'Baustelle', required }: Props) {
+export function SitePicker({ sites, value, onChange, onCreate, onUpdate, onGoToSite, newSite = emptySite, label = 'Baustelle', required }: Props) {
   const [creating, setCreating] = useState(false)
   // The record of the chosen site, opened on top; closing it leads back here.
-  const [viewing, setViewing] = useState<'record' | 'edit' | 'quick-edit' | null>(null)
+  const [viewing, setViewing] = useState<'record' | 'edit' | null>(null)
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
   const chosenAddress = chosen && formatAddress(chosen)
@@ -102,12 +107,13 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
             <Anchor size="xs" fw={600} onClick={() => setViewing('record')}>
               Datensatz öffnen: {chosen.name}
             </Anchor>
-            {/* Straight into the form, to add or correct the details of the site. */}
-            {onUpdate && (
-              <Button size="compact-xs" variant="light" onClick={() => setViewing('quick-edit')}>
-                Baustelle bearbeiten
+            {/* Straight to the page of the site, to add or correct its details. */}
+            {onGoToSite && (
+              <Button size="compact-xs" variant="light" onClick={() => onGoToSite(chosen.id)}>
+                Zur Baustelle
               </Button>
             )}
+            <SiteMapLink site={chosen} />
           </Group>
         </div>
       )}
@@ -120,22 +126,21 @@ export function SitePicker({ sites, value, onChange, onCreate, onUpdate, label =
           onClose={() => setViewing(null)}
         />
       )}
-      {chosen && (viewing === 'edit' || viewing === 'quick-edit') && onUpdate && (
+      {chosen && viewing === 'edit' && onUpdate && (
         <SiteForm
           title="Baustelle bearbeiten"
           initial={toSiteInput(chosen)}
-          // From the record back to it; straight from the day back to the day.
-          onClose={() => setViewing(viewing === 'edit' ? 'record' : null)}
+          onClose={() => setViewing('record')}
           onSave={async (input) => {
             await onUpdate(chosen.id, input)
-            setViewing(viewing === 'edit' ? 'record' : null)
+            setViewing('record')
           }}
         />
       )}
       {creating && (
         <SiteForm
           title="Neue Baustelle"
-          initial={emptySite}
+          initial={newSite}
           onClose={() => setCreating(false)}
           onSave={async (input) => {
             const site = await onCreate(input)

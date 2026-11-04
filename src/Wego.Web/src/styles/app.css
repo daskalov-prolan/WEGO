@@ -566,6 +566,11 @@ a:hover {
   container-type: inline-size;
 }
 
+/* Room below the last row: it can be scrolled up above the messages at the bottom of the screen. */
+.plan-scroll > .timeline {
+  margin-bottom: 160px;
+}
+
 .timeline {
   --name-col: 150px;
   --month-row: 26px;
@@ -761,6 +766,39 @@ a:hover {
 
 .timeline td.weekend {
   background: var(--surface-weekend);
+}
+
+/* Notes in a field: the short title on yellow paper, the explanation when pointing at it. */
+.timeline .cell-notes {
+  display: block;
+}
+
+.timeline .cell-note {
+  display: block;
+  margin-top: 2px;
+  padding: 1px 4px;
+  overflow: hidden;
+  border-left: 3px solid #f59f00;
+  border-radius: 3px;
+  background: #fff3bf;
+  color: #5c3c00;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline .cell-note[data-clickable] {
+  cursor: pointer;
+}
+
+/* A folded weekend has no room for the title: a yellow strip shows that there is a note. */
+.timeline.fold-weekends td.weekend .cell-note {
+  height: 4px;
+  padding: 0;
+  border-left: 0;
+  font-size: 0;
 }
 
 .timeline td.holiday {
@@ -1855,4 +1893,13 @@ body.stretching * {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+
+/* The map of the sites (Baustellen, and a single site from its record). */
+.sites-map {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 0;
 }

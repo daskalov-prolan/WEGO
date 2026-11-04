@@ -25,6 +25,7 @@ const NAV = [
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
   { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'PlanerG', right: true },
+  { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
 export function AppShell({ user, page, year, onYearChange, onLogout, children }: Props) {

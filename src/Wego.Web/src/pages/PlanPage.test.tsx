@@ -88,6 +88,9 @@ describe('PlanPage', () => {
     const monday = cell(/Anna, Montag, 02.03.2026/)
     expect(within(monday).getByText('8–10 Uhr')).toBeInTheDocument()
     expect(within(monday).getByText('11–13 Uhr')).toBeInTheDocument()
+    // Four hours on sites: the rest of the day shows as free.
+    expect(within(monday).getByTitle('verfügbar: der Rest des Tages ist frei')).toBeInTheDocument()
+    expect(within(cell(/Bernd, Dienstag, 03.03.2026/)).queryByTitle('verfügbar: der Rest des Tages ist frei')).not.toBeInTheDocument()
     // The short form for narrow screens names the first site and counts the rest.
     expect(within(monday).getByText('+1')).toBeInTheDocument()
 
@@ -201,16 +204,12 @@ describe('PlanPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
 
     // Rows in the order the work starts: Schulze and Meier on 2 March.
-    // Done sites are left out by default; Werner had work before today, so the hint shows up.
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual([
-      'Familie Werner',
-      'Familie Meier',
-      'Familie Schulze',
-    ])
+    // Done sites show as well (Altbau); Werner had work before today, so the hint shows up.
+    const rows = screen.getAllByRole('rowheader').map((th) => th.textContent)
+    expect(rows.filter((name) => name !== 'Altbau')).toEqual(['Familie Werner', 'Familie Meier', 'Familie Schulze'])
+    expect(rows).toContain('Altbau')
+    expect(screen.queryByRole('switch', { name: 'Nur aktive' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Frühere Einsätze: 1/ })).toBeInTheDocument()
-    await user.click(screen.getByRole('switch', { name: 'Nur aktive' }))
-    expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toContain('Altbau')
-    await user.click(screen.getByRole('switch', { name: 'Nur aktive' }))
     const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ })
     expect(within(meierMonday).getAllByText('Anna').length).toBeGreaterThan(0)
     const meierTuesday = screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ })
@@ -410,6 +409,7 @@ describe('PlanPage', () => {
         return new Response(JSON.stringify({ ...noAddress, id: 50, name: 'Familie Neu', client: 'Familie Neu', status: 'Angebot' }), {
           status: 201,
         })
+      if (url === '/api/sites/planners') return new Response(JSON.stringify([{ id: 7, name: 'Planer G', isMe: true }]), { status: 200 })
       return new Response(JSON.stringify(phases), { status: 200 })
     })
     const user = userEvent.setup()
@@ -427,6 +427,8 @@ describe('PlanPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Neue Baustelle anlegen' }))
     const client = screen.getAllByLabelText(/^Auftraggeber/).find((element) => element.getAttribute('type') !== 'radio')!
     await user.type(client, 'Familie Neu')
+    await user.click(screen.getAllByLabelText(/Zuständiger Planer/).find((element) => element.tagName === 'INPUT')!)
+    await user.click(await screen.findByRole('option', { name: 'Planer G', hidden: true }))
     await user.click(within(screen.getByRole('dialog', { name: 'Neue Baustelle' })).getByRole('button', { name: 'Speichern' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
@@ -634,6 +636,68 @@ describe('PlanPage', () => {
     expect((await optionsOf('bis')).slice(0, 2)).toEqual(['08:00', '08:30'])
   })
 
+  it('keeps the other half of a split day free, and swaps the two halves', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await user.dblClick(await screen.findByRole('button', { name: /Bernd, Dienstag, 03.03.2026/ }))
+
+    await user.click(await screen.findByRole('button', { name: '½ Tag' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Bleibt verfügbar (keine Baustelle)' }))
+    // Free in the morning, Meier in the afternoon: the times stay where they are.
+    await user.click(screen.getByRole('button', { name: 'Eintrag 1 und 2 tauschen' }))
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
+      expect.objectContaining({ siteId: null, activity: null, startTime: '07:30:00', endTime: '11:30:00' }),
+      expect.objectContaining({ siteId: 11, startTime: '12:00:00', endTime: '16:00:00' }),
+    ])
+  })
+
+  it('widens a half day to the whole day without touching the times', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    await user.dblClick(await screen.findByRole('button', { name: /Bernd, Dienstag, 03.03.2026/ }))
+    await user.click(await screen.findByRole('button', { name: '½ Tag' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Bleibt verfügbar (keine Baustelle)' }))
+
+    await user.click(screen.getAllByRole('button', { name: 'Auf den ganzen Tag ausweiten' })[0])
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
+      expect.objectContaining({ siteId: 11, startTime: '07:00:00', endTime: '16:00:00' }),
+    ])
+  })
+
+  it('shows the note of an entry when pointing at its sign', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+    await user.click(screen.getByRole('button', { name: 'Weiter' }))
+    // One hint only, the note instead of site and activity.
+    const sign = within(cell(/Bernd, Donnerstag, 12.03.2026/)).getAllByRole('img', { name: 'mit Notiz' })[0]
+    expect(sign.closest('[title]')).toHaveAttribute('title', 'mit 2 Helfern')
+  })
+
+  it('swaps two sites of a day with their times by dragging one onto the other', async () => {
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    const monday = await screen.findByRole('button', { name: /Anna, Montag, 02.03.2026/ })
+    const chipOf = (name: string) => within(monday).getAllByText(name)[0].closest('.chip')!
+
+    fireEvent.dragStart(chipOf('Familie Meier'))
+    fireEvent.drop(chipOf('Familie Schulze'))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
+    expect(JSON.parse(String(call[1].body))[0].entries).toEqual([
+      expect.objectContaining({ siteId: 11, activity: 'Trockenbau', startTime: '08:00:00', endTime: '10:00:00' }),
+      expect.objectContaining({ siteId: 10, activity: 'Fliesen', startTime: '11:00:00', endTime: '13:00:00' }),
+    ])
+  })
+
   it('in the offer phase plans a visit by dragging it from the legend onto a day, the site still open', async () => {
     const phases: Plan = {
       ...plan,
@@ -765,6 +829,44 @@ describe('PlanPage', () => {
       return within(await screen.findByRole('menu'))
     }
 
+    it('writes a note into the field of an employee, shows its explanation and deletes it', async () => {
+      const user = userEvent.setup()
+      const withNote = { ...plan, notes: [{ id: 5, employeeId: 1, date: '2026-03-03', title: 'Arzttermin', text: 'Ab 14 Uhr nicht da' }] }
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url === '/api/plan/notes') return new Response(JSON.stringify({ id: 6, ...JSON.parse(String(init?.body)) }), { status: 201 })
+        if (url === '/api/plan/notes/5') return new Response(null, { status: 204 })
+        return new Response(JSON.stringify(withNote), { status: 200 })
+      })
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      // The title in the field of Anna; pointing at it shows the explanation.
+      const note = within(cell(/Anna, Dienstag, 03.03.2026/)).getByText('Arzttermin')
+      await user.hover(note)
+      expect(await screen.findByText('Ab 14 Uhr nicht da', {}, { timeout: 2000 })).toBeInTheDocument()
+
+      // A right click on a field of an employee offers a note there, independent of the site.
+      const items = await menu(/Bernd, Mittwoch, 04.03.2026/)
+      await user.click(items.getByRole('menuitem', { name: 'Notiz einfügen' }))
+      await user.type(await screen.findByRole('textbox', { name: /Überschrift/ }), 'Werkzeug holen')
+      await user.type(screen.getByRole('textbox', { name: /Erklärung/ }), 'Bohrhammer aus dem Lager.')
+      await user.click(screen.getByRole('button', { name: 'Speichern' }))
+
+      await waitFor(() => expect(within(cell(/Bernd, Mittwoch, 04.03.2026/)).getByText('Werkzeug holen')).toBeInTheDocument())
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/notes')!
+      expect(JSON.parse(String(call[1].body))).toEqual({
+        employeeId: 2,
+        date: '2026-03-04',
+        title: 'Werkzeug holen',
+        text: 'Bohrhammer aus dem Lager.',
+      })
+
+      // A right click on the note deletes it.
+      fireEvent.contextMenu(within(cell(/Anna, Dienstag, 03.03.2026/)).getByText('Arzttermin'))
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Notiz löschen: Arzttermin' }))
+      await waitFor(() => expect(within(cell(/Anna, Dienstag, 03.03.2026/)).queryByText('Arzttermin')).not.toBeInTheDocument())
+    })
+
     it('copies a cell and pastes it into another, with its activities', async () => {
       const user = userEvent.setup()
       renderWithProviders(<PlanPage year={2026} canEdit />)
@@ -834,6 +936,7 @@ describe('PlanPage', () => {
         'Einfügen',
         'Löschen: Familie Meier',
         'Ganzen Tag löschen',
+        'Notiz einfügen',
       ])
       await user.click(items.getByRole('menuitem', { name: 'Ausschneiden: Familie Meier' }))
 

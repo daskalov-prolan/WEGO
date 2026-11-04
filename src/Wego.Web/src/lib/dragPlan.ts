@@ -1,6 +1,6 @@
 import type { DragEvent } from 'react'
 import type { Activity, DayEntryInput, Entry, EntryType } from '../api/types'
-import { toInput } from './ui'
+import { onDay, toInput } from './ui'
 
 /**
  * What can be dragged in a plan: an entry of a cell, an activity of a site that is not planned yet, an
@@ -102,7 +102,7 @@ export function moveChanges(entry: Entry, to: MoveTarget, entriesOf: (employeeId
   const target = sameDay ? rest : entriesOf(to.employeeId, to.date)
   const there =
     entry.type === 'Baustelle' && to.siteId !== null && target.some((other) => other.type === 'Baustelle' && other.siteId === to.siteId)
-  const joined = [...target.map(toInput), ...(there ? [] : [moved])]
+  const joined = [...target.map(toInput), ...(there ? [] : [onDay(moved, target)])]
   if (sameDay) return [{ employeeId: to.employeeId, date: to.date, entries: joined }]
   return [
     { employeeId: entry.employeeId, date: entry.date, entries: rest.map(toInput) },

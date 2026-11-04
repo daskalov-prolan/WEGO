@@ -8,6 +8,7 @@ import { AdminPage } from './pages/AdminPage'
 import { EmployeesPage } from './pages/EmployeesPage'
 import { EmployeeReportPage } from './pages/EmployeeReportPage'
 import { LoginPage, NewPasswordPage } from './pages/LoginPage'
+import { MyAreaPage } from './pages/MyAreaPage'
 import { MyPlanPage } from './pages/MyPlanPage'
 import { PlanPage } from './pages/PlanPage'
 import { SitePage } from './pages/SitePage'
@@ -96,6 +97,7 @@ export default function App() {
 
   let content
   if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
+  else if (page === 'mein-bereich') content = <MyAreaPage user={user} />
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
     content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage />

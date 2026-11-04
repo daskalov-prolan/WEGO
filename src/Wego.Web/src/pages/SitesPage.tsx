@@ -1,9 +1,10 @@
-import { Alert, Anchor, Button, Group, Select, Switch, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Anchor, Button, Group, SegmentedControl, Select, Switch, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Planner, Site, SiteStatus } from '../api/types'
+import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
+import { SitesMap } from '../components/SitesMap'
 import { StatusBadge } from '../components/SiteStatus'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
@@ -40,8 +41,9 @@ type Show = 'active' | 'all' | 'last6' | `year:${number}` | `status:${SiteStatus
 const isActive = (site: Site, today: string) => isOpen(site.status) && !!site.plannedStart && site.plannedStart <= today
 
 function shows(site: Site, show: Show, today: string): boolean {
-  // Cancelled sites only when asked for by their status.
-  if (show === 'all') return site.status !== 'Storniert'
+  // Cancelled sites (from before there was no cancelling any more) are not shown at all.
+  if (site.status === 'Storniert') return false
+  if (show === 'all') return true
   if (show === 'active') return isActive(site, today)
   if (show.startsWith('status:')) return site.status === show.slice(7)
   if (!site.plannedStart) return false
@@ -73,6 +75,30 @@ export function SitesPage() {
   // The construction phase first, whenever it starts.
   const [show, setShow] = useState<Show>('status:Bauphase')
   const [grouping, setGrouping] = useState<Grouping>('none')
+  // The sites shown as a list or on the map of Berlin.
+  const [view, setView] = useState<'list' | 'map'>('list')
+  const [locations, setLocations] = useState<Map<number, SiteMapLocation>>(new Map())
+  const [pending, setPending] = useState(0)
+  useEffect(() => {
+    if (view !== 'map') return
+    // A few addresses are looked up per call: ask again until all are known.
+    let stopped = false
+    const load = async () => {
+      try {
+        const answer = await api.siteLocations()
+        if (stopped) return
+        setLocations(new Map(answer.locations.map((location) => [location.siteId, location])))
+        setPending(answer.pending)
+        if (answer.pending > 0) window.setTimeout(load, 500)
+      } catch (e) {
+        if (!stopped) setError(messageOf(e))
+      }
+    }
+    void load()
+    return () => {
+      stopped = true
+    }
+  }, [view])
   const today = todayIso()
   const isPhone = useIsPhone()
 
@@ -162,6 +188,12 @@ export function SitesPage() {
     if (firstUpcoming) document.getElementById(`site-row-${firstUpcoming.id}`)?.scrollIntoView({ block: 'start' })
   }, [firstUpcoming, sort])
 
+  // The sites shown that have a place on the map.
+  const points = useMemo(
+    () => rows.flatMap((site) => (locations.has(site.id) ? [{ site, location: locations.get(site.id)! }] : [])),
+    [rows, locations],
+  )
+
   const sortBy = (key: SortKey) =>
     setSort((current) => ({ key, descending: current.key === key ? !current.descending : false }))
 
@@ -189,8 +221,11 @@ export function SitesPage() {
           allowDeselect={false}
           data={[
             { value: 'active', label: 'Aktive Baustellen' },
-            { value: 'all', label: 'Alle Baustellen (ohne stornierte)' },
-            ...SITE_STATUSES.map((status) => ({ value: `status:${status.value}`, label: `Status ${status.label}` })),
+            { value: 'all', label: 'Alle Baustellen' },
+            ...SITE_STATUSES.filter((status) => status.value !== 'Storniert').map((status) => ({
+              value: `status:${status.value}`,
+              label: `Status ${status.label}`,
+            })),
             { value: 'last6', label: 'Start in den letzten 6 Monaten' },
             ...years.map((year) => ({ value: `year:${year}`, label: `Start im Jahr ${year}` })),
           ]}
@@ -207,6 +242,14 @@ export function SitesPage() {
             { value: 'status', label: 'nach Status' },
           ]}
         />
+        <SegmentedControl
+          value={view}
+          onChange={(value) => setView(value as 'list' | 'map')}
+          data={[
+            { value: 'list', label: 'Liste' },
+            { value: 'map', label: 'Karte' },
+          ]}
+        />
         <Text size="sm" c="dimmed">
           {rows.length} von {sites.length} Baustellen
         </Text>
@@ -218,7 +261,16 @@ export function SitesPage() {
         </Alert>
       )}
 
-      {isPhone ? (
+      {view === 'map' ? (
+        <>
+          <SitesMap points={points} />
+          <Text size="sm" c="dimmed" mt="xs">
+            {pending > 0
+              ? `Adressen werden auf der Karte gesucht … (noch ${pending})`
+              : `${rows.filter((site) => locations.has(site.id)).length} von ${rows.length} Baustellen auf der Karte; ohne gefundene Adresse fehlen die übrigen.`}
+          </Text>
+        </>
+      ) : isPhone ? (
         // On a phone one card per site instead of the wide table.
         <div className="site-cards">
           {groups.map((group) => (

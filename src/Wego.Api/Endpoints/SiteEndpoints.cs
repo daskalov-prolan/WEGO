@@ -39,6 +39,7 @@ public static class SiteEndpoints
         // who may see it (see OfferAccess).
         group.MapGet("/", async (ClaimsPrincipal user, WegoDbContext db) =>
         {
+            await StartDueSitesAsync(db);
             var access = await OfferAccess.ForAsync(user, db);
             return (await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync())
                 .Where(access.Shows).Select(ToDto);
@@ -55,6 +56,7 @@ public static class SiteEndpoints
 
         group.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
         {
+            await StartDueSitesAsync(db);
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             return site is not null && (await OfferAccess.ForAsync(user, db)).Shows(site)
                 ? Results.Ok(ToDto(site))
@@ -256,6 +258,34 @@ public static class SiteEndpoints
         db.SiteHourlyRates.Where(r => r.SiteId == siteId)
             .Select(r => new HourlyRateDto(r.EmployeeId, r.HourlyRate))
             .ToListAsync();
+
+    /// <summary>The name in the status history of a site that entered the construction phase by itself.</summary>
+    public const string AutomaticStart = "automatisch (Baubeginn erreicht)";
+
+    /// <summary>
+    /// Sites in the offer phase whose planned start has come go into the construction phase by themselves,
+    /// with its activities, as if a planner had pressed "Bauphase beginnen". Runs before sites are read.
+    /// </summary>
+    public static async Task StartDueSitesAsync(WegoDbContext db)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var due = await db.Sites.Include(s => s.Tasks)
+            .Where(s => s.Status == SiteStatus.Angebot && s.PlannedStart != null && s.PlannedStart <= today)
+            .ToListAsync();
+        if (due.Count == 0) return;
+        var activities = await db.Activities.ToListAsync();
+        foreach (var site in due)
+        {
+            db.SiteStatusChanges.Add(new SiteStatusChange
+            {
+                SiteId = site.Id, From = site.Status, To = SiteStatus.Bauphase, ChangedAt = DateTime.UtcNow,
+                ChangedBy = AutomaticStart,
+            });
+            site.Status = SiteStatus.Bauphase;
+            site.GenerateTasks(activities);
+        }
+        await db.SaveChangesAsync();
+    }
 
     public static SiteDto ToDto(Site s) => new(s.Id, s.Name, s.Client, s.Street, s.HouseNumber, s.AddressAddition,
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,

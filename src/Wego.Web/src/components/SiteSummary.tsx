@@ -4,6 +4,7 @@ import type { Site } from '../api/types'
 import { formatDate } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
 import { SiteLocation } from './SiteLocation'
+import { SiteMapLink } from './SitesMap'
 import { StatusBadge } from './SiteStatus'
 
 /** One value of the summary with its label; nothing when there is no value. */
@@ -32,6 +33,7 @@ export function SiteSummary({ site, withStatus = true, planner }: { site: Site; 
       <section className="form-section">
         <h3>Adresse</h3>
         {address ? <SiteLocation location={address} /> : <Text>–</Text>}
+        <SiteMapLink site={site} />
         <Fact label="Telefon Kunde">
           {site.clientPhone ? (
             <Anchor href={`tel:${site.clientPhone.replace(/[^+0-9]/g, '')}`}>{site.clientPhone}</Anchor>

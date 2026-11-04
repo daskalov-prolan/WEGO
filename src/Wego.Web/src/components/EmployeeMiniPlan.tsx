@@ -7,7 +7,7 @@ import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, entryNam
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { openTasksBySite, tasksForEmployee } from '../lib/tasks'
-import { toInput } from '../lib/ui'
+import { onDay, toInput } from '../lib/ui'
 import { percent, useDayStrip, workdaysOf } from '../lib/useDayStrip'
 import { Chip } from './Chip'
 import { DayEditor } from './DayEditor'
@@ -132,7 +132,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
       noteImportant: false,
     }
     await save(
-      [{ employeeId, date, entries: [...entriesOn(date).map(toInput), entry] }],
+      [{ employeeId, date, entries: [...entriesOn(date).map(toInput), onDay(entry, entriesOn(date))] }],
       `${activityLabel(activity)} auf ${site.name} am ${formatDate(date)} eingeplant.`,
     )
   }

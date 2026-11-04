@@ -23,7 +23,7 @@ interface Props {
   stretch?: { left: boolean; right: boolean; onStart: (side: 'left' | 'right', event: PointerEvent) => void }
 }
 
-/** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note. */
+/** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note; pointing at the entry shows the note. */
 export function NoteMark({ important }: { important: boolean }) {
   return important ? (
     <span className="note-mark important" role="img" aria-label="wichtige Notiz">
@@ -46,7 +46,8 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
     <span
       className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
-      title={entryTitle(entry)}
+      // With a note, pointing at the entry shows the note instead of site and activity.
+      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : entryTitle(entry)}
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable)}
       {...drop}

@@ -35,15 +35,10 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // The planner in charge: a new site goes to whoever creates it, unless another one is chosen.
+  // The planner in charge must be chosen before the site is saved.
   const [planners, setPlanners] = useState<Planner[]>([])
   useEffect(() => {
-    api.planners().then((answer) => {
-      const list = Array.isArray(answer) ? answer : []
-      setPlanners(list)
-      const me = list.find((planner) => planner.isMe)
-      setSite((current) => (current.responsiblePlannerId || !me ? current : { ...current, responsiblePlannerId: me.id }))
-    }, () => {})
+    api.planners().then((answer) => setPlanners(Array.isArray(answer) ? answer : []), () => {})
   }, [])
 
   const field = (key: keyof SiteInput) => ({
@@ -81,6 +76,10 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
     event.preventDefault()
     // Opened from the day of an employee, the form is a child of that form in React: its submit stays here.
     event.stopPropagation()
+    if (!named.responsiblePlannerId) {
+      setError('Bitte den zuständigen Planer wählen.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -157,6 +156,8 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
             <Select
               label="Zuständiger Planer"
               placeholder="Planer wählen"
+              required
+              error={error && !site.responsiblePlannerId ? 'Bitte wählen' : undefined}
               maw={320}
               data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
               value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}

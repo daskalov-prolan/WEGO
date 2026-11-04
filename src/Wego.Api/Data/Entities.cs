@@ -84,7 +84,7 @@ public class Employee
     public List<PlanEntry> Entries { get; set; } = [];
 }
 
-/// <summary>Where a construction site stands. Storniert can follow any status; otherwise in this order.</summary>
+/// <summary>Where a construction site stands, in this order. Storniert is no longer offered; old sites may still have it.</summary>
 public enum SiteStatus
 {
     Angebot,
@@ -96,14 +96,12 @@ public enum SiteStatus
 public static class SiteStatusFlow
 {
     /// <summary>
-    /// The allowed status changes: forward one step, back from done to the construction phase (more to do
-    /// after all), or cancelled from anywhere.
+    /// The allowed status changes: forward one step, or back from done to the construction phase (more to do
+    /// after all). Cancelling is no longer possible.
     /// </summary>
     public static bool CanChange(SiteStatus from, SiteStatus to) =>
         (from, to) switch
         {
-            (SiteStatus.Storniert, _) => false,
-            (_, SiteStatus.Storniert) => true,
             (SiteStatus.Angebot, SiteStatus.Bauphase) => true,
             (SiteStatus.Bauphase, SiteStatus.Abgeschlossen) => true,
             (SiteStatus.Abgeschlossen, SiteStatus.Bauphase) => true,
@@ -180,6 +178,12 @@ public class Site
     public int? ResponsiblePlannerId { get; set; }
     public Employee? ResponsiblePlanner { get; set; }
 
+    /// <summary>The place of the address on the map, looked up for <see cref="GeocodedFor"/> (null: not found).</summary>
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    /// <summary>The address the place was looked up for; when the address changes, it is looked up again.</summary>
+    public string? GeocodedFor { get; set; }
+
     public List<SiteStatusChange> StatusChanges { get; set; } = [];
     public List<SiteTask> Tasks { get; set; } = [];
 
@@ -248,6 +252,20 @@ public enum HolidayKind
 {
     Schulferien,
     Feiertag,
+}
+
+/// <summary>
+/// A note in the field of an employee and a day of the plan, not tied to a site: the short title shows in
+/// the field, the explanation when pointing at it.
+/// </summary>
+public class CalendarNote
+{
+    public int Id { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public required string Title { get; set; }
+    public string? Text { get; set; }
 }
 
 /// <summary>Berlin school holidays and public holidays (Feiertage), shown in the plan.</summary>

@@ -3,11 +3,14 @@ import type {
   Activity,
   ActivityDef,
   ActivityInput,
+  CalendarNote,
+  CalendarNoteInput,
   DayEntryInput,
   Employee,
   EmployeeInput,
   EmployeeOverview,
   EmployeeReport,
+  MyVacation,
   Entry,
   HolidayKind,
   NamedItem,
@@ -17,6 +20,8 @@ import type {
   Site,
   SiteHourlyRate,
   SiteInput,
+  SiteMapLocation,
+  SiteMapLocations,
   SiteReport,
   SiteStatus,
   StatusChange,
@@ -84,8 +89,14 @@ export const api = {
   /** Replaces the entries of several employee days in one transaction. */
   saveDays: (days: { employeeId: number; date: string; entries: DayEntryInput[] }[]) =>
     request<Entry[]>('PUT', '/api/plan/batch', days),
+  createNote: (input: CalendarNoteInput) => request<CalendarNote>('POST', '/api/plan/notes', input),
+  updateNote: (id: number, input: CalendarNoteInput) => request<CalendarNote>('PUT', `/api/plan/notes/${id}`, input),
+  deleteNote: (id: number) => request<void>('DELETE', `/api/plan/notes/${id}`),
 
   sites: () => request<Site[]>('GET', '/api/sites'),
+  /** The places of the sites for the map; a few addresses more are looked up with every call. */
+  siteLocations: () => request<SiteMapLocations>('GET', '/api/sites/locations'),
+  siteLocation: (id: number) => request<SiteMapLocation>('GET', `/api/sites/${id}/location`),
   planners: () => request<Planner[]>('GET', '/api/sites/planners'),
   /** The town of a postal code, in Berlin with the borough ("Berlin-Pankow"). */
   postalCode: (code: string, street: string | null) =>
@@ -109,6 +120,7 @@ export const api = {
     request<SiteReport>('GET', `/api/reports/sites/${id}${year === undefined ? '' : `?year=${year}`}`),
   employeeReport: (id: number, year: number) =>
     request<EmployeeReport>('GET', `/api/reports/employees/${id}?year=${year}`),
+  myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
 
   employeeNames: () => request<NamedItem[]>('GET', '/api/employees/names'),

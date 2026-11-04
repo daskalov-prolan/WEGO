@@ -64,8 +64,8 @@ describe('SitesPage', () => {
     // Today is 15 March 2026: Arndt begins later, Zesch has no start, Abgesagt is cancelled.
     await choose('Aktive Baustellen')
     expect(names()).toEqual(['Bäßler', 'Chung'])
-    // All but the cancelled ones.
-    await choose('Alle Baustellen (ohne stornierte)')
+    // All of them; the old cancelled one never shows.
+    await choose('Alle Baustellen')
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
   })
 
@@ -113,17 +113,35 @@ describe('SitesPage', () => {
     expect(within(chung).getByRole('link', { name: '030 123 45' })).toHaveAttribute('href', 'tel:03012345')
   })
 
+  it('shows the sites of the chosen view on the map of Berlin', async () => {
+    const fetchMock = vi.mocked(fetch)
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>
+    fetchMock.mockImplementation((async (url: string, init?: RequestInit) =>
+      url === '/api/sites/locations'
+        ? new Response(JSON.stringify({ locations: [{ siteId: 2, latitude: 52.5, longitude: 13.4 }], pending: 0 }), { status: 200 })
+        : base(url, init)) as never)
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Karte' }))
+    expect(await screen.findByRole('region', { name: 'Karte der Baustellen' })).toBeInTheDocument()
+    // The construction phase: four sites, one of them with a place on the map.
+    expect(await screen.findByText(/1 von 4 Baustellen auf der Karte/)).toBeInTheDocument()
+  })
+
   it('shows the sites in a status, starting in a year or in the last six months', async () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
 
-    await choose('Status Storniert')
-    expect(names()).toEqual(['Abgesagt'])
-    // Bäßler and Chung started in the last six months, Abgesagt starts later.
+    // There is no cancelling any more: no such status to choose, and the old cancelled site never shows.
+    await userEvent.click(screen.getAllByLabelText('Anzeigen').find((element) => element.tagName === 'INPUT')!)
+    expect(screen.queryByRole('option', { name: 'Status Storniert', hidden: true })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    // Bäßler and Chung started in the last six months.
     await choose('Start in den letzten 6 Monaten')
     expect(names()).toEqual(['Bäßler', 'Chung'])
     await choose('Start im Jahr 2026')
-    expect(names()).toEqual(['Bäßler', 'Chung', 'Abgesagt', 'Arndt'])
+    expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt'])
     await choose('Start im Jahr 2027')
     expect(screen.getAllByRole('row')).toHaveLength(1)
   })
@@ -151,7 +169,7 @@ describe('SitesPage', () => {
   it('groups the sites by the planner in charge or by status', async () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
-    await choose('Alle Baustellen (ohne stornierte)')
+    await choose('Alle Baustellen')
     const groupRows = () => [...document.querySelectorAll('.group-row')].map((row) => row.textContent)
 
     await userEvent.click(screen.getAllByLabelText('Gruppieren').find((element) => element.tagName === 'INPUT')!)
