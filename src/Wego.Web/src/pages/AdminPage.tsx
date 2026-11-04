@@ -417,11 +417,17 @@ function SchoolHolidaysSection({ year }: { year: number }) {
     event.preventDefault()
     const [start, end] = range
     if (!start || !end) return
+    const closure = kind === 'Betriebsferien'
+    if (
+      closure &&
+      !window.confirm('Betriebsferien: Alle Handwerker bekommen an den Werktagen Urlaub eingetragen. Was an diesen Tagen geplant ist, wird ersetzt. Fortfahren?')
+    )
+      return
     void run(async () => {
       await api.addSchoolHoliday(name, start, end, kind)
       setName('')
       setRange([null, null])
-      return 'Ferien eingetragen.'
+      return closure ? 'Betriebsferien eingetragen: Urlaub für alle Handwerker.' : 'Ferien eingetragen.'
     })
   }
 
@@ -477,12 +483,15 @@ function SchoolHolidaysSection({ year }: { year: number }) {
                     size="compact-sm"
                     color="red"
                     variant="subtle"
-                    onClick={() =>
-                      run(async () => {
+                    onClick={() => {
+                      // Betriebsferien take the vacation they gave with them.
+                      if (holiday.kind === 'Betriebsferien' && !window.confirm('Betriebsferien löschen? Der Urlaub aller Handwerker an diesen Tagen wird wieder entfernt.'))
+                        return
+                      void run(async () => {
                         await api.deleteSchoolHoliday(holiday.id)
                         return ''
                       })
-                    }
+                    }}
                   >
                     Löschen
                   </Button>
@@ -500,7 +509,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 
       <Paper withBorder p="sm" component="form" onSubmit={add}>
         <Text fw={600} size="sm" mb="xs">
-          Von Hand eintragen (z. B. Brückentag, Betriebsferien)
+          Von Hand eintragen (z. B. Brückentag, Betriebsferien: Urlaub für alle Handwerker)
         </Text>
         <Group align="flex-end" gap="sm">
           <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
@@ -508,7 +517,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             label="Art"
             value={kind}
             onChange={(value) => value && setKind(value as HolidayKind)}
-            data={['Feiertag', 'Schulferien']}
+            data={['Feiertag', 'Schulferien', 'Betriebsferien']}
             allowDeselect={false}
             w={150}
           />

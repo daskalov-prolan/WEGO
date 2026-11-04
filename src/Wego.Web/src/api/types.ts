@@ -99,7 +99,8 @@ export interface Site extends NamedItem, SiteInput {
   tasks: SiteTask[]
 }
 
-export type HolidayKind = 'Schulferien' | 'Feiertag'
+/** Betriebsferien: the company is closed, every craftsman has vacation on its working days. */
+export type HolidayKind = 'Schulferien' | 'Feiertag' | 'Betriebsferien'
 
 /** A school holiday period or a public holiday (Feiertag) in Berlin. */
 export interface SchoolHoliday {

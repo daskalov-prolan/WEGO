@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Wego.Api.Data;
 using static Wego.Api.Endpoints.PlanEndpoints;
@@ -16,11 +17,60 @@ public static class SchoolHolidayEndpoints
     private record OpenHoliday(DateOnly StartDate, DateOnly EndDate, List<OpenHolidayName>? Name);
     private record OpenHolidayName(string Language, string Text);
 
+    /// <summary>
+    /// The working days of a company closure: Monday to Friday, without public holidays (they are free anyway).
+    /// </summary>
+    private static async Task<List<DateOnly>> ClosureDaysAsync(WegoDbContext db, SchoolHoliday closure)
+    {
+        var publicHolidays = await db.SchoolHolidays
+            .Where(h => h.Kind == HolidayKind.Feiertag && h.StartDate <= closure.EndDate && h.EndDate >= closure.StartDate)
+            .ToListAsync();
+        var days = new List<DateOnly>();
+        for (var day = closure.StartDate; day <= closure.EndDate; day = day.AddDays(1))
+            if (day.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
+                && !publicHolidays.Any(h => h.StartDate <= day && h.EndDate >= day))
+                days.Add(day);
+        return days;
+    }
+
+    /// <summary>
+    /// Company closure: every active craftsman gets vacation on its working days. What was planned on those
+    /// days gives way (the change log keeps it).
+    /// </summary>
+    private static async Task EnterClosureAsync(WegoDbContext db, ClaimsPrincipal user, SchoolHoliday closure)
+    {
+        var days = await ClosureDaysAsync(db, closure);
+        var craftsmen = await db.Employees.Where(e => e.IsActive && e.ShowInPlan).Select(e => e.Id).ToListAsync();
+        var replaced = await db.PlanEntries
+            .Where(e => craftsmen.Contains(e.EmployeeId) && days.Contains(e.Date))
+            .ToListAsync();
+        db.PlanEntries.RemoveRange(replaced);
+        foreach (var employeeId in craftsmen)
+            foreach (var day in days)
+                db.PlanEntries.Add(new PlanEntry { EmployeeId = employeeId, Date = day, Type = EntryType.Urlaub });
+        ChangeLog.Add(db, user, ChangeArea.Plan, "Betriebsferien eingetragen", null,
+            replaced.Select(e => new { e.EmployeeId, e.Date, e.Type, e.SiteId, e.Activity, e.StartTime, e.EndTime, e.Note }).ToList(),
+            new { closure.Name, closure.StartDate, closure.EndDate, Employees = craftsmen.Count, Days = days.Count }, closure.StartDate);
+    }
+
+    /// <summary>The closure is taken back: the vacation it gave on its working days goes again.</summary>
+    private static async Task RemoveClosureAsync(WegoDbContext db, ClaimsPrincipal user, SchoolHoliday closure)
+    {
+        var days = await ClosureDaysAsync(db, closure);
+        var craftsmen = await db.Employees.Where(e => e.ShowInPlan).Select(e => e.Id).ToListAsync();
+        var vacation = await db.PlanEntries
+            .Where(e => e.Type == EntryType.Urlaub && craftsmen.Contains(e.EmployeeId) && days.Contains(e.Date))
+            .ToListAsync();
+        db.PlanEntries.RemoveRange(vacation);
+        ChangeLog.Add(db, user, ChangeArea.Plan, "Betriebsferien gelöscht", null,
+            new { closure.Name, closure.StartDate, closure.EndDate, Days = days.Count }, null, closure.StartDate);
+    }
+
     public static void MapSchoolHolidayEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/schoolholidays").RequireAuthorization(Policies.Admin);
 
-        group.MapPost("/", async (SchoolHolidayInput input, WegoDbContext db) =>
+        group.MapPost("/", async (SchoolHolidayInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var name = input.Name?.Trim();
             if (string.IsNullOrEmpty(name) || name.Length > 200)
@@ -34,15 +84,20 @@ public static class SchoolHolidayEndpoints
                 Name = name, Kind = input.Kind, StartDate = input.StartDate, EndDate = input.EndDate,
             };
             db.SchoolHolidays.Add(holiday);
+            if (holiday.Kind == HolidayKind.Betriebsferien) await EnterClosureAsync(db, user, holiday);
             await db.SaveChangesAsync();
             return Results.Ok(new SchoolHolidayDto(holiday.Id, holiday.Name, holiday.Kind, holiday.StartDate,
                 holiday.EndDate));
         });
 
-        group.MapDelete("/{id:int}", async (int id, WegoDbContext db) =>
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var deleted = await db.SchoolHolidays.Where(h => h.Id == id).ExecuteDeleteAsync();
-            return deleted == 0 ? Results.NotFound() : Results.NoContent();
+            var holiday = await db.SchoolHolidays.FindAsync(id);
+            if (holiday is null) return Results.NotFound();
+            db.SchoolHolidays.Remove(holiday);
+            if (holiday.Kind == HolidayKind.Betriebsferien) await RemoveClosureAsync(db, user, holiday);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
         });
 
         // Loads the Berlin school holidays and public holidays of one year from the public OpenHolidays API.

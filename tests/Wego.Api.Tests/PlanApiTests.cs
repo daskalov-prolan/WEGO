@@ -845,6 +845,33 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.NotFound, (await g.GetAsync($"/api/sites/{nowhere}/location")).StatusCode);
     }
 
+    [Fact]
+    public async Task A_company_closure_gives_every_craftsman_vacation_and_takes_it_back()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var craftsman = await CreateEmployeeAsync(g, "Ferienhandwerker", null, null);
+        var site = await CreateSiteAsync(g, "Vor den Ferien");
+        // Planned on the Monday of the closure: it gives way.
+        await g.PutAsJsonAsync($"/api/plan/{craftsman}/2028-08-07", new object[] { new { type = "Baustelle", siteId = site } });
+        await g.PostAsJsonAsync("/api/schoolholidays", new { name = "Tag der Ruhe", kind = "Feiertag", startDate = "2028-08-09", endDate = "2028-08-09" });
+
+        // Monday 7 to Sunday 13 August 2028: five working days, one of them a public holiday.
+        var created = await g.PostAsJsonAsync("/api/schoolholidays",
+            new { name = "Betriebsferien", kind = "Betriebsferien", startDate = "2028-08-07", endDate = "2028-08-13" });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        async Task<List<(string Date, string Type)>> DaysOf() =>
+            (await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2028")).GetProperty("entries").EnumerateArray()
+                .Where(e => e.GetProperty("employeeId").GetInt32() == craftsman)
+                .Select(e => (e.GetProperty("date").GetString()!, e.GetProperty("type").GetString()!)).ToList();
+        Assert.Equal([("2028-08-07", "Urlaub"), ("2028-08-08", "Urlaub"), ("2028-08-10", "Urlaub"), ("2028-08-11", "Urlaub")],
+            await DaysOf());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/schoolholidays/{id}")).StatusCode);
+        Assert.Empty(await DaysOf());
+    }
+
     private static async Task<int> CreateEmployeeAsync(HttpClient planer, string name, string? userName,
         string? password, string role = "Handwerker", string? mainActivity = null)
     {

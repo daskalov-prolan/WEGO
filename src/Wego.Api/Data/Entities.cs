@@ -252,6 +252,8 @@ public enum HolidayKind
 {
     Schulferien,
     Feiertag,
+    /// <summary>The company is closed: every craftsman has vacation on its working days.</summary>
+    Betriebsferien,
 }
 
 /// <summary>
