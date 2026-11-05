@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, Site } from '../api/types'
-import { renderWithProviders } from '../test-utils'
+import { byText, renderWithProviders } from '../test-utils'
 import { EmployeeMiniPlan } from './EmployeeMiniPlan'
 
 const site = (id: number, name: string, plannedStart: string | null, tasks: Site['tasks']): Site => ({
@@ -62,7 +62,7 @@ const laneNames = () => [...document.querySelectorAll('.mini-lane-name .name')].
 describe('EmployeeMiniPlan', () => {
   it('has a lane per site: first those worked on, then those with open tasks by planned start', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
-    await screen.findByText('KW 10 · ab 02.03.')
+    await screen.findByText(byText('KW 10 · ab 02.03.'))
     // A craftsman does every activity of the construction phase; the open tasks stand at their site.
     expect(laneNames()).toEqual(['Meier', 'Abriss früh', 'Fliesen früh', 'Fliesen spät'])
     const early = document.querySelectorAll('.mini-lane-name')[2] as HTMLElement
@@ -72,12 +72,12 @@ describe('EmployeeMiniPlan', () => {
   it('opens at the current week, jumps to the next free week and plans a dragged task on a day of its site', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
-    expect(screen.getByText('KW 10 · 20 %')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 10 · 20 %'))).toBeInTheDocument()
     expect(within(screen.getByRole('button', { name: 'Meier, 2026-03-03' })).getAllByText('Bernd').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
-    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 12 · ab 16.03.'))).toBeInTheDocument()
 
     const lane = [...document.querySelectorAll<HTMLElement>('.mini-lane-name')].find((name) => name.textContent?.startsWith('Abriss früh'))!
     const box = within(lane).getByRole('button', { name: 'Abriss / Baubeginn' })
@@ -93,7 +93,7 @@ describe('EmployeeMiniPlan', () => {
       { employeeId: 2, date: '2026-03-17', entries: [expect.objectContaining({ siteId: 10, activity: 'Abriss' })] },
     ])
     // Still the week it was planned in.
-    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 12 · ab 16.03.'))).toBeInTheDocument()
   })
 
   it('moves an entry to another day and site by dragging it', async () => {
@@ -115,7 +115,7 @@ describe('EmployeeMiniPlan', () => {
 
   it('follows the activity filter: only sites and open tasks with those activities', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit activityFilter={new Set(['Abriss'])} />)
-    await screen.findByText('KW 10 · ab 02.03.')
+    await screen.findByText(byText('KW 10 · ab 02.03.'))
     // Meier only has Fliesen, the Fliesen tasks drop out.
     expect(laneNames()).toEqual(['Abriss früh'])
   })

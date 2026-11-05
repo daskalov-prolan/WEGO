@@ -68,6 +68,15 @@ export function formatTimeRange(entry: Pick<Entry, 'startTime' | 'endTime'>): st
   return `${formatTime(entry.startTime)}–${formatTime(entry.endTime)} Uhr`
 }
 
+/** "ganztägig" for the whole day (no time, or 7–16 Uhr), else the time window, e.g. "8–10 Uhr". */
+export function formatDayTime(entry: Pick<Entry, 'startTime' | 'endTime'>): string {
+  const whole =
+    !entry.startTime ||
+    !entry.endTime ||
+    (entry.startTime.startsWith(WHOLE_DAY.start) && entry.endTime.startsWith(WHOLE_DAY.end))
+  return whole ? 'ganztägig' : formatTimeRange(entry)
+}
+
 export function formatHours(hours: number): string {
   return hours === 0 ? '–' : hours.toLocaleString('de-DE', { maximumFractionDigits: 2 })
 }

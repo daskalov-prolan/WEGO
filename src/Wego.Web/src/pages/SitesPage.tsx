@@ -1,11 +1,11 @@
-import { Alert, Anchor, Button, Group, SegmentedControl, Select, Switch, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Anchor, Button, Group, SegmentedControl, Select, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SitesMap } from '../components/SitesMap'
-import { StatusBadge } from '../components/SiteStatus'
+import { StatusBadge, StatusSlider } from '../components/SiteStatus'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
@@ -154,14 +154,7 @@ export function SitesPage() {
   // Only a site in the construction phase can be done, and only a done one goes back.
   const doneSwitch = (site: Site) =>
     (site.status === 'Bauphase' || site.status === 'Abgeschlossen') && (
-      <Switch
-        size="sm"
-        color="green"
-        aria-label={`${site.name} erledigt`}
-        checked={site.status === 'Abgeschlossen'}
-        onClick={(event) => event.stopPropagation()}
-        onChange={(event) => setDone(site, event.currentTarget.checked).catch(() => {})}
-      />
+      <StatusSlider site={site} size="xs" onChange={(status) => setDone(site, status === 'Abgeschlossen').catch(() => {})} />
     )
 
   // The rows in groups, in the order of the sort within each group.
@@ -296,7 +289,7 @@ export function SitesPage() {
                     {site.clientPhone && <PhoneLink phone={site.clientPhone} />}
                     {plannerName(site) && <span>Zuständig: {plannerName(site)}</span>}
                     {site.plannedStart && <span>Start {formatDate(site.plannedStart)}</span>}
-                    {doneSwitch(site) && <span className="site-card-done">erledigt {doneSwitch(site)}</span>}
+                    {doneSwitch(site) && <span className="site-card-done">{doneSwitch(site)}</span>}
                   </div>
                 </div>
               ))}

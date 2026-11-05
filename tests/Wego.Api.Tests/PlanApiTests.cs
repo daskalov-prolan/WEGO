@@ -64,7 +64,8 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
 
         var report = await planer.GetFromJsonAsync<JsonElement>($"/api/reports/sites/{schulze}?year={Year}");
         Assert.Equal(2, report.GetProperty("totalDays").GetInt32());
-        Assert.Equal(2.0, report.GetProperty("totalHours").GetDouble());
+        // Two hours on the split day, and the whole day (07:00 to 16:00) where Schulze came without times.
+        Assert.Equal(11.0, report.GetProperty("totalHours").GetDouble());
         Assert.Equal("Split Tester", report.GetProperty("employees")[0].GetProperty("name").GetString());
 
         var employeeReport = await planer.GetFromJsonAsync<JsonElement>(
@@ -780,7 +781,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var id = await CreateEmployeeAsync(g, "Urlauberin", "urlauberin", "urlauberin-pw");
         // Thursday and Friday, then Monday after the weekend: one stretch; a Saturday does not count. Then one day apart.
-        foreach (var day in new[] { "2027-03-04", "2027-03-05", "2027-03-06", "2027-03-08", "2027-03-10" })
+        foreach (var day in new[] { "2027-02-04", "2027-02-05", "2027-02-06", "2027-02-08", "2027-02-10" })
             await g.PutAsJsonAsync($"/api/plan/{id}/{day}", new object[] { new { type = "Urlaub" } });
         await g.PutAsJsonAsync($"/api/plan/{id}/2026-07-01", new object[] { new { type = "Urlaub" } });
 
@@ -791,7 +792,7 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(5m, vacation.GetProperty("used").GetDecimal());
         var entitlement = vacation.GetProperty("entitlement").GetInt32();
         Assert.Equal(entitlement - 5m, vacation.GetProperty("remaining").GetDecimal());
-        Assert.Equal([("2027-03-04", "2027-03-08", 3m), ("2027-03-10", "2027-03-10", 1m), ("2027-12-24", "2027-12-24", 0.5m), ("2027-12-31", "2027-12-31", 0.5m)],
+        Assert.Equal([("2027-02-04", "2027-02-08", 3m), ("2027-02-10", "2027-02-10", 1m), ("2027-12-24", "2027-12-24", 0.5m), ("2027-12-31", "2027-12-31", 0.5m)],
             vacation.GetProperty("blocks").EnumerateArray().Select(b =>
                 (b.GetProperty("from").GetString(), b.GetProperty("to").GetString(), b.GetProperty("days").GetDecimal())));
 
@@ -870,6 +871,76 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
 
         Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/schoolholidays/{id}")).StatusCode);
         Assert.Empty(await DaysOf());
+    }
+
+    [Fact]
+    public async Task A_craftsman_added_later_gets_the_company_closure_once_and_it_counts_as_vacation()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        // Monday 1 to Friday 5 July 2030, entered before the craftsman came.
+        var created = await g.PostAsJsonAsync("/api/schoolholidays",
+            new { name = "Sommerpause", kind = "Betriebsferien", startDate = "2030-07-01", endDate = "2030-07-05" });
+        var closure = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        var late = await CreateEmployeeAsync(g, "Spaeter Handwerker", "spaeter", "spaeter-pw");
+
+        async Task<List<string>> VacationOf() =>
+            (await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2030")).GetProperty("entries").EnumerateArray()
+                .Where(e => e.GetProperty("employeeId").GetInt32() == late && e.GetProperty("type").GetString() == "Urlaub")
+                .Select(e => e.GetProperty("date").GetString()!).ToList();
+        Assert.Equal(["2030-07-01", "2030-07-02", "2030-07-03", "2030-07-04", "2030-07-05"], await VacationOf());
+
+        // A planner takes a day back: it does not come again.
+        await g.PutAsJsonAsync($"/api/plan/{late}/2030-07-03", Array.Empty<object>());
+        Assert.Equal(["2030-07-01", "2030-07-02", "2030-07-04", "2030-07-05"], await VacationOf());
+
+        // Four days of the closure, and half a day each for 24 and 31 December 2030 (Tuesdays).
+        var me = await LoginAsync("spaeter", "spaeter-pw");
+        var vacation = await me.GetFromJsonAsync<JsonElement>("/api/me/vacation?year=2030");
+        Assert.Equal(5m, vacation.GetProperty("used").GetDecimal());
+        Assert.Equal(vacation.GetProperty("entitlement").GetInt32() - 5m, vacation.GetProperty("remaining").GetDecimal());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/schoolholidays/{closure}")).StatusCode);
+        Assert.Empty(await VacationOf());
+    }
+
+    [Fact]
+    public async Task Public_holidays_are_no_vacation_even_when_not_loaded()
+    {
+        Assert.Equal(new DateOnly(2027, 3, 28), Wego.Api.Data.BerlinHolidays.EasterSunday(2027));
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+
+        // A Feiertag is one day: a closure entered as Feiertag by mistake is refused.
+        var wrong = await g.PostAsJsonAsync("/api/schoolholidays",
+            new { name = "Betriebsferien", kind = "Feiertag", startDate = "2031-12-22", endDate = "2032-01-02" });
+        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+
+        // No holidays loaded for 2031/32: 25 and 26 December and 1 January are free all the same.
+        var created = await g.PostAsJsonAsync("/api/schoolholidays",
+            new { name = "Winterpause", kind = "Betriebsferien", startDate = "2031-12-22", endDate = "2032-01-02" });
+        var closure = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        var id = await CreateEmployeeAsync(g, "Feiertagsprüfer", "feiertag", "feiertag-pw");
+        var dates = new List<string>();
+        foreach (var year in new[] { 2031, 2032 })
+            dates.AddRange((await g.GetFromJsonAsync<JsonElement>($"/api/plan?year={year}")).GetProperty("entries").EnumerateArray()
+                .Where(e => e.GetProperty("employeeId").GetInt32() == id).Select(e => e.GetProperty("date").GetString()!));
+        Assert.Equal(["2031-12-22", "2031-12-23", "2031-12-24", "2031-12-29", "2031-12-30", "2031-12-31", "2032-01-02"], dates);
+
+        // Vacation entered on Neujahr anyway does not count: 2 January, and the halves of 24 and 31 December 2032.
+        await g.PutAsJsonAsync($"/api/plan/{id}/2032-01-01", new object[] { new { type = "Urlaub" } });
+        var me = await LoginAsync("feiertag", "feiertag-pw");
+        var vacation = await me.GetFromJsonAsync<JsonElement>("/api/me/vacation?year=2032");
+        Assert.Equal(2m, vacation.GetProperty("used").GetDecimal());
+        // Nor does the plan show it as Urlaub.
+        Assert.DoesNotContain((await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2032")).GetProperty("entries").EnumerateArray(),
+            e => e.GetProperty("employeeId").GetInt32() == id && e.GetProperty("date").GetString() == "2032-01-01");
+
+        // The plan shows them as Feiertage, too.
+        var holidays = (await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2032")).GetProperty("schoolHolidays").EnumerateArray()
+            .Where(h => h.GetProperty("kind").GetString() == "Feiertag").Select(h => (h.GetProperty("startDate").GetString(), h.GetProperty("name").GetString())).ToList();
+        Assert.Contains(("2032-01-01", "Neujahr"), holidays);
+        Assert.Contains(("2032-03-26", "Karfreitag"), holidays);
+
+        await g.DeleteAsync($"/api/schoolholidays/{closure}");
     }
 
     private static async Task<int> CreateEmployeeAsync(HttpClient planer, string name, string? userName,

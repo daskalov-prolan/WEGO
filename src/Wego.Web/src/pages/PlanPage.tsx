@@ -9,13 +9,15 @@ import {
   Switch,
   Text,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core'
 import { useWindowEvent } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
+import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
 import { ActivityIcon } from '../components/ActivityIcon'
@@ -29,12 +31,13 @@ import {
   defaultActivity,
   entryName,
   textOn,
+  isFree,
   isOpen,
   worksInPhase,
 } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
+import { shortNames, SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
 import { CellMenu, ClipMenu } from '../components/CellMenu'
 import { NoteDialog } from '../components/CalendarNotes'
@@ -45,8 +48,10 @@ import {
   addDays,
   addMonths,
   daysOfYear,
+  CURRENT_YEAR,
   formatDate,
   isoWeek,
+  HALF_DAYS,
   MONTHS,
   todayIso,
   weekOf,
@@ -104,6 +109,19 @@ function inPhase(entry: Entry, site: Site | undefined, phase: Phase) {
   return status === phase || (phase === 'Bauphase' && status !== undefined && !isOpen(status))
 }
 
+const SCALE_KEY = 'wego.plan.scale'
+/** How big the plan is shown, in per cent: 60 to 150 in steps of 10. */
+const SCALES = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+
+function loadScale(): number {
+  try {
+    const saved = Number(localStorage.getItem(SCALE_KEY))
+    return SCALES.includes(saved) ? saved : 100
+  } catch {
+    return 100
+  }
+}
+
 function loadFoldWeekends(): boolean {
   try {
     return localStorage.getItem(WEEKENDS_KEY) !== 'true'
@@ -133,13 +151,27 @@ interface Step {
   after: DayChange[]
 }
 
+/** The year of the plan, chosen here and not in the header (as in Mein Plan). */
+function YearSelect({ year, onChange, small = false }: { year: number; onChange?: (year: number) => void; small?: boolean }) {
+  if (!onChange) return null
+  return (
+    <YearPicker
+      year={year}
+      years={[CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year]}
+      onChange={onChange}
+      size={small ? 'xs' : 'sm'}
+      w={small ? 82 : undefined}
+    />
+  )
+}
+
 /**
  * "Planung": the plan of everybody as a timeline, the days of the year from left to right, scrolled
  * freely while the rows stay in view. The rows are the employees (with the sites in the cells) or the
  * construction sites (with the employees in the cells). Woche, Monat and Jahr are zoom levels.
  * Planners select cells to fill many days at once.
  */
-export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAbsence = false, user, onYearChange }: Props) {
+export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAbsence = false, onYearChange }: Props) {
   const first = `${year}-01-01`
   const last = `${year}-12-31`
   const today = todayIso()
@@ -162,6 +194,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // The first day next to the names, as last scrolled to or by: kept there when the table changes its size.
   const pinned = useRef(anchor)
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
+  // Bigger or smaller, like the zoom of the browser, for the plan only; kept for the next visit.
+  const [scale, setScale] = useState(loadScale)
+  const changeScale = (next: number) => {
+    setScale(next)
+    try {
+      localStorage.setItem(SCALE_KEY, String(next))
+    } catch {
+      // Without storage the size holds until the page is left.
+    }
+  }
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
   // The phase from the menu: the employees who work in it, and its sites and activities. Who does no offer
   // work does not see the offer phase (the server leaves it out of the plan, too).
@@ -169,7 +211,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const [siteDay, setSiteDay] = useState<{ siteId: number; date: string } | null>(null)
   const [hidden, setHidden] = useState<number[]>(loadHidden)
   // The day open in the editor; addActivity: an activity dropped on it, added as a new row.
-  const [open, setOpen] = useState<{ employee: PlanEmployee; date: string; addActivity?: Activity } | null>(null)
+  // addHalf: a click on the free half of a day, added as a new row with its times.
+  // fillFree: a click on "verfügbar": its row gets a site to choose.
+  const [open, setOpen] = useState<{
+    employee: PlanEmployee
+    date: string
+    addActivity?: Activity
+    addHalf?: { start: string; end: string }
+    fillFree?: boolean
+  } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assigning, setAssigning] = useState(false)
   // A site opened from a cell, and whether its form is open.
@@ -196,17 +246,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   useEffect(() => {
     api.plan(year).then(setPlan, (e) => setError(messageOf(e)))
   }, [year])
-
-  // The own vacation days of the year (see the line below the plan); counted from the plan as it changes.
-  const ownId = user?.showInPlan ? user.id : null
-  const [entitlement, setEntitlement] = useState<number | null>(null)
-  useEffect(() => {
-    if (ownId === null) return
-    api.employeeReport(ownId, year).then(
-      (report) => setEntitlement(report.vacation.entitlement),
-      () => setEntitlement(null),
-    )
-  }, [ownId, year])
 
   // The way back is used once; opening the plan anew starts at today again.
   useEffect(() => {
@@ -270,16 +309,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
 
-  // Vacation days taken this year, counted like the server does: Monday to Friday, each day once.
-  const vacationUsed = useMemo(() => {
-    const days = new Set<string>()
-    for (const entry of plan?.entries ?? []) {
-      const weekday = new Date(`${entry.date}T12:00:00`).getDay()
-      if (entry.employeeId === ownId && entry.type === 'Urlaub' && weekday !== 0 && weekday !== 6) days.add(entry.date)
-    }
-    return days.size
-  }, [plan, ownId])
-
 
   const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
   const yearDays = useMemo(() => daysOfYear(year), [year])
@@ -300,11 +329,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const siteRows = useMemo<SiteRow[]>(() => {
     if (!plan) return []
-    const shown = new Set(phaseEmployees.filter((employee) => !hidden.includes(employee.id)).map((e) => e.id))
+    // By site everybody is shown: the choice of the employees is for the plan by employee only.
+    const shown = new Set(phaseEmployees.map((e) => e.id))
     const rows = new Map<number, SiteRow & { start: string }>()
     for (const site of plan.sites) {
       // The construction phase shows the done sites as well; cancelled ones nowhere.
       if (site.status !== phase && !(phase === 'Bauphase' && site.status === 'Abgeschlossen')) continue
+      // On a phone only the sites still in their phase, not the done ones.
+      if (isPhone && site.status !== phase) continue
       const plannedThisYear =
         site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
       // Planned for this year, or with activities still to plan (sites without dates go last).
@@ -316,6 +348,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
       if (!site || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
+      if (isPhone && site.status !== phase) continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date, openTasks: openTasksBySite.get(site.id) ?? [] }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
@@ -323,8 +356,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       else row.byDate.set(entry.date, [entry])
       rows.set(site.id, row)
     }
-    return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start) || a.site.name.localeCompare(b.site.name, 'de'))
-  }, [plan, phase, phaseEmployees, hidden, siteById, year, openTasksBySite])
+    // On a phone in the order of the alphabet; otherwise by Baubeginn, the sites without one at the end.
+    const begin = (row: SiteRow) => row.site.plannedStart ?? '9999-12-31'
+    return [...rows.values()].sort((a, b) =>
+      isPhone ? a.site.name.localeCompare(b.site.name, 'de') : begin(a).localeCompare(begin(b)) || a.site.name.localeCompare(b.site.name, 'de'),
+    )
+  }, [plan, phase, phaseEmployees, siteById, year, openTasksBySite, isPhone])
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
   const earlierWork = useMemo(() => {
@@ -364,6 +401,11 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const clamp = (iso: string) => (iso < first ? first : iso > last ? last : iso)
 
   const nameWidth = () => scroller.current?.querySelector<HTMLElement>('th.corner')?.offsetWidth ?? 0
+  // Where a column starts within the scrolled plan (offsetLeft would count from a box further out).
+  const leftOf = (column: HTMLElement) => {
+    const element = scroller.current!
+    return column.getBoundingClientRect().left - element.getBoundingClientRect().left - element.clientLeft + element.scrollLeft
+  }
 
   /** The days between the employee names and the right edge, read from the drawn columns. */
   const readVisible = () => {
@@ -376,17 +418,20 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     for (const column of element.querySelectorAll<HTMLElement>('th.dayhead')) {
       if (column.offsetWidth === 0) return null
       const iso = column.id.slice(4)
-      if (!from && column.offsetLeft + column.offsetWidth > left + 1) from = iso
-      if (column.offsetLeft < right) to = iso
+      const start = leftOf(column)
+      if (!from && start + column.offsetWidth > left + 1) from = iso
+      if (start < right) to = iso
     }
     return from && to ? { from, to } : null
   }
 
   const scrollNow = (iso: string, smooth: boolean) => {
-    const column = document.getElementById(`col-${iso}`)
+    // A phone shows the plan week by week: from the Monday on (if that is in the year).
+    const monday = isPhone && view === 'week' ? weekOf(iso)[0].iso : iso
+    const column = document.getElementById(`col-${monday}`) ?? document.getElementById(`col-${iso}`)
     if (!scroller.current || !column) return false
-    pinned.current = iso
-    scroller.current.scrollTo?.({ left: column.offsetLeft - nameWidth(), behavior: smooth ? 'smooth' : 'auto' })
+    pinned.current = column.id.slice(4)
+    scroller.current.scrollTo?.({ left: leftOf(column) - nameWidth(), behavior: smooth ? 'smooth' : 'auto' })
     return true
   }
 
@@ -420,7 +465,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       const column = document.getElementById(`col-${pinned.current}`)
       const corner = element.querySelector<HTMLElement>('th.corner')
       if (!column || pendingScroll.current) return
-      const left = column.offsetLeft - (corner?.offsetWidth ?? 0)
+      const start = column.getBoundingClientRect().left - element.getBoundingClientRect().left - element.clientLeft + element.scrollLeft
+      const left = start - (corner?.offsetWidth ?? 0)
       if (Math.abs(element.scrollLeft - left) > 1) element.scrollLeft = left
     }
     const observer = new ResizeObserver(keep)
@@ -497,8 +543,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
   // Work of the other phase stays visible, but pale: the day is not free.
+  // "verfügbar" belongs to every phase: always in full colour.
   const isDimmed = (entry: Entry) =>
-    entry.type === 'Baustelle' && !inPhase(entry, entry.siteId === null ? undefined : siteById.get(entry.siteId), phase)
+    entry.type === 'Baustelle' && !isFree(entry) && !inPhase(entry, entry.siteId === null ? undefined : siteById.get(entry.siteId), phase)
   const employees = phaseEmployees.filter((employee) => !hidden.includes(employee.id))
 
   const toggleEmployee = (id: number) =>
@@ -581,10 +628,17 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
   const middle = addDays(visible.from, Math.floor((Date.parse(visible.to) - Date.parse(visible.from)) / 172800000))
+  // The calendar week in red, as everywhere.
   const title =
-    view === 'week'
-      ? `KW ${[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')} · ${short(visible.from)}–${short(visible.to)}${year}`
-      : `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
+    view === 'week' ? (
+      <>
+        <span className="kw">KW {[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')}</span> ·{' '}
+        {short(visible.from)}–{short(visible.to)}
+        {year}
+      </>
+    ) : (
+      `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
+    )
 
   /** Puts these employees on a site on that day, each with their own activity there, next to what they have. */
   const addToSite = async (site: Site, employeeIds: number[], date: string) => {
@@ -688,8 +742,20 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   /** Adds the clipboard to these cells (see pasteChanges); cut entries leave their day in the same step. */
   const paste = async (targets: PasteTarget[]) => {
     if (!clip) return
-    const changes = pasteChanges(clip, targets, entriesOf, everyone, siteById)
-    await save(changes, `${clip.label} in ${targets.length} ${targets.length === 1 ? 'Feld' : 'Felder'} eingefügt.`)
+    const message = `${clip.label} in ${targets.length} ${targets.length === 1 ? 'Feld' : 'Felder'} eingefügt.`
+    if (clip.entries.length > 0) await save(pasteChanges(clip, targets, entriesOf, everyone, siteById), message)
+    // The notes go into the fields of the employees (not onto a site).
+    const notes = clip.notes ?? []
+    for (const target of targets)
+      for (const note of notes)
+        if (target.employeeId !== undefined)
+          keepNote(await api.createNote({ employeeId: target.employeeId, date: target.date, title: note.title, text: note.text ?? '' }))
+    if (clip.cut)
+      for (const note of notes) {
+        await api.deleteNote(note.id)
+        dropNote(note.id)
+      }
+    if (clip.entries.length === 0 && notes.length > 0) notifications.show({ message, color: 'green' })
     if (clip.cut) setClip(null)
     setSelected(new Set())
   }
@@ -833,6 +899,24 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     save([{ employeeId: a.employeeId, date: a.date, entries: swapped }], `${a.employeeName}: Reihenfolge getauscht.`).catch(fail)
   }
 
+  /** Half a day on a site moves to the other, free half of the day: morning and afternoon change. */
+  const dropOnFree = (entry: Entry) =>
+    dropTarget(
+      (item: DragItem) => item.kind === 'entry' && item.entry.id === entry.id,
+      () => {
+        const [morning, afternoon] = HALF_DAYS
+        const half = (entry.startTime ?? '') >= '12:00' ? morning : afternoon
+        const entries = entriesOf(entry.employeeId, entry.date).map((other) =>
+          other.id === entry.id ? { ...toInput(other), startTime: `${half.start}:00`, endTime: `${half.end}:00` } : toInput(other),
+        )
+        save(
+          [{ employeeId: entry.employeeId, date: entry.date, entries }],
+          `${entry.employeeName}: ${entryName(entry)} jetzt ${half === morning ? 'vormittags' : 'nachmittags'}.`,
+        ).catch(fail)
+      },
+      canEdit,
+    )
+
   const dropOnEntry = (entry: Entry) =>
     dropTarget(
       (item: DragItem) => {
@@ -905,6 +989,58 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     selected,
     onSelectedChange: setSelected,
   }
+  const perspectiveSwitch = (
+    <SegmentedControl
+      size={isPhone ? 'xs' : 'sm'}
+      value={perspective}
+      onChange={(value) => changePerspective(value as Perspective)}
+      data={[
+        { value: 'employees', label: 'Nach Mitarbeiter' },
+        { value: 'sites', label: 'Nach Baustelle' },
+      ]}
+      color="wego"
+    />
+  )
+  /** The choice of the employees shown, opened by the button given. */
+  const employeeMenu = (target: ReactNode) => (
+    <Menu closeOnItemClick={false} position="bottom-start" withinPortal>
+      <Menu.Target>{target}</Menu.Target>
+      <Menu.Dropdown>
+        <Group gap={4} px="xs" py={4}>
+          <Button size="compact-xs" variant="subtle" onClick={() => storeHidden([])}>
+            Alle auswählen
+          </Button>
+          <Button size="compact-xs" variant="subtle" color="gray" onClick={() => storeHidden(everyone.map((employee) => employee.id))}>
+            Alle abwählen
+          </Button>
+        </Group>
+        <Menu.Divider />
+        {phaseEmployees.map((employee) => (
+          <Menu.Item key={employee.id} onClick={() => toggleEmployee(employee.id)}>
+            <Checkbox
+              label={employee.name}
+              checked={!hidden.includes(employee.id)}
+              onChange={() => toggleEmployee(employee.id)}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  )
+  // The corner of the plan opens the choice of the employees; by site it is not needed.
+  const corner = perspective === 'sites' ? 'Baustelle' : employeeMenu(
+    <UnstyledButton className="corner-menu" aria-label={`Mitarbeiter auswählen (${employees.length}/${phaseEmployees.length})`}>
+      Name
+      <span className="corner-count">
+        {employees.length}/{phaseEmployees.length} ▾
+      </span>
+    </UnstyledButton>,
+  )
+
+  // First names, as in the plan.
+  const paletteNames = shortNames(phaseEmployees)
+
   const singleSelected = selected.size === 1 ? parseKey([...selected][0]) : null
   const singleEntries = singleSelected ? entriesOf(singleSelected.employeeId, singleSelected.date) : []
 
@@ -912,49 +1048,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     <div className="plan">
       <div className="plan-toolbar">
         <Group gap="xs" wrap="wrap" className="plan-controls">
-          <SegmentedControl
-            size="sm"
-            value={perspective}
-            onChange={(value) => changePerspective(value as Perspective)}
-            data={[
-              { value: 'employees', label: 'Nach Mitarbeiter' },
-              { value: 'sites', label: 'Nach Baustelle' },
-            ]}
-            color="wego"
-          />
-          <Menu closeOnItemClick={false} position="bottom-start" withinPortal>
-            <Menu.Target>
-              <Button size="sm" variant="default">
-                Mitarbeiter ({employees.length}/{phaseEmployees.length})
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Group gap={4} px="xs" py={4}>
-                <Button size="compact-xs" variant="subtle" onClick={() => storeHidden([])}>
-                  Alle auswählen
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  color="gray"
-                  onClick={() => storeHidden(everyone.map((employee) => employee.id))}
-                >
-                  Alle abwählen
-                </Button>
-              </Group>
-              <Menu.Divider />
-              {phaseEmployees.map((employee) => (
-                <Menu.Item key={employee.id} onClick={() => toggleEmployee(employee.id)}>
-                  <Checkbox
-                    label={employee.name}
-                    checked={!hidden.includes(employee.id)}
-                    onChange={() => toggleEmployee(employee.id)}
-                    onClick={(event) => event.stopPropagation()}
-                  />
-                </Menu.Item>
-              ))}
-            </Menu.Dropdown>
-          </Menu>
+          {/* On a phone: view and year in one row, the arrows and "Heute" centred below. The choice of the
+              employees sits in the corner of the plan. */}
+          {isPhone ? (
+            <Group gap={6} wrap="nowrap" justify="space-between" w="100%">
+              {perspectiveSwitch}
+              <YearSelect year={year} onChange={onYearChange} small />
+            </Group>
+          ) : (
+            perspectiveSwitch
+          )}
           {perspective === 'sites' && earlierWork && (
             <Tooltip
               label={`${earlierWork.sites} offene Baustellen haben Einsätze vor heute, der früheste am ${formatDate(earlierWork.earliest)}. Klicken springt dorthin.`}
@@ -974,7 +1077,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           {/* Zoom, paging and the shown weeks at the right, before the switches. On a phone only ‹ Heute ›. */}
           {isPhone ? (
-            <Group gap={4} wrap="nowrap" ml="auto" className="phone-paging">
+            <Group gap={6} wrap="nowrap" justify="center" w="100%" className="phone-paging">
               <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
                 ‹
               </ActionIcon>
@@ -996,6 +1099,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                   { value: 'month', label: 'Monat' },
                 ]}
               />
+              <YearSelect year={year} onChange={onYearChange} />
               <Button size="sm" color="wegoRed.6" onClick={goToday}>
                 Heute
               </Button>
@@ -1017,6 +1121,31 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                 checked={foldWeekends}
                 onChange={(event) => toggleWeekends(event.currentTarget.checked)}
               />
+              <Group gap={2} wrap="nowrap" className="plan-scale">
+                <ActionIcon
+                  variant="default"
+                  size="input-sm"
+                  aria-label="Kleiner"
+                  disabled={scale === SCALES[0]}
+                  onClick={() => changeScale(SCALES[SCALES.indexOf(scale) - 1])}
+                >
+                  −
+                </ActionIcon>
+                <Tooltip label="Zurück auf 100 %">
+                  <UnstyledButton className="plan-scale-value" aria-label={`Größe ${scale} %`} onClick={() => changeScale(100)}>
+                    {scale} %
+                  </UnstyledButton>
+                </Tooltip>
+                <ActionIcon
+                  variant="default"
+                  size="input-sm"
+                  aria-label="Größer"
+                  disabled={scale === SCALES.at(-1)}
+                  onClick={() => changeScale(SCALES[SCALES.indexOf(scale) + 1])}
+                >
+                  +
+                </ActionIcon>
+              </Group>
             </Group>
           )}
         </Group>
@@ -1084,12 +1213,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             </span>
           )}
         </div>
-        {canEdit && perspective === 'sites' && !isPhone && employees.length > 0 && (
+        {canEdit && perspective === 'sites' && !isPhone && phaseEmployees.length > 0 && (
           <div className="employee-palette" role="group" aria-label="Mitarbeiter zum Einplanen">
             <Text size="xs" c="dimmed">
               Auf eine Baustelle ziehen:
             </Text>
-            {employees.map((employee) => {
+            {phaseEmployees.map((employee) => {
               return (
                 <span
                   key={employee.id}
@@ -1097,7 +1226,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                   title={`${employee.name} auf einen Tag einer Baustelle ziehen`}
                   {...dragSource({ kind: 'employee', employeeId: employee.id, name: employee.name }, true)}
                 >
-                  {employee.name}
+                  {paletteNames.get(employee.id) ?? employee.name}
                 </span>
               )
             })}
@@ -1112,19 +1241,26 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
       <div
         className="plan-scroll"
+        style={scale === 100 ? undefined : { zoom: scale / 100 }}
         ref={scroller}
         onScroll={onScroll}
-        // Strg+C / Strg+X: the marked entry; Strg+V: into the selected cells.
+        // Strg+C / Strg+X: the marked entry, else the whole field clicked last (with its notes);
+        // Strg+V: into the selected fields, else into the field clicked last.
         onKeyDown={(event) => {
           if (!canEdit || !(event.ctrlKey || event.metaKey)) return
           const key = event.key.toLowerCase()
-          if ((key === 'c' || key === 'x') && markedEntry) {
+          const focused = (event.target as HTMLElement).closest<HTMLElement>('[data-cell]')?.dataset.cell
+          if (key === 'c' || key === 'x') {
+            const field = focused ? parseKey(focused) : null
+            const entries = markedEntry ? [markedEntry] : field ? entriesOf(field.employeeId, field.date) : []
+            const notes = !markedEntry && field ? (notesByCell.get(focused!) ?? []) : []
+            if (entries.length === 0 && notes.length === 0) return
             event.preventDefault()
-            copyEntries([markedEntry], key === 'x')
+            copyEntries(entries, key === 'x', notes)
             notifications.show({ message: key === 'x' ? 'Ausgeschnitten.' : 'Kopiert.', autoClose: 2000 })
-          } else if (key === 'v' && clip && selected.size > 0) {
+          } else if (key === 'v' && clip && (selected.size > 0 || focused)) {
             event.preventDefault()
-            paste(toTargets([...selected])).catch(fail)
+            paste(toTargets(selected.size > 0 ? [...selected] : [focused!])).catch(fail)
           }
         }}
       >
@@ -1145,15 +1281,20 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             foldWeekends={weekendsFolded}
             dropOn={canEdit ? dropOnEmployee : undefined}
             dropOnEntry={canEdit ? dropOnEntry : undefined}
+            dropOnFree={canEdit ? dropOnFree : undefined}
+            onOpenFree={canEdit ? (employee, date, half) => setOpen({ employee, date, addHalf: half }) : undefined}
+            onFillFree={canEdit ? (employee, date) => setOpen({ employee, date, fillFree: true }) : undefined}
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('e')}
+            corner={corner}
             {...shared}
             {...noteProps}
           />
         ) : (
           <SiteTimeline
+            corner={corner}
             days={yearDays}
             rows={siteRows}
             holidayByDate={holidayByDate}
@@ -1171,17 +1312,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           />
         )}
       </div>
-
-      {ownId !== null && entitlement !== null && (
-        <div className="vacation-line" aria-label="Eigene Urlaubstage">
-          <span>
-            Urlaub {year}: genommen <strong>{vacationUsed}</strong> von <strong>{entitlement}</strong> Urlaubstagen
-          </span>
-          <span className={entitlement - vacationUsed < 0 ? 'vacation-left over' : 'vacation-left'}>
-            verbleibende Urlaubstage: <strong>{entitlement - vacationUsed}</strong>
-          </span>
-        </div>
-      )}
 
       {selected.size > 0 && perspective === 'employees' && (
         <Paper className="selection-bar" shadow="lg" p="sm" withBorder>
@@ -1236,7 +1366,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           sites={plan.sites}
           onCreateSite={createSite}
-          onUpdateSite={updateSite}
           recentSites={recentSites}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
@@ -1270,10 +1399,11 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             employee={open.employee}
             date={open.date}
             addActivity={open.addActivity}
+            addHalf={open.addHalf}
+            fillFree={open.fillFree}
             entries={entriesOf(open.employee.id, open.date)}
             sites={plan.sites}
             onCreateSite={createSite}
-            onUpdateSite={updateSite}
             onGoToSite={canEdit ? shared.onOpenSite : undefined}
             canAbsence={canAbsence}
             onClose={() => setOpen(null)}
@@ -1360,6 +1490,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               }}
               onOpenSite={shared.onOpenSite}
               onDelete={(entries) => remove(entries).catch(fail)}
+              notes={employee ? (notesByCell.get(cellKey(employee.id, date)) ?? []) : []}
               extra={employee ? [{ label: 'Notiz einfügen', onClick: () => setNoteDialog({ employee, date }) }] : []}
             />
           )
@@ -1373,6 +1504,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             {
               label: `Notiz bearbeiten: ${noteMenu.note.title}`,
               onClick: () => setNoteDialog({ employee: employeeOfNote(noteMenu.note), date: noteMenu.note.date, note: noteMenu.note }),
+            },
+            {
+              label: `Notiz kopieren: ${noteMenu.note.title}`,
+              onClick: () => {
+                copyEntries([], false, [noteMenu.note])
+                notifications.show({ message: 'Notiz kopiert. Rechtsklick auf ein Feld und „Einfügen“.', autoClose: 3000 })
+              },
             },
             {
               label: `Notiz löschen: ${noteMenu.note.title}`,

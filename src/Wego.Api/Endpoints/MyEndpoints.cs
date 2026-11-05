@@ -38,13 +38,15 @@ public static class MyEndpoints
                 return Results.Ok(new MyVacationDto(year, false, VacationCountedFrom, employee.VacationDaysPerYear, 0, 0,
                     employee.VacationDaysPerYear, []));
 
+            await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
             var (from, to) = PlanEndpoints.YearRange(year);
-            // Saturdays and Sundays do not use up vacation days (as in the reports).
+            var publicHolidays = await SchoolHolidayEndpoints.PublicHolidaysAsync(db, from, to);
+            // Saturdays, Sundays and public holidays do not use up vacation days (as in the reports).
             var days = (await db.PlanEntries.AsNoTracking()
                     .Where(e => e.EmployeeId == employee.Id && e.Type == EntryType.Urlaub && e.Date >= from && e.Date <= to)
                     .Select(e => e.Date)
                     .ToListAsync())
-                .Where(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                .Where(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && !publicHolidays.Contains(d))
                 .Distinct()
                 .Order()
                 .ToList();

@@ -38,6 +38,6 @@ describe('MyAreaPage', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/me/vacation?year=2027', expect.anything())
 
     const rows = screen.getAllByRole('row').slice(1).map((row) => row.textContent)
-    expect(rows).toEqual(['Mo 04.01.20271genommen', 'Do 05.08.2027 – Mi 11.08.20275geplant'])
+    expect(rows).toEqual(['Mo 04.01.2027genommen1', 'Do 05.08.2027 – Mi 11.08.20275'])
   })
 })

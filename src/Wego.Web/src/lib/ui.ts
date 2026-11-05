@@ -52,7 +52,9 @@ export function useSwipe(onLeft: () => void, onRight: () => void) {
 /** Holiday per day. A Feiertag wins over school holidays on the same day. */
 export function holidaysByDate(holidays: SchoolHoliday[]): Map<string, SchoolHoliday> {
   const map = new Map<string, SchoolHoliday>()
-  const ordered = [...holidays].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'Feiertag' ? 1 : -1))
+  // One mark per day; the later one wins: Schulferien, then Betriebsferien, then Feiertag.
+  const rank = { Schulferien: 0, Betriebsferien: 1, Feiertag: 2 } as Record<string, number>
+  const ordered = [...holidays].sort((a, b) => (rank[a.kind] ?? 0) - (rank[b.kind] ?? 0))
   for (const holiday of ordered) {
     for (const day of daysBetween(holiday.startDate, holiday.endDate)) map.set(day.iso, holiday)
   }

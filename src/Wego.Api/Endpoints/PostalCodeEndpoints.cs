@@ -5,7 +5,7 @@ using Wego.Api.Data;
 namespace Wego.Api.Endpoints;
 
 /// <summary>
-/// The town (with the borough in cities such as Berlin) of a German postal code, from OpenPLZ
+/// The town (with the district, the Ortsteil, in cities such as Berlin) of a German postal code, from OpenPLZ
 /// (openplzapi.org), so that the form of a site fills it in. Only the postal code and the street name leave
 /// the server, nothing of the customer.
 /// </summary>
@@ -13,7 +13,7 @@ public static partial class PostalCodeEndpoints
 {
     public const string OpenPlzClient = "openplz";
 
-    /// <summary><paramref name="City"/> is what the form takes, e.g. "Berlin-Reinickendorf".</summary>
+    /// <summary><paramref name="City"/> is what the form takes, e.g. "Berlin-Frohnau" (the Ortsteil, else the Bezirk).</summary>
     public record PostalCodeDto(string PostalCode, string City, string? Borough, string? Suburb);
 
     private record Locality(string Name);
@@ -53,7 +53,7 @@ public static partial class PostalCodeEndpoints
         if (localities.Count == 0) return null;
         var city = localities[0].Name;
 
-        // The borough of the street, else the one most streets with this postal code lie in.
+        // The Ortsteil of the street, else the one most streets with this postal code lie in.
         List<Street> streets = [];
         if (street is not null)
             streets = await client.GetFromJsonAsync<List<Street>>(
@@ -66,7 +66,9 @@ public static partial class PostalCodeEndpoints
             .Select(g => g.Key)
             .FirstOrDefault();
 
-        return new PostalCodeDto(code, place.Borough is { } borough ? $"{city}-{borough}" : city, place.Borough, place.Suburb);
+        // The Ortsteil (e.g. Frohnau) says more than the Bezirk (Reinickendorf); the Bezirk only where there is none.
+        var part = place.Suburb ?? place.Borough;
+        return new PostalCodeDto(code, part is not null ? $"{city}-{part}" : city, place.Borough, place.Suburb);
     }
 
     /// <summary>The street as OpenPLZ writes it, without the house number ("Stockumer Straße 23" → "Stockumer Str.").</summary>

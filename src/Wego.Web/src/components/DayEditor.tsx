@@ -27,7 +27,6 @@ interface Props {
   entries: Entry[]
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
-  onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
   /** Planners: goes to the page of a site (the day is left without saving). */
   onGoToSite?: (siteId: number) => void
   /** Urlaub and Krank are for Planer G: without it such a row stays as it is. */
@@ -39,6 +38,10 @@ interface Props {
   onCopy?: (entries: DayEntryInput[]) => void
   /** An activity dragged onto the day: added as a new row whose site is chosen (or created) here. */
   addActivity?: Activity
+  /** The free half of a day clicked: added as a new row with these times, its site chosen here. */
+  addHalf?: { start: string; end: string }
+  /** "verfügbar" clicked: the rows kept free get a site to choose, in the same time. */
+  fillFree?: boolean
 }
 
 interface Row {
@@ -78,7 +81,7 @@ function toInputs(rows: Row[]): DayEntryInput[] {
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
-  const { employee, date, entries, sites, onCreateSite, onUpdateSite, onGoToSite, canAbsence = false, onClose, onSave, onCopy } = props
+  const { employee, date, entries, sites, onCreateSite, onGoToSite, canAbsence = false, onClose, onSave, onCopy } = props
   // A new site row starts without an activity: it follows the site chosen.
   const main = null
   // The activities offered follow the status of an open site. On a done or cancelled site (entries from
@@ -101,13 +104,14 @@ export function DayEditor(props: Props) {
       type: e.type,
       siteId: e.siteId,
       activity: e.activity,
-      free: isFree(e),
+      free: !props.fillFree && isFree(e),
       start: e.startTime?.slice(0, 5) ?? '',
       end: e.endTime?.slice(0, 5) ?? '',
       note: e.note ?? '',
       important: e.noteImportant,
     }))
     if (props.addActivity) return [...saved, emptyRow('Baustelle', null, props.addActivity)]
+    if (props.addHalf) return [...saved, { ...emptyRow('Baustelle', null, main), ...props.addHalf }]
     return saved.length === 0 ? [emptyRow('Baustelle', null, main)] : saved
   })
   const [error, setError] = useState('')
@@ -231,7 +235,6 @@ export function DayEditor(props: Props) {
                       update(index, { siteId, activity: fits ? row.activity : defaultActivity(employee, status) })
                     }}
                     onCreate={createSite}
-                    onUpdate={onUpdateSite}
                     onGoToSite={onGoToSite}
                     // A new site for the start of the construction (Abriss / Baubeginn) begins on this day.
                     newSite={row.activity === 'Abriss' ? { ...emptySite, plannedStart: date } : undefined}

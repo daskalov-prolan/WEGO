@@ -1,6 +1,6 @@
 import { notifications } from '@mantine/notifications'
 import { useSyncExternalStore } from 'react'
-import type { Entry, PlanEmployee, Site } from '../api/types'
+import type { CalendarNote, Entry, PlanEmployee, Site } from '../api/types'
 import { allowedActivities, defaultActivity, entryName, isOpen } from './activities'
 import type { DayChange } from './dragPlan'
 import { toInput } from './ui'
@@ -10,6 +10,8 @@ export interface Clip {
   label: string
   entries: Entry[]
   cut: boolean
+  /** The notes of the copied days (or one note alone), pasted into the fields of the employees. */
+  notes?: CalendarNote[]
 }
 
 let clip: Clip | null = null
@@ -31,10 +33,11 @@ export function useClip(): Clip | null {
   )
 }
 
-/** Puts these entries (one, or all of a day) on the clipboard. */
-export function copyEntries(entries: Entry[], cut: boolean) {
-  if (entries.length === 0) return
-  setClip({ label: [...new Set(entries.map((entry) => entryName(entry)))].join(' / '), entries, cut })
+/** Puts these entries (one, or all of a day) and notes on the clipboard. */
+export function copyEntries(entries: Entry[], cut: boolean, notes: CalendarNote[] = []) {
+  if (entries.length === 0 && notes.length === 0) return
+  const names = [...new Set(entries.map((entry) => entryName(entry)))]
+  setClip({ label: [...names, ...notes.map((note) => `Notiz „${note.title}“`)].join(' / '), entries, cut, notes })
 }
 
 /**
@@ -114,17 +117,20 @@ export function clipMenuItems({
   onPaste,
   onOpenSite,
   onDelete,
+  notes = [],
 }: {
   one?: Entry
   all: Entry[]
+  /** The notes in the cell: copying all of the cell takes them along. */
+  notes?: CalendarNote[]
   pasteLabel?: string
   onPaste: () => void
   onOpenSite?: (siteId: number) => void
   /** Removes these entries; without it the menu offers no deleting. */
   onDelete?: (entries: Entry[]) => void
 }): ClipMenuItem[] {
-  const copied = (entries: Entry[], cut: boolean) => () => {
-    copyEntries(entries, cut)
+  const copied = (entries: Entry[], cut: boolean, withNotes: CalendarNote[] = []) => () => {
+    copyEntries(entries, cut, withNotes)
     notifications.show({
       message: `${cut ? 'Ausgeschnitten' : 'Kopiert'}. Rechtsklick auf ein Feld und „Einfügen“.`,
       autoClose: 3000,
@@ -140,8 +146,16 @@ export function clipMenuItems({
   }
   if (!one || all.length > 1)
     items.push(
-      { label: one ? 'Ganzen Tag kopieren' : 'Kopieren', disabled: all.length === 0, onClick: copied(all, false) },
-      { label: one ? 'Ganzen Tag ausschneiden' : 'Ausschneiden', disabled: all.length === 0, onClick: copied(all, true) },
+      {
+        label: one ? 'Ganzen Tag kopieren' : 'Kopieren',
+        disabled: all.length === 0 && notes.length === 0,
+        onClick: copied(all, false, notes),
+      },
+      {
+        label: one ? 'Ganzen Tag ausschneiden' : 'Ausschneiden',
+        disabled: all.length === 0 && notes.length === 0,
+        onClick: copied(all, true, notes),
+      },
     )
   items.push({ label: pasteLabel, disabled: clip === null, onClick: onPaste })
   if (onDelete && one) items.push({ label: `Löschen: ${entryName(one)}`, onClick: () => onDelete([one]) })

@@ -12,7 +12,7 @@ import {
   entryTitle,
   isOpen,
 } from '../lib/activities'
-import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
+import { addDays, formatDate, isoWeek, todayIso, weekOf, type Day } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import { onDay, toInput } from '../lib/ui'
 import { Chip } from './Chip'
@@ -165,6 +165,15 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
     save(changes, `${entryName(entry)} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
   }
 
+  // A working day where nothing happens at this site and everybody shown works elsewhere is of no interest
+  // here: it gets a narrow column, so that a longer stretch fits. A day with someone free stays wide.
+  const notHere = (day: Day) =>
+    lanes.length > 0 &&
+    lanes.every((employee) => {
+      const there = byLaneDay.get(`${employee.id}|${day.iso}`) ?? []
+      return there.length > 0 && there.every((entry) => entry.siteId !== site.id)
+    })
+
   return (
     <Paper withBorder p="md" mb="lg" className="mini-plan">
       <Group justify="space-between" mb="xs" gap="xs">
@@ -200,6 +209,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         corner="Mitarbeiter"
         mark={(monday) => percent(load(monday))}
         markTitle="Auslastung der Mitarbeiter mit offener Haupttätigkeit"
+        narrow={notHere}
       >
         {plans.length > 0 && lanes.length === 0 && (
           <Text size="sm" c="dimmed" className="mini-no-lanes">
@@ -222,6 +232,7 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
                 canEdit={canEdit}
                 accepts={(item) => accepts(employee, day.iso, item)}
                 onDropItem={(item) => dropItem(employee, day.iso, item)}
+                narrow={!day.isWeekend && notHere(day)}
               >
                 {(byLaneDay.get(`${employee.id}|${day.iso}`) ?? []).map((entry) =>
                   entry.siteId === site.id ? (

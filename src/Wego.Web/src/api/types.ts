@@ -286,4 +286,6 @@ export interface EmployeeInput {
   password: string | null
   hourlyRate: number | null
   phone: string | null
+  /** Craftsmen: the activity they get on a new site, in its colour. */
+  mainActivity: Activity | null
 }

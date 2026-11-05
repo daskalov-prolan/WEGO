@@ -1,10 +1,9 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import type { Activity, CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { CellNotes } from './CalendarNotes'
-import { ActivityIcon } from './ActivityIcon'
 import type { Day } from '../lib/dates'
-import { formatDateLong, MONTHS } from '../lib/dates'
-import { entryName, entryStyle, entryTitle, onlyHalfDay } from '../lib/activities'
+import { formatDateLong, HALF_DAYS, MONTHS } from '../lib/dates'
+import { entryName, entryStyle, entryTitle, isFree, onlyHalfDay } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -43,6 +42,12 @@ export interface MatrixProps {
   dropOn?: (employee: PlanEmployee, date: string) => DropHandlers
   /** Planners: an activity dragged onto an entry becomes its activity. */
   dropOnEntry?: (entry: Entry) => DropHandlers
+  /** Planners: the entry of half a day dragged onto the free half ("verfügbar") moves there. */
+  dropOnFree?: (entry: Entry) => DropHandlers
+  /** Planners: a click on the free half ("verfügbar") plans a site in that half of the day. */
+  onOpenFree?: (employee: PlanEmployee, date: string, half: { start: string; end: string }) => void
+  /** Planners: a click on an entry kept free ("verfügbar") opens the day to put a site in its place. */
+  onFillFree?: (employee: PlanEmployee, date: string) => void
   /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
   marked?: { ids: Set<number>; first: number; last: number }
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
@@ -51,6 +56,8 @@ export interface MatrixProps {
   onStretchStart?: (entry: Entry, side: 'left' | 'right', event: PointerEvent) => void
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (employee: PlanEmployee, date: string, at: { x: number; y: number; entryId?: number }) => void
+  /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
+  corner?: ReactNode
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -172,10 +179,15 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
           return
         }
         if (selected.size > 0) onSelectedChange(new Set())
+        const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+        const entry = chip && props.entriesOf(employee.id, day.iso).find((candidate) => candidate.id === Number(chip.dataset.entryId))
+        // "verfügbar" clicked: the day opens with a site to choose in its place.
+        if (entry && isFree(entry) && props.onFillFree) {
+          props.onFillFree(employee, day.iso)
+          return
+        }
         // With the mouse a click marks an entry (or lifts the mark); the day opens on a double click.
         if (props.onMark && pointerType.current === 'mouse') {
-          const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
-          const entry = chip && props.entriesOf(employee.id, day.iso).find((candidate) => candidate.id === Number(chip.dataset.entryId))
           props.onMark(entry ?? null)
           return
         }
@@ -190,14 +202,32 @@ function useCellSelection(props: MatrixProps, days: Day[]) {
   return { handlers, siteClickBelongsToCell }
 }
 
-function EmployeeName({ employee, link }: { employee: NamedItem; link: boolean }) {
-  return link ? <a href={`#/mitarbeiter/${employee.id}`}>{employee.name}</a> : <>{employee.name}</>
+function EmployeeName({ employee, link, label = employee.name }: { employee: NamedItem; link: boolean; label?: string }) {
+  return link ? <a href={`#/mitarbeiter/${employee.id}`}>{label}</a> : <>{label}</>
+}
+
+/**
+ * The first names of the plan, so that the column stays narrow; two of the same first name get the first letter
+ * of their last name ("Nikolay M."). What stands in brackets (a nickname) is left out.
+ */
+export function shortNames(employees: NamedItem[]): Map<number, string> {
+  const parts = (name: string) => name.replace(/\(.*?\)/g, ' ').trim().split(/\s+/)
+  const first = (name: string) => parts(name)[0] ?? name
+  const count = new Map<string, number>()
+  for (const employee of employees) count.set(first(employee.name), (count.get(first(employee.name)) ?? 0) + 1)
+  return new Map(
+    employees.map((employee) => {
+      const [given, ...rest] = parts(employee.name)
+      const last = rest.at(-1)
+      return [employee.id, (count.get(given) ?? 0) > 1 && last ? `${given} ${last[0]}.` : given || employee.name]
+    }),
+  )
 }
 
 function dayClass(day: Day, holiday: SchoolHoliday | undefined, today: string) {
   return [
     day.isWeekend ? 'weekend' : '',
-    holiday ? (holiday.kind === 'Feiertag' ? 'public-holiday' : 'holiday') : '',
+    holiday ? (holiday.kind === 'Feiertag' ? 'public-holiday' : holiday.kind === 'Betriebsferien' ? 'closure' : 'holiday') : '',
     day.iso === today ? 'today' : '',
   ]
     .filter(Boolean)
@@ -212,6 +242,8 @@ interface FrameProps {
   foldWeekends?: boolean
   /** Heading of the column on the left: "Mitarbeiter" or "Baustelle". */
   corner: ReactNode
+  /** Rows of employees (first names only): a narrower column on the left. */
+  byEmployee?: boolean
   children: ReactNode
 }
 
@@ -219,7 +251,7 @@ interface FrameProps {
  * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
  * and folded weekends work the same in both.
  */
-function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, children }: FrameProps) {
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, byEmployee = false, children }: FrameProps) {
   const weekends = days.filter((day) => day.isWeekend).length
   const months: { month: number; count: number }[] = []
   for (const day of days) {
@@ -229,7 +261,7 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
 
   return (
     <table
-      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}`}
+      className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}${byEmployee ? ' by-employee' : ''}`}
       style={{ '--weekdays': days.length - weekends, '--weekends': weekends } as CSSProperties}
     >
       <colgroup>
@@ -258,7 +290,7 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
               <th
                 key={day.iso}
                 id={`col-${day.iso}`}
-                className={`dayhead ${dayClass(day, holiday, today)}`}
+                className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}`}
                 title={holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso)}
               >
                 <span className="wd">{day.weekday}</span>
@@ -304,7 +336,6 @@ function Compact({
       style={entryStyle(first)}
       {...dragSource({ kind: 'entry', entry: first }, draggable)}
     >
-      <ActivityIcon activity={first.activity} type={first.type} />
       <span className="compact-name" onClick={onTextClick}>
         {text}
       </span>
@@ -323,6 +354,7 @@ export function TimelineMatrix(props: MatrixProps) {
   const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends, dropOn } = props
   const draggable = dropOn !== undefined
   const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
+  const names = shortNames(employees)
   const openSite = (siteId: number, event: MouseEvent) => {
     if (siteClickBelongsToCell()) return
     event.stopPropagation()
@@ -336,18 +368,42 @@ export function TimelineMatrix(props: MatrixProps) {
       today={today}
       zoom={zoom}
       foldWeekends={foldWeekends}
-      corner="Mitarbeiter"
+      corner={props.corner ?? 'Mitarbeiter'}
+      byEmployee
     >
       {employees.map((employee, employeeIndex) => {
         return (
           <tr key={employee.id}>
             <th className="employee" scope="row" title={employee.name}>
-              <EmployeeName employee={employee} link={linkNames} />
+              <EmployeeName employee={employee} link={linkNames} label={names.get(employee.id)} />
             </th>
             {days.map((day, dayIndex) => {
               const entries = entriesOf(employee.id, day.iso)
               const notes = props.notesOf?.(employee.id, day.iso) ?? []
               const first = entries[0]
+              // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
+              const free = onlyHalfDay(entries)
+              const afternoon = free && (first.startTime ?? '') >= '12:00'
+              const freeChip = (
+                <span
+                  className="chip chip-baustelle chip-half-free"
+                  style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
+                  title={props.onOpenFree ? 'verfügbar: klicken, um hier eine Baustelle einzutragen' : 'verfügbar: dieser Teil des Tages ist frei'}
+                  {...(entries.length === 1 ? props.dropOnFree?.(first) : {})}
+                  onClick={
+                    props.onOpenFree &&
+                    ((event) => {
+                      // The free half opens, not the marking of the cell.
+                      event.stopPropagation()
+                      props.onOpenFree!(employee, day.iso, afternoon ? HALF_DAYS[0] : HALF_DAYS[1])
+                    })
+                  }
+                >
+                  <span className="chip-line">
+                    <span className="chip-name">verfügbar</span>
+                  </span>
+                </span>
+              )
               const isSelected = selected.has(cellKey(employee.id, day.iso))
               return (
                 <td
@@ -362,10 +418,13 @@ export function TimelineMatrix(props: MatrixProps) {
                     className={isSelected ? 'cell selected' : 'cell'}
                     aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
                     aria-pressed={isSelected || undefined}
+                    data-cell={cellKey(employee.id, day.iso)}
                     title={cellTitle(entries, entryTitle)}
                     {...handlers(employeeIndex, dayIndex)}
                   >
                     <span className="cell-full">
+                      {/* Work in the afternoon only: the free morning comes first. */}
+                      {free && afternoon && freeChip}
                       {entries.map((entry) => (
                         <Chip
                           key={entry.id}
@@ -387,18 +446,7 @@ export function TimelineMatrix(props: MatrixProps) {
                           }
                         />
                       ))}
-                      {/* Only half a day on sites: the other half is free. */}
-                      {onlyHalfDay(entries) && (
-                        <span
-                          className="chip chip-baustelle chip-half-free"
-                          style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
-                          title="verfügbar: der Rest des Tages ist frei"
-                        >
-                          <span className="chip-line">
-                            <span className="chip-name">verfügbar</span>
-                          </span>
-                        </span>
-                      )}
+                      {free && !afternoon && freeChip}
                     </span>
                     {first && (
                       <Compact
@@ -443,6 +491,8 @@ export interface SiteRow {
 }
 
 interface SiteTimelineProps {
+  /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
+  corner?: ReactNode
   days: Day[]
   rows: SiteRow[]
   holidayByDate: Map<string, SchoolHoliday>
@@ -473,6 +523,11 @@ interface SiteTimelineProps {
 export function SiteTimeline(props: SiteTimelineProps) {
   const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
   const draggable = dropOn !== undefined
+  // The people in the fields by their first names, as in the plan by employee.
+  const people = new Map<number, NamedItem>()
+  for (const row of rows) for (const list of row.byDate.values()) for (const entry of list) people.set(entry.employeeId, { id: entry.employeeId, name: entry.employeeName })
+  const names = shortNames([...people.values()])
+  const nameOf = (entry: Entry) => names.get(entry.employeeId) ?? entry.employeeName
   return (
     <TimelineFrame
       days={days}
@@ -480,7 +535,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
       today={today}
       zoom={zoom}
       foldWeekends={foldWeekends}
-      corner="Baustelle"
+      corner={props.corner ?? 'Baustelle'}
     >
       {rows.map(({ site, byDate }) => (
         <tr key={site.id}>
@@ -525,7 +580,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                       <Chip
                         key={entry.id}
                         entry={entry}
-                        label={entry.employeeName}
+                        label={nameOf(entry)}
                         draggable={draggable}
                         drop={props.dropOnEntry?.(entry)}
                         marked={marked?.ids.has(entry.id)}
@@ -542,7 +597,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                     ))}
                   </span>
                   {entries.length > 0 && (
-                    <Compact entries={entries} text={entries[0].employeeName} dimmed={false} draggable={draggable} />
+                    <Compact entries={entries} text={nameOf(entries[0])} dimmed={false} draggable={draggable} />
                   )}
                 </button>
               </td>

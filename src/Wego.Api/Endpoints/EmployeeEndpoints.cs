@@ -57,6 +57,8 @@ public static class EmployeeEndpoints
             ChangeLog.Add(db, user, ChangeArea.Mitarbeiter, "Angelegt", employee.Id, null, ToDto(employee));
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
+            // A new craftsman gets the vacation of the company closures.
+            await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
             return Results.Created($"/api/employees/{employee.Id}", ToDto(employee));
         });
 
@@ -81,6 +83,8 @@ public static class EmployeeEndpoints
                 string.IsNullOrEmpty(input.Password) ? "Geändert" : "Geändert, Passwort gesetzt",
                 id, before, ToDto(employee));
             await db.SaveChangesAsync();
+            // Made a craftsman or active again: the company closures come with it.
+            await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
             return Results.Ok(ToDto(employee));
         });
 

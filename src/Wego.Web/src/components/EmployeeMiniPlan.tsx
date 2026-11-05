@@ -325,11 +325,6 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
             reload()
             return site
           }}
-          onUpdateSite={async (id, input) => {
-            const site = await api.updateSite(id, input)
-            reload()
-            return site
-          }}
           // Only Planer G open the report of an employee.
           canAbsence
           onClose={() => setOpenDay(null)}

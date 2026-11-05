@@ -26,6 +26,9 @@ builder.Services.AddHttpClient(SchoolHolidayEndpoints.OpenHolidaysClient, client
     client.BaseAddress = new Uri("https://openholidaysapi.org/");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+// School holidays of new years come by themselves; the tests do without the outside world.
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<HolidayImportService>();
 
 builder.Services.AddHttpClient(NominatimGeocoder.Client, client =>
 {

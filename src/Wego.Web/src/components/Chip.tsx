@@ -2,8 +2,7 @@ import type { MouseEvent, PointerEvent } from 'react'
 import type { Entry } from '../api/types'
 import { activityLabel, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
 import { dragSource } from '../lib/dragPlan'
-import { formatTimeRange } from '../lib/dates'
-import { ActivityIcon } from './ActivityIcon'
+import { formatTimeRange, WHOLE_DAY } from '../lib/dates'
 
 interface Props {
   entry: Entry
@@ -39,7 +38,8 @@ export function NoteMark({ important }: { important: boolean }) {
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
 export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, stretch, drop }: Props) {
-  const time = formatTimeRange(entry)
+  // The whole working day goes without saying: only part of a day shows its time.
+  const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
   return (
@@ -53,7 +53,6 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
       {...drop}
     >
       <span className="chip-line">
-        {!isFree(entry) && <ActivityIcon activity={entry.activity} type={entry.type} />}
         {time && <span className="time">{time}</span>}
         <span className="chip-name">
           {label !== undefined ? (

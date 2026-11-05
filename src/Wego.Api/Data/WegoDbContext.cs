@@ -13,6 +13,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
+    public DbSet<ClosureVacation> ClosureVacations => Set<ClosureVacation>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
 
@@ -124,6 +125,13 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Title).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxTitle);
             e.Property(x => x.Text).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxText);
             e.HasIndex(x => new { x.EmployeeId, x.Date });
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ClosureVacation>(e =>
+        {
+            e.HasKey(x => new { x.HolidayId, x.EmployeeId });
+            e.HasOne(x => x.Holiday).WithMany().HasForeignKey(x => x.HolidayId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 

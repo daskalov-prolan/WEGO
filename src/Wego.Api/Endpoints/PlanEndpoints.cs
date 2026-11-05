@@ -46,6 +46,7 @@ public static class PlanEndpoints
         {
             var (from, to) = YearRange(year);
             await SiteEndpoints.StartDueSitesAsync(db);
+            await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
             var access = await OfferAccess.ForAsync(user, db);
             var allSites = await db.Sites.AsNoTracking().Include(s => s.Tasks).OrderBy(s => s.Name).ToListAsync();
             var siteStatus = allSites.ToDictionary(s => s.Id, s => s.Status);
@@ -55,6 +56,9 @@ public static class PlanEndpoints
                     .ToListAsync())
                 .Where(e => access.Shows(e, siteStatus))
                 .ToList();
+            // A public holiday is no vacation: Urlaub on it (e.g. from a company closure) is not shown.
+            var publicHolidays = await SchoolHolidayEndpoints.PublicHolidaysAsync(db, from, to);
+            entries = entries.Where(e => !(e.Type == EntryType.Urlaub && publicHolidays.Contains(e.Date))).ToList();
 
             // Former employees stay visible in the years they still have entries in.
             var withEntries = entries.Select(e => e.EmployeeId).ToHashSet();
@@ -74,6 +78,14 @@ public static class PlanEndpoints
                 .OrderBy(h => h.StartDate)
                 .Select(h => new SchoolHolidayDto(h.Id, h.Name, h.Kind, h.StartDate, h.EndDate))
                 .ToListAsync();
+            // The public holidays of Berlin also when they were not loaded for the year (no id of their own).
+            var known = holidays.Where(h => h.Kind == HolidayKind.Feiertag && h.StartDate == h.EndDate)
+                .Select(h => h.StartDate).ToHashSet();
+            holidays = holidays
+                .Concat(BerlinHolidays.Named(year).Where(h => !known.Contains(h.Date))
+                    .Select(h => new SchoolHolidayDto(-h.Date.DayNumber, h.Name, HolidayKind.Feiertag, h.Date, h.Date)))
+                .OrderBy(h => h.StartDate)
+                .ToList();
 
             var sites = allSites.Where(access.Shows).Select(SiteEndpoints.ToDto).ToList();
 
@@ -117,8 +129,21 @@ public static class PlanEndpoints
     /// Replaces the entries of the given days in one transaction, logs every day that changed,
     /// and returns what is stored now.
     /// </summary>
+    /// <summary>The whole working day, given to a day with one site and no times.</summary>
+    public static readonly (TimeOnly Start, TimeOnly End) WholeDay = (new TimeOnly(7, 0), new TimeOnly(16, 0));
+
+    /// <summary>
+    /// Somebody on one site the whole day: without times the entry gets 07:00 to 16:00 (the costing counts
+    /// these hours). Several entries of a day keep what they have.
+    /// </summary>
+    private static DayEntryInput[] WithWholeDay(DayEntryInput[] entries) =>
+        entries is [{ Type: EntryType.Baustelle, SiteId: not null, StartTime: null, EndTime: null } only]
+            ? [only with { StartTime = WholeDay.Start, EndTime = WholeDay.End }]
+            : entries;
+
     private static async Task<IResult> SaveDays(WegoDbContext db, ClaimsPrincipal user, IReadOnlyList<DayInput> days)
     {
+        days = days.Select(d => d with { Entries = WithWholeDay(d.Entries ?? []) }).ToList();
         var activities = (await db.Activities.Select(a => a.Key).ToListAsync()).ToHashSet();
         foreach (var day in days)
         {

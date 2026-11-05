@@ -17,7 +17,7 @@ describe('AppShell', () => {
         <p>Inhalt</p>
       </AppShell>,
     )
-    expect(menu()).toEqual(['Mein Plan', 'Planung Angebotsphase', 'Planung Bauphase', 'Baustellen', 'Mitarbeiter', 'Verwaltung', 'Mein Bereich'])
+    expect(menu()).toEqual(['Mein Plan', 'Planung Angebotsphase', 'Bauphase', 'Baustellen', 'Mitarbeiter', 'Verwaltung', 'Mein Bereich'])
     expect(screen.getByRole('link', { name: 'Planung Angebotsphase' })).toHaveAttribute('aria-current', 'page')
     // The records start the group on the right.
     expect(screen.getByRole('link', { name: 'Baustellen' })).toHaveClass('nav-right')
@@ -30,6 +30,6 @@ describe('AppShell', () => {
         <p>Inhalt</p>
       </AppShell>,
     )
-    expect(menu()).toEqual(['Mein Plan', 'Planung Bauphase', 'Mitarbeiter', 'Mein Bereich'])
+    expect(menu()).toEqual(['Mein Plan', 'Bauphase', 'Mitarbeiter', 'Mein Bereich'])
   })
 })
