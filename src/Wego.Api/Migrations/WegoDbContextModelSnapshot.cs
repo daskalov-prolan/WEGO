@@ -130,6 +130,21 @@ namespace Wego.Api.Migrations
                     b.ToTable("ChangeLog");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.ClosureVacation", b =>
+                {
+                    b.Property<int>("HolidayId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("HolidayId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("ClosureVacations");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Property<int>("Id")
@@ -455,6 +470,25 @@ namespace Wego.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.ClosureVacation", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.SchoolHoliday", "Holiday")
+                        .WithMany()
+                        .HasForeignKey("HolidayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Holiday");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>

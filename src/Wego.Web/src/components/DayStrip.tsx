@@ -28,7 +28,7 @@ export function StripNav({
         ‹
       </ActionIcon>
       <Text size="sm" fw={700} c="wego.9">
-        KW {isoWeek(visible)} · ab {visible.slice(8, 10)}.{visible.slice(5, 7)}.
+        <span className="kw">KW {isoWeek(visible)}</span> · ab {visible.slice(8, 10)}.{visible.slice(5, 7)}.
       </Text>
       <ActionIcon variant="default" onClick={() => go(addDays(visible, 7))} aria-label="Woche vor">
         ›
@@ -47,14 +47,31 @@ export function StripNav({
 }
 
 /** Head of a day column; Mondays carry the calendar week and how full it is. */
-function DayHead({ day, today, mark, markTitle }: { day: Day; today: string; mark: (monday: string) => string; markTitle: string }) {
+function DayHead({
+  day,
+  today,
+  mark,
+  markTitle,
+  narrow,
+}: {
+  day: Day
+  today: string
+  mark: (monday: string) => string
+  markTitle: string
+  narrow: boolean
+}) {
   return (
     <div
       id={`mini-${day.iso}`}
-      className={['mini-day', 'mini-day-head', day.isWeekend ? 'weekend' : '', day.iso === today ? 'today' : ''].join(' ')}
+      className={['mini-day', 'mini-day-head', day.isWeekend ? 'weekend' : '', narrow ? 'narrow' : '', day.iso === today ? 'today' : ''].join(' ')}
+      title={narrow ? `${day.weekday} ${pad(day.dayOfMonth)}.${pad(day.month + 1)}.: hier nichts geplant, alle anderswo` : undefined}
     >
       <span className="mini-week-mark" title={markTitle}>
-        {day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)} · ${mark(day.iso)}` : ' '}
+        {day.weekday === 'Mo' ? (
+          <>
+            <span className="kw">KW {isoWeek(day.iso)}</span> · {mark(day.iso)}
+          </>
+        ) :' '}
       </span>
       <span className="wd">{day.weekday}</span>
       {!day.isWeekend && (
@@ -78,6 +95,7 @@ export function StripGrid({
   mark,
   markTitle,
   className,
+  narrow = () => false,
   children,
 }: {
   strip: DayStrip
@@ -87,6 +105,8 @@ export function StripGrid({
   mark: (monday: string) => string
   markTitle: string
   className?: string
+  /** Working days of no interest here: narrow like the weekends, so that more days fit. */
+  narrow?: (day: Day) => boolean
   children: ReactNode
 }) {
   const { scroller: scrollerRef, onScroll } = strip
@@ -95,13 +115,15 @@ export function StripGrid({
       <div
         className="mini-lanes"
         style={{
-          gridTemplateColumns: `var(--lane-name) ${strip.days.map((day) => (day.isWeekend ? 'var(--weekend)' : 'var(--day)')).join(' ')}`,
+          gridTemplateColumns: `var(--lane-name) ${strip.days
+            .map((day) => (day.isWeekend ? 'var(--weekend)' : narrow(day) ? 'var(--narrow)' : 'var(--day)'))
+            .join(' ')}`,
         }}
       >
         <div className="mini-corner">{corner}</div>
         {strip.days.map((day) => (
           <Fragment key={day.iso}>
-            <DayHead day={day} today={today} mark={mark} markTitle={markTitle} />
+            <DayHead day={day} today={today} mark={mark} markTitle={markTitle} narrow={!day.isWeekend && narrow(day)} />
           </Fragment>
         ))}
         {children}
@@ -117,15 +139,17 @@ interface LaneCellProps {
   canEdit: boolean
   accepts: (item: DragItem) => boolean
   onDropItem: (item: DragItem) => void
+  /** A narrow day (see StripGrid): only the colours of what is there. */
+  narrow?: boolean
   children: ReactNode
 }
 
 /** One day of a lane; planners drop entries and open activities on it. */
-export function LaneCell({ day, label, onOpen, canEdit, accepts, onDropItem, children }: LaneCellProps) {
+export function LaneCell({ day, label, onOpen, canEdit, accepts, onDropItem, narrow = false, children }: LaneCellProps) {
   return (
     <button
       type="button"
-      className={day.isWeekend ? 'mini-cell weekend' : 'mini-cell'}
+      className={['mini-cell', day.isWeekend ? 'weekend' : '', narrow ? 'narrow' : ''].filter(Boolean).join(' ')}
       aria-label={label}
       onClick={onOpen}
       {...dropTarget(accepts, onDropItem, canEdit)}

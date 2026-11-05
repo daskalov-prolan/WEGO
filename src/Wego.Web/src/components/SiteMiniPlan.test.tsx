@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Plan, Site } from '../api/types'
-import { renderWithProviders } from '../test-utils'
+import { byText, renderWithProviders } from '../test-utils'
 import { SiteMiniPlan } from './SiteMiniPlan'
 
 const site: Site = {
@@ -56,29 +56,29 @@ describe('SiteMiniPlan', () => {
   it('opens at the first planned work, without any at the planned start', async () => {
     // The first entry at this site (Abriss on 5 March), not the planned start in April.
     const { unmount } = renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
     unmount()
 
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...plan, entries: [] }), { status: 200 }))
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 14 · ab 30.03.')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 14 · ab 30.03.'))).toBeInTheDocument()
   })
 
   it('moves by week and jumps to the next week in which someone who can do open work is free', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Woche vor' }))
-    expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 11 · ab 09.03.'))).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Baubeginn' }))
-    expect(screen.getByText('KW 14 · ab 30.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 14 · ab 30.03.'))).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Heute' }))
-    expect(screen.getByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
 
     // Bernd is free in KW 10 too, but the jump looks for the next week after the first one shown.
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
-    expect(screen.getByText('KW 11 · ab 09.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 11 · ab 09.03.'))).toBeInTheDocument()
   })
 
   it('counts every craftsman for the free week, and any entry makes the week taken', async () => {
@@ -104,11 +104,11 @@ describe('SiteMiniPlan', () => {
       url === '/api/plan/batch' ? new Response('[]', { status: 200 }) : new Response(JSON.stringify(busier), { status: 200 }),
     )
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
 
     // KW 11: Anna, Bernd and Carla have an entry, Dora is free but does no work on sites. KW 12: Carla is free.
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
-    expect(screen.getByText('KW 12 · ab 16.03.')).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 12 · ab 16.03.'))).toBeInTheDocument()
     // Lanes only for who worked here: Anna. Carla counts for the free week, but has no lane.
     expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual(['Anna'])
   })
@@ -118,8 +118,8 @@ describe('SiteMiniPlan', () => {
 
     // The first entry is on Thursday 5 March: the weeks begin on Monday 2 March.
     // Anna and Bernd can both do the open work; each works one of five days in KW 10, none in KW 11.
-    expect(await screen.findByText('KW 10 · 20 %')).toBeInTheDocument()
-    expect(screen.getByText('KW 11 · 0 %')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · 20 %'))).toBeInTheDocument()
+    expect(screen.getByText(byText('KW 11 · 0 %'))).toBeInTheDocument()
 
     // A lane only for who worked here: Anna, not Bernd.
     expect(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).toBeInTheDocument()
@@ -128,7 +128,7 @@ describe('SiteMiniPlan', () => {
 
   it('moves its entries by dragging them onto a day of a lane', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
-    expect(await screen.findByText('KW 10 · ab 02.03.')).toBeInTheDocument()
+    expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
     const batch = () => {
       const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')
       return call ? JSON.parse(String(call[1].body)) : null

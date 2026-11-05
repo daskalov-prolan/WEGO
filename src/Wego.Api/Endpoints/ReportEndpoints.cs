@@ -103,9 +103,10 @@ public static class ReportEndpoints
             employee.VacationDaysPerYear - used, CountWeekdays(list, EntryType.Krank));
     }
 
-    // Saturdays and Sundays do not use up vacation days.
+    // Saturdays, Sundays and the public holidays of Berlin do not use up vacation days.
     private static int CountWeekdays(IEnumerable<PlanEntry> entries, EntryType type) => entries
-        .Where(e => e.Type == type && e.Date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+        .Where(e => e.Type == type && e.Date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
+            && !BerlinHolidays.IsHoliday(e.Date))
         .Select(e => e.Date)
         .Distinct()
         .Count();

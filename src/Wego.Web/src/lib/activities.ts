@@ -48,6 +48,11 @@ export function textOn(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#14232a' : '#ffffff'
 }
 
+/** Writing on the full colour of an activity: black (the planners' choice), only Fliesenarbeiten white. */
+export function textOfActivity(activity: string | null | undefined): string {
+  return activity === 'Fliesen' ? '#ffffff' : '#000000'
+}
+
 /** The three colours of an activity from its one colour: tuned by hand for the known ones, mixed for others. */
 export function coloursOf(color: string): Colours {
   const background = color.toLowerCase()
@@ -65,12 +70,12 @@ export let ACTIVITIES: ActivityInfo[] = (
     ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
     ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
     ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#e8590c'],
-    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
-    ['Trockenbau', 'Trockenbau', 'Bauphase', '#fd7e14'],
-    ['Sanitaer', 'Sanitär', 'Bauphase', '#1c7ed6'],
-    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#7048e8'],
-    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#d6336c'],
-    ['Endmontage', 'Endmontage', 'Bauphase', '#1c7ed6'],
+    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#e31b35'],
+    ['Trockenbau', 'Trockenbau', 'Bauphase', '#d6c7bc'],
+    ['Sanitaer', 'Sanitär', 'Bauphase', '#2a9cad'],
+    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#ff9f50'],
+    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#7a3e8e'],
+    ['Endmontage', 'Endmontage', 'Bauphase', '#2a9cad'],
   ] as const
 ).map(([key, label, phase, color], index) => toInfo({ key, label, phase, color, sortOrder: index + 1 }))
 
@@ -85,9 +90,10 @@ export function setActivities(defs: ActivityDef[]) {
 /** color: Mantine colour of the badges; hex: the same colour for the process diagram of the legend. */
 export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; hex: string }[] = [
   { value: 'Angebot', label: 'Angebotsphase', color: 'cyan', hex: '#1098ad' },
-  { value: 'Bauphase', label: 'Bauphase', color: 'orange', hex: '#e8590c' },
+  { value: 'Bauphase', label: 'Bauphase', color: 'wegoRed', hex: '#e31b35' },
   { value: 'Abgeschlossen', label: 'Erledigt', color: 'green', hex: '#2f9e44' },
-  { value: 'Storniert', label: 'Storniert', color: 'red', hex: '#e03131' },
+  // Grey: the red is the Bauphase's.
+  { value: 'Storniert', label: 'Storniert', color: 'gray', hex: '#868e96' },
 ]
 
 /** Done or cancelled: nothing is planned there any more. */
@@ -106,8 +112,8 @@ export function activitiesOfStatus(status: SiteStatus): Activity[] {
 
 
 export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', edge: '#8fa3a8' }
-/** Free ("verfügbar"): a fresh green, stronger than the green of the holidays behind the days. */
-export const FREE: Colours = { background: '#40c057', tint: '#c3f0ca', edge: '#2b8a3e' }
+/** Free ("verfügbar"): sage green, filled in the calendar like the sites. */
+export const FREE: Colours = { background: '#6fa56c', tint: '#d4e6d3', edge: '#4a7a48' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
 export const ABSENCE: Colours = { background: '#ffc61a', tint: '#ffe27a', edge: '#e0a000' }
 /** Feiertage are green, school holidays a lighter green. */
@@ -159,10 +165,22 @@ function colours(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, '
   return (entry.activity && BY_VALUE.get(entry.activity)) || NO_ACTIVITY
 }
 
-/** Inline style that hands the colours of an entry to the CSS (see .chip, .cell-compact, .my-entry). */
+/**
+ * Inline style that hands the colours of an entry to the CSS (see .chip, .cell-compact, .my-entry).
+ * An activity also gets --entry-fill and --entry-text: in the calendar its field is filled with the full colour,
+ * written in black (the planners' choice), only Fliesenarbeiten in white on its dark blackberry.
+ */
 export function entryStyle(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, 'siteName'>>): CSSProperties {
-  const { background, tint, edge } = colours(entry)
-  return { '--entry-bg': tint, '--entry-strong': background, '--entry-color': edge } as CSSProperties
+  const found = colours(entry)
+  const { background, tint, edge } = found
+  // Activities and the free half (verfügbar); Urlaub, Krank and entries without activity stay light.
+  const filled = found !== ABSENCE && found !== NO_ACTIVITY
+  return {
+    '--entry-bg': tint,
+    '--entry-strong': background,
+    '--entry-color': edge,
+    ...(filled ? { '--entry-fill': background, '--entry-text': textOfActivity(entry.activity) } : {}),
+  } as CSSProperties
 }
 
 /** Tooltip text: customer and activity, or Urlaub / Krank. */
@@ -175,7 +193,7 @@ export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>)
 }
 
 /** A craftsman unless said otherwise; a planner when said so. */
-type Skilled = { isPlaner?: boolean; isCraftsman?: boolean }
+type Skilled = { isPlaner?: boolean; isCraftsman?: boolean; mainActivity?: Activity | null }
 
 /**
  * The activities the plan offers for an employee: a craftsman (a row in the plan) does all activities of the
@@ -199,5 +217,7 @@ export function worksInPhase(employee: Skilled, phase: 'Angebot' | 'Bauphase'): 
 
 /** The activity a new entry gets: the first the employee can do in the status of the site, otherwise none. */
 export function defaultActivity(employee: Skilled, status?: SiteStatus): Activity | null {
-  return allowedActivities(employee, status)[0] ?? null
+  const allowed = allowedActivities(employee, status)
+  // The main activity of a craftsman (see Verwaltung) where it fits, else the first of the phase.
+  return employee.mainActivity && allowed.includes(employee.mainActivity) ? employee.mainActivity : (allowed[0] ?? null)
 }

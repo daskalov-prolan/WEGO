@@ -17,7 +17,6 @@ interface Props {
   employees: PlanEmployee[]
   sites: Site[]
   onCreateSite: (input: SiteInput) => Promise<Site>
-  onUpdateSite: (id: number, input: SiteInput) => Promise<Site>
   recentSites: NamedItem[]
   onClose: () => void
   /** add: keep what is already planned on those days and add the site as a further entry. */
@@ -26,7 +25,7 @@ interface Props {
 
 /** Puts one construction site on all selected cells at once. */
 export function AssignSite(props: Props) {
-  const { cellCount, employees, sites, onCreateSite, onUpdateSite, recentSites, onClose, onApply } = props
+  const { cellCount, employees, sites, onCreateSite, recentSites, onClose, onApply } = props
   const [siteId, setSiteId] = useState<number | null>(null)
   const [chosenActivity, setActivity] = useState<ActivityChoice>('main')
   const status = sites.find((site) => site.id === siteId)?.status
@@ -129,7 +128,6 @@ export function AssignSite(props: Props) {
               if (activity !== 'main' && nextStatus && !activitiesOfStatus(nextStatus).includes(activity)) setActivity('main')
             }}
             onCreate={onCreateSite}
-            onUpdate={onUpdateSite}
             required
           />
           <Group grow gap="xs">

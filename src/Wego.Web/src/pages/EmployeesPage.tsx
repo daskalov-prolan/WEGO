@@ -1,4 +1,5 @@
-import { Alert, Anchor, Badge, CloseButton, Group, Select, Table, Text, TextInput, Title } from '@mantine/core'
+import { Alert, Anchor, Badge, Button, CloseButton, Group, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Employee, EmployeeOverview } from '../api/types'
@@ -16,6 +17,52 @@ function shows(employee: EmployeeOverview, show: Show): boolean {
   return true
 }
 
+/**
+ * The last name: the last word of the name, what stands in brackets left aside ("Nikolay Mihov" → "Mihov",
+ * "Ivan Prodanov (Vanko)" → "Prodanov"; "Koko" stays "Koko").
+ */
+const lastName = (name: string) =>
+  name
+    .replace(/\([^)]*\)/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .at(-1) ?? name
+
+/** By last name, then by the whole name, as in a telephone list. */
+const byLastName = (a: { name: string }, b: { name: string }) =>
+  lastName(a.name).localeCompare(lastName(b.name), 'de') || a.name.localeCompare(b.name, 'de')
+
+const telLink = (phone: string) => `tel:${phone.replace(/[^+0-9]/g, '')}`
+
+/** On the phone: the active employees by last name, each with a button that calls them. */
+function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
+  // Short enough to scroll through: no search here.
+  const shown = employees.filter((employee) => employee.isActive).sort(byLastName)
+  return (
+    <>
+      <Stack gap="xs">
+        {shown.map((employee) => (
+          <Paper key={employee.id} withBorder radius="md" p="sm">
+            <Group justify="space-between" wrap="nowrap" gap="xs">
+              <div style={{ minWidth: 0 }}>
+                <Text fw={700}>{employee.name}</Text>
+                <Text size="sm" c="dimmed">
+                  {employee.phone ?? 'keine Nummer'}
+                </Text>
+              </div>
+              {employee.phone && (
+                <Button component="a" href={telLink(employee.phone)} color="wegoRed.6" aria-label={`${employee.name} anrufen`}>
+                  Anrufen
+                </Button>
+              )}
+            </Group>
+          </Paper>
+        ))}
+      </Stack>
+    </>
+  )
+}
+
 const euroPerHour = (rate: number) =>
   `${rate.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/Std.`
 
@@ -29,6 +76,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [show, setShow] = useState<Show>('active')
+  const phone = useMediaQuery('(max-width: 600px)')
 
   useEffect(() => {
     const list = canEdit ? api.employees() : api.employeesOverview()
@@ -39,6 +87,21 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
   const shown = employees
     .filter((employee) => shows(employee, show))
     .filter((employee) => !needle || employee.name.toLowerCase().includes(needle))
+
+  if (phone)
+    return (
+      <div className="page">
+        <Title order={2} mb="md">
+          Mitarbeiter
+        </Title>
+        {error && (
+          <Alert color="red" variant="light" mb="md">
+            {error}
+          </Alert>
+        )}
+        <PhoneList employees={employees} />
+      </div>
+    )
 
   return (
     <div className="page">
@@ -129,7 +192,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
                 <Table.Td>
                   {employee.phone && (
                     <Anchor
-                      href={`tel:${employee.phone.replace(/[^+0-9]/g, '')}`}
+                      href={telLink(employee.phone)}
                       onClick={(event) => event.stopPropagation()}
                       style={{ whiteSpace: 'nowrap' }}
                     >

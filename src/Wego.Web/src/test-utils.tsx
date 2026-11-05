@@ -18,3 +18,7 @@ export function renderWithProviders(ui: ReactElement) {
     ),
   })
 }
+
+/** Finds a text also when parts of it stand in elements of their own (e.g. the red "KW 10" in "KW 10 · ab 02.03."). */
+export const byText = (text: string) => (_: string, element: Element | null) =>
+  element?.textContent === text && ![...element.children].some((child) => child.textContent === text)

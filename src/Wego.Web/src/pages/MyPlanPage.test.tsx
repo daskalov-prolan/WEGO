@@ -35,6 +35,7 @@ const plan: Plan = {
     entry(4, 3, 'Carla', '2026-03-02', 12, 'Familie Werner', null, null),
     { ...entry(5, 1, 'Anna', '2026-03-03', 0, '', null, null), type: 'Urlaub', siteId: null, siteName: null },
     entry(6, 1, 'Anna', '2026-03-10', 12, 'Familie Werner', null, null),
+    entry(7, 3, 'Carla', '2026-03-10', 12, 'Familie Werner', '07:00:00', '16:00:00'),
   ],
 }
 
@@ -62,22 +63,70 @@ describe('MyPlanPage', () => {
   it('shows the own week: where, when and with whom', async () => {
     renderWithProviders(<MyPlanPage year={2026} user={user} />)
 
-    const monday = (await screen.findByText('Montag, 02.03.2026')).closest('section')!
+    const monday = (await screen.findByText('Montag, 02.03.2026')).closest('article')!
     expect(within(monday).getByText('Heute')).toBeInTheDocument()
     expect(within(monday).getByText('8–10 Uhr')).toBeInTheDocument()
     expect(within(monday).getByText('Familie Schulze')).toBeInTheDocument()
-    expect(within(monday).getByText('mit Bernd')).toBeInTheDocument()
+    // Bernd is there the whole day, Anna only from 8 to 10: his time is shown.
+    expect(within(monday).getByText('mit Bernd (ganztägig)')).toBeInTheDocument()
     expect(within(monday).getByText(/Musterweg 3, 13125 Berlin/)).toBeInTheDocument()
-    expect(within(monday).getByRole('link', { name: 'Karte' })).toHaveAttribute('href', expect.stringContaining('Musterweg%203'))
-    expect(within(monday).getByText('Komplettbad')).toBeInTheDocument()
     expect(within(monday).getByText('allein')).toBeInTheDocument()
 
-    // Somebody else's site is none of this employee's business here.
-    expect(screen.queryByText('Familie Werner')).not.toBeInTheDocument()
+    // Somebody else's site is none of this employee's business here (Carla on Monday).
+    expect(within(monday).queryByText('Familie Werner')).not.toBeInTheDocument()
 
-    const tuesday = screen.getByText('Dienstag, 03.03.2026').closest('section')!
+    const tuesday = screen.getByText('Dienstag, 03.03.2026').closest('article')!
     expect(within(tuesday).getByText('Urlaub')).toBeInTheDocument()
-    expect(await screen.findByText('Urlaub: 29 von 30 Tagen frei')).toBeInTheDocument()
+    // The vacation is counted under Mein Bereich, not here.
+    expect(screen.queryByText(/Tagen frei/)).not.toBeInTheDocument()
+  })
+
+  it('opens the details of a site from its tile: way there, what to do, own days there', async () => {
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+    await screen.findByText('Montag, 02.03.2026')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Familie Schulze: Details öffnen' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('link', { name: 'Navigation starten' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('destination=Musterweg%203'),
+    )
+    expect(within(dialog).getByText('Komplettbad')).toBeInTheDocument()
+    expect(within(dialog).getByText('mit Bernd (ganztägig)')).toBeInTheDocument()
+    expect(within(dialog).getByText('Meine Tage hier (1)')).toBeInTheDocument()
+  })
+
+  it('pages on into the next year after the last week, and offers no year before 2026', async () => {
+    vi.setSystemTime(new Date('2026-12-28T09:00:00'))
+    const onYearChange = vi.fn()
+    renderWithProviders(<MyPlanPage year={2026} user={user} onYearChange={onYearChange} />)
+    await screen.findByText('Montag, 28.12.2026')
+    expect(screen.getByRole('combobox', { name: 'Jahr' }).querySelectorAll('option')[0]).toHaveTextContent('2026')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nächste Woche' }))
+    expect(onYearChange).toHaveBeenCalledWith(2027)
+  })
+
+  it('shows a public holiday as such, not as vacation, also when a closure entered vacation on it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            ...plan,
+            schoolHolidays: [{ id: -1, name: 'Tag der Arbeit', kind: 'Feiertag', startDate: '2026-05-01', endDate: '2026-05-01' }],
+            entries: [{ ...entry(30, 1, 'Anna', '2026-05-01', 0, '', null, null), type: 'Urlaub', siteId: null, siteName: null }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+    const friday = (await screen.findByText('Freitag, 01.05.2026')).closest('article')!
+    expect(within(friday).getByText('Gesetzlicher Feiertag')).toBeInTheDocument()
+    expect(within(friday).queryByText('Urlaub')).not.toBeInTheDocument()
+    expect(within(friday).getByText('Tag der Arbeit')).toBeInTheDocument()
   })
 
   it('moves to the next week', async () => {
@@ -86,8 +135,9 @@ describe('MyPlanPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Nächste Woche' }))
 
-    const tuesday = screen.getByText('Dienstag, 10.03.2026').closest('section')!
+    const tuesday = screen.getByText('Dienstag, 10.03.2026').closest('article')!
     expect(within(tuesday).getByText('Familie Werner')).toBeInTheDocument()
-    expect(within(tuesday).getByText('allein')).toBeInTheDocument()
+    // Same time as Anna (the whole day): no time in brackets.
+    expect(within(tuesday).getByText('mit Carla')).toBeInTheDocument()
   })
 })

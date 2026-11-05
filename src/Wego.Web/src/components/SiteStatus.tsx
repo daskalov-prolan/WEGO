@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Popover, Table, Text } from '@mantine/core'
+import { Badge, Button, Group, Popover, SegmentedControl, Table, Text } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Site, SiteStatus, StatusChange } from '../api/types'
@@ -17,6 +17,41 @@ export function StatusBadge({ status }: { status: SiteStatus }) {
     <Badge color={info.color} variant="light">
       {info.label}
     </Badge>
+  )
+}
+
+/**
+ * Bauphase or Erledigt as one slider of two fields of the same size: on the page of a site and in the list
+ * of sites ("Setze auf erledigt") alike.
+ */
+export function StatusSlider({
+  site,
+  onChange,
+  size = 'sm',
+}: {
+  site: Site
+  onChange: (status: SiteStatus) => void
+  size?: 'xs' | 'sm'
+}) {
+  const done = site.status === 'Abgeschlossen'
+  return (
+    <SegmentedControl
+      size={size}
+      w={size === 'xs' ? 200 : 230}
+      fullWidth
+      radius="xl"
+      // A slider: a sunk track, the coloured part lifted with a knob at its inner edge (see .status-slider).
+      className={done ? 'status-slider done' : 'status-slider'}
+      color={done ? 'green' : 'wegoRed'}
+      aria-label={`${site.name}: Bauphase oder erledigt`}
+      value={done ? 'Abgeschlossen' : 'Bauphase'}
+      data={[
+        { value: 'Bauphase', label: 'Bauphase' },
+        { value: 'Abgeschlossen', label: 'Erledigt' },
+      ]}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(value) => onChange(value as SiteStatus)}
+    />
   )
 }
 
@@ -48,8 +83,15 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
   return (
     <div>
       <Group gap={6} align="center" wrap="nowrap">
-        <StatusBadge status={site.status} />
+        {/* In the construction phase or done: the slider between both; else the status and its next steps. */}
+        {canEdit && (site.status === 'Bauphase' || site.status === 'Abgeschlossen') ? (
+          <StatusSlider site={site} onChange={(status) => change(status)} />
+        ) : (
+          <StatusBadge status={site.status} />
+        )}
         {canEdit &&
+          site.status !== 'Bauphase' &&
+          site.status !== 'Abgeschlossen' &&
           nextStatuses(site.status).map((status) => (
             <Button
               key={status}

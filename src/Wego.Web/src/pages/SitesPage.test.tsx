@@ -158,7 +158,7 @@ describe('SitesPage', () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
-    await user.click(within(chung).getByRole('switch', { name: 'Chung erledigt' }))
+    await user.click(within(chung).getByText('Erledigt'))
 
     // Done, it leaves the construction phase.
     await waitFor(() => expect(names()).toEqual(['Bäßler', 'Arndt', 'Zesch']))

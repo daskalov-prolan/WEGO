@@ -22,11 +22,13 @@ import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Access, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
+import type { Access, Activity, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
+import { activitiesOfStatus, activityLabel } from '../lib/activities'
 import { toEmployeeInput } from '../lib/employees'
 import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
-import { formatDate } from '../lib/dates'
+import { YearPicker } from '../components/YearPicker'
+import { CURRENT_YEAR, formatDate } from '../lib/dates'
 import { roleLabel, ROLES } from '../lib/roles'
 
 /** Planer G only: employees and their rights, activities, school and public holidays. Sites have their own page. */
@@ -72,6 +74,7 @@ const newEmployee: EmployeeInput = {
   userName: null,
   role: 'Handwerker',
   password: null,
+  mainActivity: null,
   hourlyRate: null,
   phone: null,
 }
@@ -362,6 +365,18 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                 checked={editing.input.showInPlan}
                 onChange={(e) => change({ showInPlan: e.currentTarget.checked })}
               />
+              {editing.input.showInPlan && (
+                <Select
+                  label="Haupttätigkeit"
+                  description="Damit kommt der Handwerker auf eine neue Baustelle, in ihrer Farbe."
+                  placeholder="keine (erste Tätigkeit der Bauphase)"
+                  clearable
+                  maw={320}
+                  data={activitiesOfStatus('Bauphase').map((activity) => ({ value: activity, label: activityLabel(activity) ?? activity }))}
+                  value={editing.input.mainActivity}
+                  onChange={(value) => change({ mainActivity: (value as Activity | null) ?? null })}
+                />
+              )}
               <Checkbox
                 label="Aktiv"
                 checked={editing.input.isActive}
@@ -386,7 +401,11 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
   )
 }
 
-function SchoolHolidaysSection({ year }: { year: number }) {
+/** The years the holidays can be kept for: from 2026 on, five years ahead of the current one. */
+const HOLIDAY_YEARS = Array.from({ length: Math.max(CURRENT_YEAR + 5, 2031) - 2026 + 1 }, (_, i) => 2026 + i)
+
+function SchoolHolidaysSection({ year: planYear }: { year: number }) {
+  const [year, setYear] = useState(Math.max(planYear, 2026))
   const [holidays, setHolidays] = useState<SchoolHoliday[]>([])
   const [name, setName] = useState('')
   const [range, setRange] = useState<[string | null, string | null]>([null, null])
@@ -433,21 +452,12 @@ function SchoolHolidaysSection({ year }: { year: number }) {
 
   return (
     <Stack gap="md">
-      <Group gap="xs">
-        <Button
-          loading={busy}
-          onClick={() =>
-            run(async () => {
-              const result = await api.importSchoolHolidays(year)
-              return `${result.imported} von ${result.total} Ferien und Feiertagen neu übernommen.`
-            })
-          }
-        >
-          Schulferien und Feiertage Berlin {year} abrufen
-        </Button>
-        <Text size="sm" c="dimmed">
-          Quelle: openholidaysapi.org
+      {/* Schulferien and Feiertage come by themselves (the server fetches every new year). */}
+      <Group gap="xs" align="center">
+        <Text fw={600} size="sm">
+          Jahr
         </Text>
+        <YearPicker year={year} years={HOLIDAY_YEARS} onChange={setYear} />
       </Group>
 
       {error && (
@@ -456,15 +466,16 @@ function SchoolHolidaysSection({ year }: { year: number }) {
         </Alert>
       )}
 
-      <Table.ScrollContainer minWidth={460}>
-        <Table striped withTableBorder>
+      {/* Fixed columns: the table looks the same in every year, whatever the names. */}
+      <Table.ScrollContainer minWidth={560}>
+        <Table striped withTableBorder layout="fixed">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Bezeichnung</Table.Th>
-              <Table.Th>Art</Table.Th>
-              <Table.Th>Von</Table.Th>
-              <Table.Th>Bis</Table.Th>
-              <Table.Th />
+              <Table.Th w={160}>Art</Table.Th>
+              <Table.Th w={150}>Von</Table.Th>
+              <Table.Th w={150}>Bis</Table.Th>
+              <Table.Th w={100} />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -472,9 +483,16 @@ function SchoolHolidaysSection({ year }: { year: number }) {
               <Table.Tr key={holiday.id}>
                 <Table.Td>{holiday.name}</Table.Td>
                 <Table.Td>
-                  <Badge color="green" variant={holiday.kind === 'Feiertag' ? 'filled' : 'light'}>
-                    {holiday.kind}
-                  </Badge>
+                  {holiday.kind === 'Betriebsferien' ? (
+                    // Yellow like the Urlaub it gives.
+                    <Badge color="yellow" c="dark" variant="filled">
+                      {holiday.kind}
+                    </Badge>
+                  ) : (
+                    <Badge color="green" variant={holiday.kind === 'Feiertag' ? 'filled' : 'light'}>
+                      {holiday.kind}
+                    </Badge>
+                  )}
                 </Table.Td>
                 <Table.Td>{formatDate(holiday.startDate)}</Table.Td>
                 <Table.Td>{formatDate(holiday.endDate)}</Table.Td>
@@ -506,6 +524,9 @@ function SchoolHolidaysSection({ year }: { year: number }) {
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
+      <Text size="xs" c="dimmed" ta="right" mt={-8}>
+        Schulferien und Feiertage: openholidaysapi.org
+      </Text>
 
       <Paper withBorder p="sm" component="form" onSubmit={add}>
         <Text fw={600} size="sm" mb="xs">
@@ -530,7 +551,7 @@ function SchoolHolidaysSection({ year }: { year: number }) {
             miw={220}
             required
           />
-          <Button type="submit" variant="light" disabled={!range[0] || !range[1]}>
+          <Button type="submit" variant="light" loading={busy} disabled={!range[0] || !range[1]}>
             Hinzufügen
           </Button>
         </Group>

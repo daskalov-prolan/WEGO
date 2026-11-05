@@ -2,7 +2,7 @@ import { ColorSwatch, Group, Select } from '@mantine/core'
 import type { CSSProperties } from 'react'
 import type { Activity, SiteStatus } from '../api/types'
 import { ActivityIcon } from './ActivityIcon'
-import { ACTIVITIES, activityInfo, SITE_STATUSES, textOn } from '../lib/activities'
+import { ACTIVITIES, activityInfo, SITE_STATUSES, textOfActivity } from '../lib/activities'
 import { dragSource } from '../lib/dragPlan'
 
 /** Choice of the activity on the site, each with its colour from the plan. */
@@ -68,7 +68,7 @@ export function PhaseActivities({ phase, draggable = false }: { phase: Phase; dr
             {
               '--entry-bg': activity.tint,
               '--entry-strong': activity.background,
-              '--entry-text': textOn(activity.background),
+              '--entry-text': textOfActivity(activity.value),
             } as CSSProperties
           }
           title={draggable ? `${activity.label} auf einen Tag oder auf einen Einsatz ziehen` : undefined}

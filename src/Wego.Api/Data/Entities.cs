@@ -270,6 +270,18 @@ public class CalendarNote
     public string? Text { get; set; }
 }
 
+/// <summary>
+/// The vacation of a company closure was entered for this craftsman (once: when a planner takes a day of it
+/// back, it does not come again).
+/// </summary>
+public class ClosureVacation
+{
+    public int HolidayId { get; set; }
+    public SchoolHoliday Holiday { get; set; } = null!;
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+}
+
 /// <summary>Berlin school holidays and public holidays (Feiertage), shown in the plan.</summary>
 public class SchoolHoliday
 {

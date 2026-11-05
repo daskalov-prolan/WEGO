@@ -1,4 +1,4 @@
-import { Anchor, Modal, Text } from '@mantine/core'
+import { Button, Modal, Text } from '@mantine/core'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
@@ -54,7 +54,8 @@ export function SitesMap({ points, height = 520, linkToPage = true }: { points: 
         fillColor: colour,
         fillOpacity: 0.95,
       })
-        .bindTooltip(escape(site.name))
+        // Several sites: every name stands next to its dot; one alone is named in the title.
+        .bindTooltip(escape(site.name), points.length > 1 ? { permanent: true, direction: 'right', offset: [8, 0], className: 'map-label' } : {})
         .bindPopup(
           `<strong>${escape(site.name)}</strong>` +
             (address ? `<br>${escape(address)}` : '') +
@@ -72,7 +73,7 @@ export function SitesMap({ points, height = 520, linkToPage = true }: { points: 
 }
 
 /** "Auf Karte anzeigen": the site alone on the map, in a window on top. */
-export function SiteMapLink({ site }: { site: Site }) {
+export function SiteMapLink({ site, size = 'compact-xs' }: { site: Site; size?: string }) {
   const [open, setOpen] = useState(false)
   const [location, setLocation] = useState<SiteMapLocation | null>(null)
   const [error, setError] = useState('')
@@ -85,12 +86,17 @@ export function SiteMapLink({ site }: { site: Site }) {
   if (!site.street) return null
   return (
     <>
-      <Anchor size="sm" component="button" type="button" onClick={() => {
+      <Button
+        size={size}
+        color="wegoRed.6"
+        style={{ alignSelf: 'flex-start' }}
+        onClick={() => {
           setError('')
           setOpen(true)
-        }}>
+        }}
+      >
         Auf Karte anzeigen
-      </Anchor>
+      </Button>
       {open && (
         <Modal opened onClose={() => setOpen(false)} title={site.name} size="xl" centered>
           {error ? (

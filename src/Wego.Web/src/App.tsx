@@ -96,7 +96,7 @@ export default function App() {
   const phase = current === 'angebotsphase' ? 'Angebot' : 'Bauphase'
 
   let content
-  if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} />
+  if (current === 'mein-plan' && user.showInPlan) content = <MyPlanPage year={year} user={user} onYearChange={setYear} />
   else if (page === 'mein-bereich') content = <MyAreaPage user={user} />
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
@@ -129,6 +129,8 @@ export default function App() {
       page={current}
       year={year}
       onYearChange={setYear}
+      // The year in the header only where a page needs it and has no choice of its own.
+      showYear={page === 'baustellen' || page === 'verwaltung' || (page === 'mitarbeiter' && Boolean(selectedId && isAdmin))}
       onLogout={() => api.logout().finally(() => setUser(null))}
     >
       {content}

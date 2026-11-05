@@ -148,6 +148,8 @@ a:hover {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* Room for the scrollbar always, so that nothing moves when a page (or year) is short enough to need none. */
+  scrollbar-gutter: stable;
 }
 
 /* ---------- login ---------- */
@@ -300,6 +302,26 @@ a:hover {
   font-weight: 900;
   line-height: 1;
 }
+/* In the calendar a site is filled with the full colour of its activity, its writing white or dark to suit. */
+.timeline .chip,
+.timeline .cell-compact,
+.mini-cell .chip {
+  border-left-color: var(--entry-fill, var(--entry-strong, #b8c6ca));
+  background: var(--entry-fill, var(--entry-bg, #e9eff1));
+  color: var(--entry-text, #14232a);
+}
+
+.timeline .chip .activity {
+  color: var(--entry-text, var(--entry-color));
+}
+
+.timeline .chip .time,
+.timeline .chip .note:not(.important),
+.timeline .chip .note-mark:not(.important),
+.mini-cell .chip .time {
+  color: var(--entry-text, #3d5054);
+}
+
 .chip.dimmed,
 .dimmed {
   opacity: 0.3;
@@ -567,6 +589,15 @@ a:hover {
 }
 
 /* Room below the last row: it can be scrolled up above the messages at the bottom of the screen. */
+/* The size of the plan: − and + with the per cent between them. */
+.plan-scale-value {
+  min-width: 52px;
+  padding: 0 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .plan-scroll > .timeline {
   margin-bottom: 160px;
 }
@@ -768,7 +799,8 @@ a:hover {
   background: var(--surface-weekend);
 }
 
-/* Notes in a field: the short title on yellow paper, the explanation when pointing at it. */
+/* Notes in a field: the short title on golden yellow with a red edge on the left, so it reads as a note
+   and not as a site; the explanation when pointing at it. */
 .timeline .cell-notes {
   display: block;
 }
@@ -778,10 +810,10 @@ a:hover {
   margin-top: 2px;
   padding: 1px 4px;
   overflow: hidden;
-  border-left: 3px solid #f59f00;
+  border-left: 5px solid #e31b35;
   border-radius: 3px;
-  background: #fff3bf;
-  color: #5c3c00;
+  background: #f2b705;
+  color: #000000;
   font-size: 0.72rem;
   font-weight: 600;
   text-align: left;
@@ -801,12 +833,29 @@ a:hover {
   font-size: 0;
 }
 
-.timeline td.holiday {
-  background: #eef9ef;
-}
+/* School holidays show in the green of the date only; the days below stay as they are. */
 
 .timeline td.public-holiday {
   background: #d3f0d6;
+}
+
+/* Betriebsferien: the whole column lightly green; the vacation in it stays yellow. */
+.timeline .day-row th.closure {
+  background: #2f9e44;
+}
+
+.timeline td.closure {
+  background: #d3f9d8;
+}
+
+/* The names of the sites next to their dots on the map. */
+.leaflet-tooltip.map-label {
+  padding: 1px 5px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .timeline td.today {
@@ -950,6 +999,75 @@ a:hover {
   max-width: 640px;
 }
 
+/* The head of Mein Plan stays on top while the weeks scroll by underneath. */
+.my-plan-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -24px -20px 12px;
+  padding: 16px 20px 12px;
+  background: var(--surface-muted);
+  box-shadow: 0 6px 8px -8px rgba(7, 42, 54, 0.35);
+}
+
+.my-week {
+  margin-bottom: 18px;
+}
+
+.my-week-title {
+  margin: 0 0 6px 2px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+  .my-plan-head {
+    margin: -16px -12px 12px;
+    padding: 12px 12px 10px;
+  }
+}
+
+/* The calendar week (KW) is red wherever it stands. */
+.kw {
+  color: var(--wego-red);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* In the narrow head of a day column it keeps the small size. */
+.mini-week-mark .kw {
+  font-size: inherit;
+}
+
+/* The arrows of the year: one year on or back at once; the number itself opens the list. */
+/* Two halves of the same size, so that a tap on the upper arrow never reaches the lower one. */
+.year-steps {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+}
+
+.year-step {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.year-step:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.year-step:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
 .my-day.today {
   border-color: var(--wego-aqua);
   box-shadow: 0 0 0 1px var(--wego-aqua);
@@ -986,6 +1104,36 @@ a:hover {
 .my-entry .detail {
   font-size: 0.9rem;
   opacity: 0.85;
+}
+
+/* A site in Mein Plan is a button: tapped, its details open. */
+.my-entry-button {
+  position: relative;
+  width: 100%;
+  padding-right: 34px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.my-entry-button:active {
+  transform: scale(0.99);
+}
+
+.my-entry-more {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(-50%);
+  opacity: 0.7;
+}
+
+.my-site-day.current {
+  border-radius: 4px;
+  background: #eef6f8;
 }
 
 .my-entry a {
@@ -1262,6 +1410,7 @@ a:hover {
 .mini-lanes {
   --lane-name: 110px;
   --weekend: 19px;
+  --narrow: 34px;
   --day: max(96px, calc((100cqw - var(--lane-name) - 2 * var(--weekend)) / 5));
   display: grid;
   width: max-content;
@@ -1350,6 +1499,29 @@ a:hover {
   background: #4d7f8c;
   font-size: 0.6rem;
   text-align: center;
+}
+
+/* A working day of no interest for this site: narrow, the date on two short lines. */
+.mini-day-head.narrow {
+  padding: 3px 2px;
+  font-size: 0.6rem;
+  text-align: center;
+  white-space: normal;
+}
+
+.mini-day-head.narrow .mini-week-mark {
+  font-size: 0;
+}
+
+.mini-cell.narrow {
+  padding: 1px;
+}
+
+.mini-cell.narrow .mini-busy,
+.mini-cell.narrow .chip {
+  min-height: 10px;
+  padding: 0;
+  font-size: 0;
 }
 
 .mini-day-head.today {
@@ -1611,11 +1783,6 @@ body.stretching * {
 
 .shell-nav a.nav-angebotsphase[aria-current='page'] {
   background: var(--wego-teal);
-}
-
-.shell-nav a.nav-bauphase[aria-current='page'] {
-  background: var(--wego-red);
-  box-shadow: 0 2px 6px rgba(215, 31, 39, 0.3);
 }
 
 /* Planung: every button of the toolbar in the round form of the menu and of the activities. */
@@ -1902,4 +2069,233 @@ body.stretching * {
   border-radius: 12px;
   box-shadow: var(--shadow);
   z-index: 0;
+}
+
+/* Phone: the corner of the plan opens the choice of the employees. */
+.corner-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.corner-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* The label in the middle of its button, also on a phone. */
+.shell-nav a {
+  justify-content: center;
+}
+
+/* Phone: more of the plan at once. Narrow names on two lines, the day head on two lines, smaller entries. */
+@container (max-width: 480px) {
+  .timeline {
+    --name-col: 74px;
+    --month-row: 22px;
+    --day-w: max(40px, calc((100cqw - var(--name-col)) / 7));
+  }
+
+  .timeline th.corner {
+    padding: 4px 5px;
+    font-size: 0.68rem;
+  }
+
+  .timeline th.employee {
+    padding: 3px 3px 3px 6px;
+    font-size: 0.66rem;
+    line-height: 1.15;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .timeline .month-row th {
+    font-size: 0.8rem;
+  }
+
+  .timeline .day-row th {
+    padding: 2px 1px;
+  }
+
+  .timeline.zoom-week .day-row .wd,
+  .timeline.zoom-week .day-row .num {
+    display: block;
+  }
+
+  .timeline .day-row .wd {
+    font-size: 0.6rem;
+  }
+
+  .timeline .day-row .num {
+    font-size: 0.72rem;
+  }
+
+  .timeline .cell {
+    min-height: 32px;
+  }
+
+  .timeline.zoom-week .cell {
+    padding: 1px;
+  }
+
+  .timeline.zoom-week .chip {
+    padding: 1px 2px;
+    font-size: 0.64rem;
+  }
+}
+
+/* Urlaub and Krank: one colour, without the stripe at the left. */
+.timeline .chip-urlaub,
+.timeline .chip-krank,
+.timeline .compact-urlaub,
+.timeline .compact-krank,
+.mini-cell .chip-urlaub,
+.mini-cell .chip-krank {
+  border-left-color: var(--entry-bg);
+}
+
+/* Phone: the working days named as small as Sa and So. */
+@container (max-width: 480px) {
+  .timeline.zoom-week .day-row .wd {
+    font-size: 0.6rem;
+  }
+}
+
+/* Nach Mitarbeiter: first names only, so the column on the left is narrower and more days fit. */
+.timeline.by-employee {
+  --name-col: 92px;
+}
+
+@container (max-width: 760px) {
+  .timeline.by-employee {
+    --name-col: 66px;
+  }
+}
+
+@container (max-width: 480px) {
+  .timeline.by-employee {
+    --name-col: 54px;
+  }
+}
+
+/* Phone: week by week. Monday to Friday fill the width, Saturday and Sunday narrow strips; the plan always
+   comes to rest on a Monday, so that no entry is cut off at the left. */
+@container (max-width: 480px) {
+  .timeline.fold-weekends {
+    --weekend-w: 12px;
+  }
+
+  .timeline.zoom-week {
+    --day-w: calc((100cqw - var(--name-col) - 2 * var(--weekend-w)) / 5);
+  }
+
+  .timeline.fold-weekends .day-row th.weekend {
+    font-size: 0.5rem;
+  }
+
+  .timeline .day-row th.week-start {
+    scroll-snap-align: start;
+    scroll-margin-left: var(--name-col);
+  }
+
+  .timeline th.employee {
+    padding-left: 4px;
+  }
+}
+
+/* Only a finger comes to rest on a Monday; the arrows go there themselves. */
+@media (max-width: 600px) and (pointer: coarse) {
+  .plan-scroll {
+    scroll-snap-type: x proximity;
+  }
+}
+
+/* Mein Bereich: as on a phone, also on the desktop. */
+.my-area {
+  max-width: 640px;
+}
+
+/* Bauphase | Erledigt as a slider: a sunk track, the coloured part lifted, with a white knob on the side it slides to. */
+.status-slider {
+  padding: 3px;
+  background: #d3dbdf;
+  box-shadow: inset 0 1px 3px rgba(7, 42, 54, 0.35);
+}
+
+.status-slider .mantine-SegmentedControl-indicator {
+  box-shadow: 0 1px 4px rgba(7, 42, 54, 0.45);
+}
+
+.status-slider .mantine-SegmentedControl-indicator::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transform: translateY(-50%);
+}
+
+.status-slider.done .mantine-SegmentedControl-indicator::after {
+  right: auto;
+  left: 4px;
+}
+
+.status-slider .mantine-SegmentedControl-control {
+  cursor: pointer;
+}
+
+/* A note looks like a slip of paper, not like a yellow site: pale paper, a dashed edge, slanted writing,
+   a pencil in front and a folded corner. */
+.timeline .cell-note {
+  position: relative;
+  padding: 1px 10px 1px 4px;
+  border: 1px dashed #e31b35;
+  border-radius: 2px;
+  background:
+    linear-gradient(225deg, #e31b35 0 5px, transparent 5px) top right / 8px 8px no-repeat,
+    linear-gradient(225deg, transparent 7px, #fff4bf 7px);
+  color: #4a3b00;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.timeline .cell-note::before {
+  content: '✎ ';
+  font-style: normal;
+}
+
+.timeline.fold-weekends td.weekend .cell-note {
+  border: 0;
+  background: #f2b705;
+}
+
+.timeline.fold-weekends td.weekend .cell-note::before {
+  content: none;
+}
+
+/* Phone: the site names keep their distance from the coloured stripe at the left. */
+@container (max-width: 480px) {
+  .timeline th.employee.site-head {
+    padding-left: 9px;
+  }
+}
+
+/* Mein Plan: the date of a day with its holiday on one line. */
+.my-day-head {
+  min-width: 0;
+}
+
+.my-day-date {
+  flex: none;
+  font-size: 0.95rem;
+  white-space: nowrap;
 }

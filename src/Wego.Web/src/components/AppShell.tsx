@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Menu, NativeSelect, PasswordInput, Stack, Text, UnstyledButton } from '@mantine/core'
+import { Alert, Button, Group, Menu, PasswordInput, Stack, Text, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
@@ -7,12 +7,15 @@ import logo from '../assets/logo.svg'
 import { CURRENT_YEAR } from '../lib/dates'
 import { canPlanRole, roleLabel } from '../lib/roles'
 import { Sheet } from './Sheet'
+import { YearPicker } from './YearPicker'
 
 interface Props {
   user: User
   page: string
   year: number
   onYearChange: (year: number) => void
+  /** false: the page chooses its year itself, or needs none. */
+  showYear?: boolean
   onLogout: () => void
   children: ReactNode
 }
@@ -21,14 +24,14 @@ interface Props {
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
   { page: 'angebotsphase', label: 'Planung Angebotsphase', visible: (user: User) => user.seesOffers !== false },
-  { page: 'bauphase', label: 'Planung Bauphase', visible: () => true },
+  { page: 'bauphase', label: 'Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
   { page: 'verwaltung', label: 'Verwaltung', visible: (user: User) => user.role === 'PlanerG', right: true },
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
-export function AppShell({ user, page, year, onYearChange, onLogout, children }: Props) {
+export function AppShell({ user, page, year, onYearChange, onLogout, showYear = true, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
   // A year paged to in the plan beyond these is offered as well.
   const years = [...new Set([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year])].sort((a, b) => a - b).map(String)
@@ -39,14 +42,10 @@ export function AppShell({ user, page, year, onYearChange, onLogout, children }:
         <img src={logo} alt="WEGO Badcenter" />
         <span className="shell-title">Personaleinsatzplanung</span>
         <Group gap="xs" ml="auto" wrap="nowrap">
-          <NativeSelect
-            aria-label="Jahr"
-            size="xs"
-            value={String(year)}
-            onChange={(e) => onYearChange(Number(e.currentTarget.value))}
-            data={years}
-            className="year-select"
-          />
+          {/* Pages with a year of their own (Mein Plan, Planung, Mein Bereich) or none (the list of employees) do without. */}
+          {showYear && (
+            <YearPicker year={year} years={years.map(Number)} onChange={onYearChange} size="xs" w={92} className="year-select" />
+          )}
           <Menu position="bottom-end" withinPortal>
             <Menu.Target>
               <UnstyledButton className="user-button" aria-label="Benutzermenü">
