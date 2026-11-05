@@ -14,24 +14,14 @@ const wego: MantineColorsTuple = [
   '#08394a',
 ]
 
-// The red of the WEGO logo (#d71f27 is shade 6), for accents.
-const wegoRed: MantineColorsTuple = [
-  '#fdebec',
-  '#f9d0d2',
-  '#f2a3a7',
-  '#ea7379',
-  '#e34b52',
-  '#df333b',
-  '#d71f27',
-  '#bd1920',
-  '#a3141a',
-  '#880f14',
-]
+// The signal red of the WEGO logo, the one red of the whole app: every shade is the same, so that no other red
+// appears (also where Mantine's own red is asked for).
+const wegoRed: MantineColorsTuple = Array(10).fill('#d71f27') as unknown as MantineColorsTuple
 
 export const theme = createTheme({
   primaryColor: 'wego',
   primaryShade: 7,
-  colors: { wego, wegoRed },
+  colors: { wego, wegoRed, red: wegoRed },
   fontFamily: "'europa', 'Segoe UI', system-ui, sans-serif",
   headings: { fontFamily: "'europa', 'Segoe UI', system-ui, sans-serif" },
   defaultRadius: 'md',

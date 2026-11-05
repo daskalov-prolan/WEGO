@@ -53,11 +53,13 @@ export interface MatrixProps {
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged. */
-  onStretchStart?: (entry: Entry, side: 'left' | 'right', event: PointerEvent) => void
+  onStretchStart?: (entry: Entry, side: 'left' | 'right' | 'down', event: PointerEvent) => void
   /** Planners: a right click on a cell opens a menu (copy, cut, paste) at the pointer. */
   onCellMenu?: (employee: PlanEmployee, date: string, at: { x: number; y: number; entryId?: number }) => void
   /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
   corner?: ReactNode
+  /** A reserved day of an offer site: framed in black on white. */
+  isReserved?: (entry: Entry) => boolean
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -321,6 +323,7 @@ function Compact({
   dimmed,
   onTextClick,
   draggable = false,
+  reserved = false,
 }: {
   entries: Entry[]
   text: string
@@ -328,11 +331,13 @@ function Compact({
   onTextClick?: (event: MouseEvent) => void
   /** Dragging the short form moves its first entry. */
   draggable?: boolean
+  /** The first entry is a reserved day (framed in black on white). */
+  reserved?: boolean
 }) {
   const first = entries[0]
   return (
     <span
-      className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : '', draggable ? 'drag-source' : ''].join(' ')}
+      className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : '', draggable ? 'drag-source' : '', reserved ? 'reserved' : ''].join(' ')}
       style={entryStyle(first)}
       {...dragSource({ kind: 'entry', entry: first }, draggable)}
     >
@@ -430,6 +435,7 @@ export function TimelineMatrix(props: MatrixProps) {
                           key={entry.id}
                           entry={entry}
                           dimmed={isDimmed(entry)}
+                          reserved={props.isReserved?.(entry)}
                           // Marking takes the click; the site opens from the right-click menu then.
                           onSiteClick={props.onMark ? undefined : openSite}
                           draggable={draggable}
@@ -440,6 +446,8 @@ export function TimelineMatrix(props: MatrixProps) {
                               ? {
                                   left: props.marked.first === entry.id,
                                   right: props.marked.last === entry.id,
+                                  // Its last entry also takes the stretch down to the employees below.
+                                  down: props.marked.last === entry.id,
                                   onStart: (side, event) => props.onStretchStart!(entry, side, event),
                                 }
                               : undefined
@@ -453,6 +461,7 @@ export function TimelineMatrix(props: MatrixProps) {
                         entries={entries}
                         text={entryName(first)}
                         dimmed={entries.every(isDimmed)}
+                        reserved={props.isReserved?.(first)}
                         onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
                         draggable={draggable}
                       />
@@ -493,6 +502,8 @@ export interface SiteRow {
 interface SiteTimelineProps {
   /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
   corner?: ReactNode
+  /** A reserved day of an offer site: framed in black on white. */
+  isReserved?: (entry: Entry) => boolean
   days: Day[]
   rows: SiteRow[]
   holidayByDate: Map<string, SchoolHoliday>
@@ -513,7 +524,7 @@ interface SiteTimelineProps {
   /** Planners: a click on an employee in a cell marks the entry; a click elsewhere in the cell opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged, to the following days or back. */
-  onStretchStart?: (entry: Entry, side: 'left' | 'right', event: PointerEvent) => void
+  onStretchStart?: (entry: Entry, side: 'left' | 'right' | 'down', event: PointerEvent) => void
 }
 
 /**
@@ -581,6 +592,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                         key={entry.id}
                         entry={entry}
                         label={nameOf(entry)}
+                        reserved={props.isReserved?.(entry)}
                         draggable={draggable}
                         drop={props.dropOnEntry?.(entry)}
                         marked={marked?.ids.has(entry.id)}
@@ -597,7 +609,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                     ))}
                   </span>
                   {entries.length > 0 && (
-                    <Compact entries={entries} text={nameOf(entries[0])} dimmed={false} draggable={draggable} />
+                    <Compact entries={entries} text={nameOf(entries[0])} dimmed={false} draggable={draggable} reserved={props.isReserved?.(entries[0])} />
                   )}
                 </button>
               </td>

@@ -24,6 +24,8 @@ import { SiteCosting } from '../components/SiteCosting'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { formatDate, formatTimeRange } from '../lib/dates'
 import { toSiteInput } from '../lib/sites'
+import { StandardFlowDialog } from '../components/StandardFlowDialog'
+import { handOverUndo } from '../lib/undoHandoff'
 
 interface Props {
   /** The year chosen above; the page itself counts over the whole time of the site. */
@@ -36,6 +38,9 @@ interface Props {
 /** Planner-only: the record of one construction site, and who worked there how many days. */
 export function SitePage({ siteId, canSeeEmployees = false }: Props) {
   const [sites, setSites] = useState<Site[]>([])
+  // A Baubeginn just entered: asked whether the standard flow goes into the plan; drawn anew after it.
+  const [flowSite, setFlowSite] = useState<Site | null>(null)
+  const [planVersion, setPlanVersion] = useState(0)
   const [report, setReport] = useState<SiteReport | null>(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
@@ -122,6 +127,12 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
               <Button size="compact-sm" variant="light" onClick={() => setEditing(true)}>
                 Bearbeiten
               </Button>
+              {/* The standard flow also later, e.g. when the Baubeginn was entered without the question. */}
+              {site.plannedStart && (
+                <Button size="compact-sm" color="wegoRed" onClick={() => setFlowSite(site)}>
+                  Standardablauf
+                </Button>
+              )}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target>
                   <ActionIcon variant="subtle" color="gray" aria-label="Weitere Aktionen">
@@ -195,12 +206,25 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
             setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))
             setEditing(false)
             notifications.show({ message: 'Baustelle gespeichert.', color: 'green' })
+            if (saved.plannedStart && !site.plannedStart) setFlowSite(saved)
           }}
         />
       )}
 
       {site && (
-        <SiteMiniPlan site={site} canEdit />
+        <SiteMiniPlan key={planVersion} site={site} canEdit />
+      )}
+
+      {flowSite && (
+        <StandardFlowDialog
+          site={flowSite}
+          onClose={() => setFlowSite(null)}
+          onEntered={(step) => {
+            // Taken back with the undo arrow of the plan.
+            handOverUndo(step)
+            setPlanVersion((version) => version + 1)
+          }}
+        />
       )}
 
       {current && (

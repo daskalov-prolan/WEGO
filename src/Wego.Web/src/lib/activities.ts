@@ -26,7 +26,7 @@ const TUNED: Record<string, { tint: string; edge: string }> = {
   // for Abriss.
   '#3aa6c0': { tint: '#cdeaf1', edge: '#1f7f96' },
   '#0f6378': { tint: '#cfe3e8', edge: '#08394a' },
-  '#d71f27': { tint: '#f8d2d4', edge: '#a3141a' },
+  '#d71f27': { tint: '#f8d2d4', edge: '#d71f27' },
   '#f46a6a': { tint: '#fdd9d9', edge: '#d32f2f' },
   '#ffc000': { tint: '#ffeeb8', edge: '#e0a200' },
   '#7db4f2': { tint: '#d9e8fb', edge: '#1e6fd9' },
@@ -70,7 +70,7 @@ export let ACTIVITIES: ActivityInfo[] = (
     ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
     ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
     ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#e8590c'],
-    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#e31b35'],
+    ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
     ['Trockenbau', 'Trockenbau', 'Bauphase', '#d6c7bc'],
     ['Sanitaer', 'Sanitär', 'Bauphase', '#2a9cad'],
     ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#ff9f50'],
@@ -90,7 +90,7 @@ export function setActivities(defs: ActivityDef[]) {
 /** color: Mantine colour of the badges; hex: the same colour for the process diagram of the legend. */
 export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; hex: string }[] = [
   { value: 'Angebot', label: 'Angebotsphase', color: 'cyan', hex: '#1098ad' },
-  { value: 'Bauphase', label: 'Bauphase', color: 'wegoRed', hex: '#e31b35' },
+  { value: 'Bauphase', label: 'Bauphase', color: 'wegoRed', hex: '#d71f27' },
   { value: 'Abgeschlossen', label: 'Erledigt', color: 'green', hex: '#2f9e44' },
   // Grey: the red is the Bauphase's.
   { value: 'Storniert', label: 'Storniert', color: 'gray', hex: '#868e96' },
@@ -181,6 +181,17 @@ export function entryStyle(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pic
     '--entry-color': edge,
     ...(filled ? { '--entry-fill': background, '--entry-text': textOfActivity(entry.activity) } : {}),
   } as CSSProperties
+}
+
+/**
+ * A day reserved for a site still in the offer phase and without Baubeginn: no activity (and so no colour) yet.
+ * Shown framed in black on white; once the Baubeginn is entered, activities colour it.
+ */
+export function isReservation(
+  entry: Pick<Entry, 'type' | 'activity'>,
+  site: { status: string; plannedStart: string | null } | undefined,
+): boolean {
+  return entry.type === 'Baustelle' && !entry.activity && site?.status === 'Angebot' && !site.plannedStart
 }
 
 /** Tooltip text: customer and activity, or Urlaub / Krank. */

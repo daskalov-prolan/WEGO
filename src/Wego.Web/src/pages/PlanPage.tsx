@@ -17,6 +17,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
+import { StandardFlowDialog } from '../components/StandardFlowDialog'
+import { forgetHandedUndo, handedUndo } from '../lib/undoHandoff'
 import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
@@ -33,6 +35,7 @@ import {
   textOn,
   isFree,
   isOpen,
+  isReservation,
   worksInPhase,
 } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
@@ -104,6 +107,8 @@ function loadPerspective(): Perspective {
 /** Whether an entry is work of this phase: by its activity, or (without one) by the status of its site. */
 function inPhase(entry: Entry, site: Site | undefined, phase: Phase) {
   if (entry.activity) return ACTIVITIES.find((activity) => activity.value === entry.activity)?.phase === phase
+  // A day without activity on an offer site is reserved for its construction: it belongs to the Bauphase.
+  if (entry.type === 'Baustelle' && site?.status === 'Angebot') return phase === 'Bauphase'
   // Done and cancelled sites were built (or would have been): their entries without an activity count there.
   const status = site?.status
   return status === phase || (phase === 'Bauphase' && status !== undefined && !isOpen(status))
@@ -230,7 +235,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const [marked, setMarked] = useState<number | null>(null)
   const startStretch = useStretch()
   // The changes made since the plan was opened: taken back (undo) and done again (redo), newest last.
-  const [history, setHistory] = useState<{ undo: Step[]; redo: Step[] }>({ undo: [], redo: [] })
+  // A change made elsewhere (the standard flow entered on the page of a site) can be taken back here, too.
+  const [history, setHistory] = useState<{ undo: Step[]; redo: Step[] }>(() => {
+    const handed = handedUndo()
+    return { undo: handed ? [handed] : [], redo: [] }
+  })
+  useEffect(forgetHandedUndo, [])
+  // A Baubeginn just entered: asked whether the standard flow goes into the plan.
+  const [flowSite, setFlowSite] = useState<Site | null>(null)
   const [busy, setBusy] = useState(false)
   // The menu of a right click on a cell.
   // The menu of a right click on a cell of an employee or of a site; `entryId`: the click was on one entry.
@@ -335,8 +347,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     for (const site of plan.sites) {
       // The construction phase shows the done sites as well; cancelled ones nowhere.
       if (site.status !== phase && !(phase === 'Bauphase' && site.status === 'Abgeschlossen')) continue
-      // On a phone only the sites still in their phase, not the done ones.
-      if (isPhone && site.status !== phase) continue
+      // On a phone the done sites stay out.
+      if (isPhone && site.status === 'Abgeschlossen') continue
       const plannedThisYear =
         site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
       // Planned for this year, or with activities still to plan (sites without dates go last).
@@ -348,7 +360,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
       if (!site || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
-      if (isPhone && site.status !== phase) continue
+      if (isPhone && site.status === 'Abgeschlossen') continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date, openTasks: openTasksBySite.get(site.id) ?? [] }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
@@ -544,6 +556,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
   // Work of the other phase stays visible, but pale: the day is not free.
   // "verfügbar" belongs to every phase: always in full colour.
+  const siteOf = (entry: Entry) => (entry.siteId === null ? undefined : siteById.get(entry.siteId))
+  // Reserved days of offer sites without Baubeginn: framed in black on white.
+  const isReserved = (entry: Entry) => phase === 'Bauphase' && isReservation(entry, siteOf(entry))
   const isDimmed = (entry: Entry) =>
     entry.type === 'Baustelle' && !isFree(entry) && !inPhase(entry, entry.siteId === null ? undefined : siteById.get(entry.siteId), phase)
   const employees = phaseEmployees.filter((employee) => !hidden.includes(employee.id))
@@ -710,21 +725,34 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const markedStretch = markedEntry ? stretchOf(markedEntry) : undefined
 
   /**
+   * The entry copied into a day of an employee: what is there at the same time is overwritten (a whole day
+   * overwrites all sites of the day, half a day the same half), the rest stays. A day with Urlaub or Krank, or
+   * with this very entry already, is left as it is (null).
+   */
+  const fillDay = (entry: Entry, employeeId: number, iso: string): DayEntryInput[] | null => {
+    const there = entriesOf(employeeId, iso)
+    if (there.some((other) => other.type !== 'Baustelle')) return null
+    if (there.some((other) => other.siteId === entry.siteId && other.activity === entry.activity && other.startTime === entry.startTime)) return null
+    const span = (e: { startTime: string | null; endTime: string | null }) => [e.startTime ?? '00:00', e.endTime ?? '24:00']
+    const [start, end] = span(entry)
+    const kept = there.filter((other) => {
+      const [otherStart, otherEnd] = span(other)
+      return !(start < otherEnd && otherStart < end)
+    })
+    return [...kept.map(toInput), onDay({ ...toInput(entry), note: null, noteImportant: false }, kept)]
+  }
+
+  /**
    * A stretch dragged to new first and last days: working days that come in get the same site, activity and
-   * time (not the note); days that drop out lose the entry. A day at that site already stays as it is.
+   * time (not the note), overwriting what is there at that time (see fillDay); days that drop out lose the entry.
    */
   const restretch = async (entry: Entry, from: string, to: string) => {
     const current = stretchOf(entry)
     const changes: DayChange[] = []
     for (let iso = from; iso <= to; iso = addDays(iso, 1)) {
       if ((iso >= current.from && iso <= current.to) || !isWorkday(iso)) continue
-      const there = entriesOf(entry.employeeId, iso)
-      if (there.some((other) => other.type === entry.type && other.siteId === entry.siteId && (entry.siteId !== null || other.activity === entry.activity))) continue
-      changes.push({
-        employeeId: entry.employeeId,
-        date: iso,
-        entries: [...there.map(toInput), onDay({ ...toInput(entry), note: null, noteImportant: false }, there)],
-      })
+      const entries = fillDay(entry, entry.employeeId, iso)
+      if (entries) changes.push({ employeeId: entry.employeeId, date: iso, entries })
     }
     for (let iso = current.from; iso <= current.to; iso = addDays(iso, 1)) {
       if (iso >= from && iso <= to) continue
@@ -737,6 +765,25 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     if (marked !== null && !(entry.date >= from && entry.date <= to)) setMarked(null)
     const name = entryName(entry)
     await save(changes, `${name}: ${formatDate(from)} bis ${formatDate(to)}.`)
+  }
+
+  /**
+   * The marked stretch dragged down (or up) over other employees: the same days, site, activity and time for
+   * them, overwriting what they have at that time (see fillDay).
+   */
+  const fillDown = async (entry: Entry, rows: string[]) => {
+    const current = stretchOf(entry)
+    const employeeIds = rows.map((row) => Number(row.slice(1)))
+    const changes: DayChange[] = []
+    for (const employeeId of employeeIds)
+      for (let iso = current.from; iso <= current.to; iso = addDays(iso, 1)) {
+        if (!entriesOf(entry.employeeId, iso).some((other) => current.ids.has(other.id))) continue
+        const entries = fillDay(entry, employeeId, iso)
+        if (entries) changes.push({ employeeId, date: iso, entries })
+      }
+    if (changes.length === 0) return
+    const people = employeeIds.length === 1 ? (everyone.find((e) => e.id === employeeIds[0])?.name ?? '1 Mitarbeiter') : `${employeeIds.length} Mitarbeiter`
+    await save(changes, `${entryName(entry)}: übernommen für ${people}.`)
   }
 
   /** Adds the clipboard to these cells (see pasteChanges); cut entries leave their day in the same step. */
@@ -798,15 +845,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   /** Dragging an end of the marked stretch along its row: the employee's row ('e') or the site's row ('s'). */
   const onStretchStart = (rows: 'e' | 's') =>
     canEdit && markedStretch
-      ? (entry: Entry, side: 'left' | 'right', event: PointerEvent) =>
+      ? (entry: Entry, side: 'left' | 'right' | 'down', event: PointerEvent) =>
           startStretch(
             {
               row: rows === 'e' ? `e${entry.employeeId}` : `s${entry.siteId}`,
               from: markedStretch.from,
               to: markedStretch.to,
               side,
-              done: (from, to) => {
-                restretch(entry, from, to).catch(fail)
+              done: (from, to, others) => {
+                ;(side === 'down' ? fillDown(entry, others) : restretch(entry, from, to)).catch(fail)
               },
             },
             event,
@@ -924,13 +971,24 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         if (item.kind === 'entry')
           return item.entry.id !== entry.id && item.entry.employeeId === entry.employeeId && item.entry.date === entry.date
         if (item.kind !== 'activity' || entry.type !== 'Baustelle' || item.activity === entry.activity) return false
+        // A reserved day takes the activity only to say that the Baubeginn comes first.
+        if (isReserved(entry)) return true
         const employee = everyone.find((candidate) => candidate.id === entry.employeeId)
         const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
-        return employee !== undefined && canDo(employee, item.activity, site && isOpen(site.status) ? site.status : undefined)
+        // An offer site with its Baubeginn entered is planned as a construction already.
+        const status = site && isOpen(site.status) ? (site.status === 'Angebot' && site.plannedStart && phase === 'Bauphase' ? 'Bauphase' : site.status) : undefined
+        return employee !== undefined && canDo(employee, item.activity, status)
       },
       (item: DragItem) => {
         if (item.kind === 'entry') return swapEntries(item.entry, entry)
         if (item.kind !== 'activity') return
+        if (isReserved(entry)) {
+          notifications.show({
+            color: 'orange',
+            message: `${entry.siteName}: erst den Baubeginn eintragen, dann bekommt die Baustelle ihre Tätigkeiten.`,
+          })
+          return
+        }
         const entries = entriesOf(entry.employeeId, entry.date).map((other) =>
           other.id === entry.id ? { ...toInput(other), activity: item.activity } : toInput(other),
         )
@@ -944,6 +1002,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const createSite = async (input: SiteInput) => {
     const site = await api.createSite(input)
+    // A new site with its Baubeginn (e.g. Abriss dragged in): asked about the standard flow once the day is saved.
+    if (canEdit && site.plannedStart) setFlowSite(site)
     setPlan((current) =>
       current && { ...current, sites: [...current.sites, site].sort((a, b) => a.name.localeCompare(b.name, 'de')) },
     )
@@ -952,7 +1012,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   /** Saves a site and shows its new name in all cells at once. */
   const updateSite = async (id: number, input: SiteInput) => {
+    const before = siteById.get(id)
     const site = await api.updateSite(id, input)
+    if (canEdit && site.plannedStart && !before?.plannedStart) setFlowSite(site)
     setPlan(
       (current) =>
         current && {
@@ -1289,12 +1351,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('e')}
             corner={corner}
+            isReserved={isReserved}
             {...shared}
             {...noteProps}
           />
         ) : (
           <SiteTimeline
             corner={corner}
+            isReserved={isReserved}
             days={yearDays}
             rows={siteRows}
             holidayByDate={holidayByDate}
@@ -1401,6 +1465,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             addActivity={open.addActivity}
             addHalf={open.addHalf}
             fillFree={open.fillFree}
+            phase={phase}
             entries={entriesOf(open.employee.id, open.date)}
             sites={plan.sites}
             onCreateSite={createSite}
@@ -1566,6 +1631,17 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             )
           }}
         />
-      )}    </div>
+      )}
+      {flowSite && !open && (
+        <StandardFlowDialog
+          site={flowSite}
+          onClose={() => setFlowSite(null)}
+          onEntered={(step, saved) => {
+            merge(step.after, saved)
+            setHistory((current) => ({ undo: [...current.undo, step], redo: [] }))
+          }}
+        />
+      )}
+    </div>
   )
 }

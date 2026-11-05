@@ -278,7 +278,7 @@ a:hover {
 }
 
 .important-mark {
-  color: #d71f27;
+  color: var(--wego-red);
   font-weight: 900;
 }
 
@@ -296,7 +296,7 @@ a:hover {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #d71f27;
+  background: var(--wego-red);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 900;
@@ -810,7 +810,7 @@ a:hover {
   margin-top: 2px;
   padding: 1px 4px;
   overflow: hidden;
-  border-left: 5px solid #e31b35;
+  border-left: 5px solid var(--wego-red);
   border-radius: 3px;
   background: #f2b705;
   color: #000000;
@@ -2258,10 +2258,10 @@ body.stretching * {
 .timeline .cell-note {
   position: relative;
   padding: 1px 10px 1px 4px;
-  border: 1px dashed #e31b35;
+  border: 1px dashed var(--wego-red);
   border-radius: 2px;
   background:
-    linear-gradient(225deg, #e31b35 0 5px, transparent 5px) top right / 8px 8px no-repeat,
+    linear-gradient(225deg, var(--wego-red) 0 5px, transparent 5px) top right / 8px 8px no-repeat,
     linear-gradient(225deg, transparent 7px, #fff4bf 7px);
   color: #4a3b00;
   font-style: italic;
@@ -2298,4 +2298,85 @@ body.stretching * {
   flex: none;
   font-size: 0.95rem;
   white-space: nowrap;
+}
+
+/* A reserved day of an offer site (no Baubeginn yet): framed in black on white, black writing. */
+.timeline .chip.reserved,
+.timeline .cell-compact.reserved,
+.mini-cell .chip.reserved {
+  border: 1.5px solid #000;
+  background: #fff;
+  color: #000;
+}
+
+/* Mein Bereich in the colours of WEGO: a red stroke under the title, turquoise headings and figures,
+   the days still free on turquoise, the days used in red. */
+.my-area-title::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--wego-red);
+}
+
+.my-area-heading {
+  padding-left: 10px;
+  border-left: 4px solid var(--wego-aqua);
+  color: var(--wego-teal);
+}
+
+.my-area-stats .stat {
+  border-top: 4px solid var(--wego-aqua);
+}
+
+.my-area-stats .stat:nth-child(1) .mantine-Text-root:first-child {
+  color: var(--wego-aqua) !important;
+}
+
+.my-area-stats .stat:nth-child(2) {
+  border-top-color: var(--wego-red);
+}
+
+.my-area-stats .stat:nth-child(2) .mantine-Text-root:first-child {
+  color: var(--wego-red) !important;
+}
+
+.my-area-stats .stat:nth-child(3) {
+  border-color: var(--wego-teal);
+  background: linear-gradient(135deg, var(--wego-teal), var(--wego-aqua));
+}
+
+.my-area-stats .stat:nth-child(3) .mantine-Text-root {
+  color: #fff !important;
+}
+
+.my-area-table thead th {
+  background: var(--wego-teal);
+  color: #fff;
+}
+
+.my-area-table tbody td:last-child {
+  color: var(--wego-red);
+}
+
+/* The lower edge of the marked entry: dragged down, the stretch goes to the employees below. */
+.stretch-handle.down {
+  top: auto;
+  right: 10px;
+  bottom: -4px;
+  left: 10px;
+  width: auto;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.stretch-handle.down::after {
+  top: 3px;
+  bottom: auto;
+  left: 50%;
+  width: 18px;
+  height: 2px;
+  transform: translateX(-50%);
 }

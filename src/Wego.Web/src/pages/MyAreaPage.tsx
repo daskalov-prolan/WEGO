@@ -3,6 +3,7 @@ import { YearPicker } from '../components/YearPicker'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { MyVacation, User } from '../api/types'
+import { ActivityIcon } from '../components/ActivityIcon'
 import { Stat } from '../components/Stat'
 import { CURRENT_YEAR, formatDate, todayIso } from '../lib/dates'
 
@@ -39,15 +40,18 @@ export function MyAreaPage({ user }: { user: User }) {
   return (
     // The same on the desktop as on a phone: one narrow column.
     <div className="page my-area">
-      <Title order={2} mb={4}>
+      {/* In the colours of WEGO: the red under the title, the turquoise for the vacation. */}
+      <Title order={2} mb={4} className="my-area-title">
         Mein Bereich
       </Title>
       <Text c="dimmed" mb="md">
         {user.name}
       </Text>
 
-      <Group justify="space-between" align="flex-end" mb="sm">
-        <Title order={3}>Mein Urlaub</Title>
+      <Group justify="space-between" align="center" mb="sm">
+        <Title order={3} className="my-area-heading">
+          <ActivityIcon type="Urlaub" size={20} /> Mein Urlaub
+        </Title>
         <YearPicker year={year} years={years} onChange={setYear} />
       </Group>
 
@@ -59,20 +63,20 @@ export function MyAreaPage({ user }: { user: User }) {
 
       {vacation && (
         <>
-          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="lg">
+          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="lg" className="my-area-stats">
             <Stat value={vacation.entitlement} label={`Urlaubstage ${vacation.year}`} />
             <Stat value={days(vacation.used)} label={`verbraucht bzw. eingeplant (davon ${days(vacation.taken)} schon genommen)`} />
             <Stat value={days(vacation.remaining)} label="noch verfügbar" negative={vacation.remaining < 0} />
           </SimpleGrid>
 
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="my-area-heading">
             Wann
           </Title>
           {vacation.blocks.length === 0 ? (
             <Text c="dimmed">Für {vacation.year} ist noch kein Urlaub eingetragen.</Text>
           ) : (
             // All in view on a phone, too: the state stands under the dates, the days at the right.
-            <Table striped withTableBorder verticalSpacing="xs">
+            <Table striped withTableBorder verticalSpacing="xs" className="my-area-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Zeitraum</Table.Th>
@@ -91,7 +95,7 @@ export function MyAreaPage({ user }: { user: User }) {
                           genommen
                         </Badge>
                       ) : block.from <= today ? (
-                        <Badge color="orange" variant="light" ml={6}>
+                        <Badge color="wegoRed" variant="filled" ml={6}>
                           läuft
                         </Badge>
                       ) : null /* What is still to come needs no word. */}
