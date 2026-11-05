@@ -10,6 +10,7 @@ import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
 import { useIsPhone } from '../lib/useIsPhone'
+import { StandardFlowDialog } from '../components/StandardFlowDialog'
 
 /** The telephone number of the customer as a link that dials it, without opening the site. */
 function PhoneLink({ phone }: { phone: string }) {
@@ -68,6 +69,8 @@ function compare(a: Site, b: Site, key: SortKey): number {
  */
 export function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
+  // A new site with its Baubeginn: asked whether the standard flow goes into the plan.
+  const [flowSite, setFlowSite] = useState<Site | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: 'plannedStart', descending: false })
@@ -365,9 +368,12 @@ export function SitesPage() {
             setSites((current) => [...current, site])
             setCreating(false)
             notifications.show({ message: `Baustelle „${site.name}“ angelegt.`, color: 'green' })
+            if (site.plannedStart) setFlowSite(site)
           }}
         />
       )}
+
+      {flowSite && <StandardFlowDialog site={flowSite} onClose={() => setFlowSite(null)} />}
     </div>
   )
 }

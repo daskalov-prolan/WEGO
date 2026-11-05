@@ -14,7 +14,8 @@ const ACTION: Record<SiteStatus, string> = {
 export function StatusBadge({ status }: { status: SiteStatus }) {
   const info = SITE_STATUSES.find((candidate) => candidate.value === status)!
   return (
-    <Badge color={info.color} variant="light">
+    // Bauphase in the full signal red of the logo, the others light.
+    <Badge color={info.color} variant={status === 'Bauphase' ? 'filled' : 'light'}>
       {info.label}
     </Badge>
   )

@@ -42,6 +42,8 @@ interface Props {
   addHalf?: { start: string; end: string }
   /** "verfügbar" clicked: the rows kept free get a site to choose, in the same time. */
   fillFree?: boolean
+  /** The plan the day is edited in: in the Bauphase an offer site is reserved (no activity) until its Baubeginn. */
+  phase?: 'Angebot' | 'Bauphase'
 }
 
 interface Row {
@@ -87,8 +89,16 @@ export function DayEditor(props: Props) {
   // The activities offered follow the status of an open site. On a done or cancelled site (entries from
   // before it was closed) the employee's own activities are offered, whatever the status was then.
   const statusOf = (siteId: number | null) => {
-    const status = sites.find((site) => site.id === siteId)?.status
+    const site = sites.find((candidate) => candidate.id === siteId)
+    const status = site?.status
+    // In the Bauphase an offer site with its Baubeginn is planned as a construction.
+    if (props.phase === 'Bauphase' && status === 'Angebot' && site?.plannedStart) return 'Bauphase'
     return status && isOpen(status) ? status : undefined
+  }
+  // In the Bauphase an offer site without Baubeginn gets reserved days: no activity yet.
+  const reserves = (siteId: number | null) => {
+    const site = sites.find((candidate) => candidate.id === siteId)
+    return props.phase === 'Bauphase' && site?.status === 'Angebot' && !site.plannedStart
   }
   const siteName = (siteId: number | null) => sites.find((site) => site.id === siteId)?.name
   // A site row is titled with its activity (there is no field for it: it comes from what was dragged in, the
@@ -224,6 +234,11 @@ export function DayEditor(props: Props) {
                     onChange={(e) => update(index, { free: e.currentTarget.checked, siteId: null })}
                   />
                 )}
+                {row.type === 'Baustelle' && !row.free && reserves(row.siteId) && (
+                  <Text size="xs" c="dimmed">
+                    Reserviert: die Baustelle ist noch im Angebot. Tätigkeiten gibt es, sobald der Baubeginn eingetragen ist.
+                  </Text>
+                )}
                 {row.type === 'Baustelle' && !row.free && (
                   <SitePicker
                     sites={sites}
@@ -232,7 +247,7 @@ export function DayEditor(props: Props) {
                       // Another site may be in another status: keep the activity only if it fits there.
                       const status = statusOf(siteId)
                       const fits = row.activity !== null && allowedActivities(employee, status).includes(row.activity)
-                      update(index, { siteId, activity: fits ? row.activity : defaultActivity(employee, status) })
+                      update(index, { siteId, activity: reserves(siteId) ? null : fits ? row.activity : defaultActivity(employee, status) })
                     }}
                     onCreate={createSite}
                     onGoToSite={onGoToSite}

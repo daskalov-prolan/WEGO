@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 
-export type StretchSide = 'left' | 'right'
+/** An end of the stretch (longer or shorter), or its lower edge: the same days for the rows below (or above). */
+export type StretchSide = 'left' | 'right' | 'down'
 
 /** A stretch of days being dragged longer or shorter at one of its ends. */
 interface Stretch {
@@ -9,8 +10,11 @@ interface Stretch {
   from: string
   to: string
   side: StretchSide
-  /** Called with the new first and last day once the mouse is let go (only if they changed). */
-  done: (from: string, to: string) => void
+  /**
+   * Called once the mouse is let go, if something changed: the new first and last day, or (dragged down) the
+   * same days with the other rows they go to.
+   */
+  done: (from: string, to: string, rows: string[]) => void
 }
 
 const marks = ['stretch-add', 'stretch-remove']
@@ -25,7 +29,7 @@ function clearMarks() {
  * starts it, for the pointer-down of a handle.
  */
 export function useStretch() {
-  const active = useRef<(Stretch & { newFrom: string; newTo: string }) | null>(null)
+  const active = useRef<(Stretch & { newFrom: string; newTo: string; rows: string[] }) | null>(null)
 
   useEffect(() => {
     const paint = () => {
@@ -33,8 +37,12 @@ export function useStretch() {
       if (!current) return
       clearMarks()
       for (const cell of document.querySelectorAll<HTMLElement>('[data-stretch-row]')) {
-        if (cell.dataset.stretchRow !== current.row) continue
         const date = cell.dataset.stretchDate!
+        if (current.side === 'down') {
+          if (current.rows.includes(cell.dataset.stretchRow!) && date >= current.from && date <= current.to) cell.classList.add('stretch-add')
+          continue
+        }
+        if (cell.dataset.stretchRow !== current.row) continue
         const inNew = date >= current.newFrom && date <= current.newTo
         const inOld = date >= current.from && date <= current.to
         if (inNew && !inOld) cell.classList.add('stretch-add')
@@ -45,7 +53,17 @@ export function useStretch() {
       const current = active.current
       if (!current) return
       const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-stretch-date]')
-      if (!cell || cell.dataset.stretchRow !== current.row) return
+      if (!cell) return
+      if (current.side === 'down') {
+        // The rows from the one of the stretch to the one under the pointer, in the order they stand.
+        const order = [...new Set([...document.querySelectorAll<HTMLElement>('[data-stretch-row]')].map((other) => other.dataset.stretchRow!))]
+        const here = order.indexOf(current.row)
+        const there = order.indexOf(cell.dataset.stretchRow!)
+        current.rows = there > here ? order.slice(here + 1, there + 1) : there >= 0 && there < here ? order.slice(there, here) : []
+        paint()
+        return
+      }
+      if (cell.dataset.stretchRow !== current.row) return
       const date = cell.dataset.stretchDate!
       // The other end stays; this end can come back to it, but not past it.
       if (current.side === 'right') current.newTo = date < current.from ? current.from : date
@@ -65,7 +83,8 @@ export function useStretch() {
       }
       window.addEventListener('click', swallow, { capture: true, once: true })
       window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0)
-      if (current.newFrom !== current.from || current.newTo !== current.to) current.done(current.newFrom, current.newTo)
+      if (current.side === 'down' ? current.rows.length > 0 : current.newFrom !== current.from || current.newTo !== current.to)
+        current.done(current.newFrom, current.newTo, current.rows)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -79,7 +98,7 @@ export function useStretch() {
     // Neither a selection of cells nor dragging the entry somewhere else.
     event.preventDefault()
     event.stopPropagation()
-    active.current = { ...stretch, newFrom: stretch.from, newTo: stretch.to }
+    active.current = { ...stretch, newFrom: stretch.from, newTo: stretch.to, rows: [] }
     document.body.classList.add('stretching')
   }
 }

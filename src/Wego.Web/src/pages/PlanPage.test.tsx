@@ -681,6 +681,24 @@ describe('PlanPage', () => {
     ])
   })
 
+  it('shows a reserved day of an offer site without Baubeginn framed, and takes no activity on it', async () => {
+    const offer = { ...noAddress, id: 30, name: 'Familie Kern', client: 'Familie Kern', status: 'Angebot' as const }
+    const reserved: Plan = { ...plan, sites: [...plan.sites, offer], entries: [entry(40, 2, '2026-03-04', 30, 'Familie Kern', null, null)] }
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(reserved), { status: 200 }))
+    renderWithProviders(<PlanPage year={2026} canEdit />)
+    const wednesday = await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ })
+
+    const chip = within(wednesday).getAllByText('Familie Kern')[0].closest('.chip')!
+    expect(chip).toHaveClass('reserved')
+    expect(chip).not.toHaveClass('dimmed')
+
+    // An activity dragged onto it: first the Baubeginn.
+    fireEvent.dragStart(screen.getAllByText('Fliesenarbeiten')[0].closest('[draggable="true"]')!)
+    fireEvent.drop(chip)
+    expect(await screen.findByText(/erst den Baubeginn eintragen/)).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(false)
+  })
+
   it('opens the day with a site to choose in place of a saved "verfügbar"', async () => {
     const kept: Plan = {
       ...plan,
@@ -790,6 +808,30 @@ describe('PlanPage', () => {
       // Escape lifts the mark.
       await user.keyboard('{Escape}')
       expect(chip()).not.toHaveClass('marked')
+    })
+
+    it('takes the marked stretch to the employee below by dragging its lower edge, overwriting the same time', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<PlanPage year={2026} canEdit />)
+      await screen.findByText(/KW 10/)
+
+      const anna = within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      await user.click(anna)
+      const marked = () => within(cell(/Anna, Montag, 02.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
+      const handle = document.querySelector('.chip.marked .stretch-handle.down') ?? marked().querySelector('.stretch-handle.down')
+      expect(handle).not.toBeNull()
+
+      // Down onto Bernd's row: his Monday is marked as coming in.
+      const bernd = cell(/Bernd, Montag, 02.03.2026/).closest('td')!
+      document.elementFromPoint = () => bernd
+      fireEvent.pointerDown(handle!)
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 10 })
+      expect(bernd).toHaveClass('stretch-add')
+      fireEvent.pointerUp(window)
+
+      await waitFor(() => expect(batch()).not.toBeNull())
+      const monday = batch().find((day: { employeeId: number; date: string }) => day.employeeId === 2 && day.date === '2026-03-02')
+      expect(monday.entries).toContainEqual(expect.objectContaining({ siteId: 11, note: null }))
     })
 
     it('in the plan by site copies an employee onto the following days by dragging the right end', async () => {

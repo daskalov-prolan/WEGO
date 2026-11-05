@@ -18,8 +18,10 @@ interface Props {
   drop?: Record<string, unknown>
   /** Marked by a click: framed. */
   marked?: boolean
+  /** A reserved day of an offer site (see isReservation): framed in black on white. */
+  reserved?: boolean
   /** Ends of a marked stretch: dragging them makes it longer or shorter. */
-  stretch?: { left: boolean; right: boolean; onStart: (side: 'left' | 'right', event: PointerEvent) => void }
+  stretch?: { left: boolean; right: boolean; down?: boolean; onStart: (side: 'left' | 'right' | 'down', event: PointerEvent) => void }
 }
 
 /** Sign for a note inside an entry: a small sheet, or a red "!" for a very important note; pointing at the entry shows the note. */
@@ -37,17 +39,17 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, stretch, drop }: Props) {
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, reserved = false, stretch, drop }: Props) {
   // The whole working day goes without saying: only part of a day shows its time.
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
-  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : ''].filter(Boolean).join(' ')
+  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
   return (
     <span
       className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
       // With a note, pointing at the entry shows the note instead of site and activity.
-      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : entryTitle(entry)}
+      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry)}
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable)}
       {...drop}
@@ -72,6 +74,13 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
       {withActivity && entry.activity && !isFree(entry) && <span className="activity">{activityLabel(entry.activity)}</span>}
       {stretch?.left && (
         <span className="stretch-handle left" title="Ziehen: früher beginnen oder später" onPointerDown={(event) => stretch.onStart('left', event)} />
+      )}
+      {stretch?.down && (
+        <span
+          className="stretch-handle down"
+          title="Nach unten ziehen: für die Mitarbeiter darunter übernehmen"
+          onPointerDown={(event) => stretch.onStart('down', event)}
+        />
       )}
       {stretch?.right && (
         <span className="stretch-handle right" title="Ziehen: länger oder kürzer" onPointerDown={(event) => stretch.onStart('right', event)} />
