@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 # Planning sheets with customer and staff names stay out of the repository
 *.xlsx
 import/
+
+# Personal Claude Code settings
+.claude/settings.local.json

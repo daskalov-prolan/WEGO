@@ -85,8 +85,11 @@ async function syncActivities(live, local) {
         run: () => live('PUT', `/api/activities/${source.key}`, pick(source, ['label', 'phase', 'color'])),
       })
   }
-  const order = localList.filter((a) => byKey.has(a.key)).map((a) => a.key)
-  const liveOrder = [...liveList].sort((a, b) => a.sortOrder - b.sortOrder).map((a) => a.key).filter((k) => order.includes(k))
+  // The local order; activities that exist only live keep their place behind (the order must name every one).
+  const liveOrder = [...liveList].sort((a, b) => a.sortOrder - b.sortOrder).map((a) => a.key)
+  const order = [...localList.filter((a) => byKey.has(a.key)).map((a) => a.key), ...liveOrder.filter((k) => !localList.some((a) => a.key === k))]
+  const liveOnly = liveList.filter((a) => !localList.some((l) => l.key === a.key))
+  if (liveOnly.length) notes.push(`Nur live, bleibt: ${liveOnly.map((a) => a.label).join(', ')}`)
   if (!same(order, liveOrder)) actions.push({ text: 'Reihenfolge der Tätigkeiten', run: () => live('PUT', '/api/activities/order', order) })
   return { actions, notes }
 }
@@ -160,7 +163,8 @@ function matchSite(source, candidates) {
 function statusPath(from, to) {
   if (from === to) return []
   if (from === 'Storniert') return null
-  if (to === 'Storniert') return ['Storniert']
+  // Cancelling is no longer possible in the app.
+  if (to === 'Storniert') return null
   const order = ['Angebot', 'Bauphase', 'Abgeschlossen']
   const i = order.indexOf(from), j = order.indexOf(to)
   return i >= 0 && j > i ? order.slice(i + 1, j + 1) : null
@@ -183,6 +187,11 @@ async function syncSites(live, local) {
   for (const source of localList) {
     const target = matchSite(source, [...unused])
     if (target) unused.delete(target)
+    // A cancelled site that is not live does not go there (it could not be cancelled there).
+    if (!target && source.status === 'Storniert') {
+      notes.push(`Baustelle ${source.name}: lokal storniert, live nicht angelegt`)
+      continue
+    }
     const fields = { ...pick(source, SITE_FIELDS), responsiblePlannerId: plannerId(source.responsiblePlannerId) }
     const changed = target
       ? [...SITE_FIELDS.filter((f) => !same(source[f], target[f])), ...(same(fields.responsiblePlannerId, target.responsiblePlannerId) ? [] : ['Zuständig'])]
@@ -219,7 +228,10 @@ async function syncSites(live, local) {
 
 // ---- The plan (entries, vacation, sick days) and the notes, year by year ----
 
-const entryKey = (e) => JSON.stringify([e.type, e.siteId ?? null, e.activity ?? null, e.startTime ?? null, e.endTime ?? null, e.note ?? null, !!e.noteImportant])
+// A day without times is the whole working day, which the server stores as 07:00 to 16:00.
+const wholeDay = (e) => (e.startTime == null && e.endTime == null) || (e.startTime?.startsWith('07:00') && e.endTime?.startsWith('16:00'))
+const entryKey = (e) =>
+  JSON.stringify([e.type, e.siteId ?? null, e.activity ?? null, wholeDay(e) ? 'ganztägig' : [e.startTime, e.endTime], e.note ?? null, !!e.noteImportant])
 const dayKey = (entries) => entries.map(entryKey).sort().join('\n')
 
 async function syncPlan(live, local) {
