@@ -1,4 +1,4 @@
-import { Button, Group } from '@mantine/core'
+import { Button, Group, Text } from '@mantine/core'
 import type { MouseEvent } from 'react'
 import type { Site } from '../api/types'
 import { formatAddress } from '../lib/sites'
@@ -33,11 +33,16 @@ export function SiteWayButtons({ site, size = 'sm' }: { site: Site; size?: strin
   )
 }
 
-/** The telephone number of the customer as a button that dials it, as in "Mein Plan". */
+/** The telephone number of the customer written out, with a button beside it that dials it. */
 export function CallButton({ phone, size = 'sm' }: { phone: string; size?: string }) {
   return (
-    <Button component="a" href={callHref(phone)} size={size} onClick={own} style={{ alignSelf: 'flex-start' }}>
-      Anrufen: {phone}
-    </Button>
+    <Group gap={8} wrap="nowrap" className="call" onClick={own}>
+      <Text component="span" size="sm" className="call-number">
+        {phone}
+      </Text>
+      <Button component="a" href={callHref(phone)} size={size} aria-label={`Anrufen: ${phone}`}>
+        Anrufen
+      </Button>
+    </Group>
   )
 }

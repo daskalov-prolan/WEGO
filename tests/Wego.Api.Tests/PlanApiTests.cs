@@ -260,6 +260,31 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_service_call_is_a_site_that_says_so_and_stays_one_when_changed()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var created = await planer.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Familie Kurz", nameSource = "Auftraggeber", status = "Bauphase", plannedStart = $"{Year}-06-12",
+            isService = true,
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var service = await created.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("SE: Familie Kurz", service.GetProperty("name").GetString());
+        Assert.True(service.GetProperty("isService").GetBoolean());
+        Assert.Equal("Bauphase", service.GetProperty("status").GetString());
+
+        // Changed without the mark (as the form of a site does): still a service call.
+        var id = service.GetProperty("id").GetInt32();
+        var changed = await (await planer.PutAsJsonAsync($"/api/sites/{id}", new
+        {
+            client = "Familie Kurz-Lang", nameSource = "Auftraggeber", plannedStart = $"{Year}-06-12",
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("SE: Familie Kurz-Lang", changed.GetProperty("name").GetString());
+        Assert.True(changed.GetProperty("isService").GetBoolean());
+    }
+
+    [Fact]
     public async Task Site_status_follows_the_job_and_every_change_is_logged()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

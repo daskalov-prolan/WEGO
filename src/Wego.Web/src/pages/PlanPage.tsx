@@ -353,8 +353,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     for (const site of plan.sites) {
       // The construction phase shows the done sites as well; cancelled ones nowhere.
       if (site.status !== phase && !(phase === 'Bauphase' && site.status === 'Abgeschlossen')) continue
-      // On a phone the done sites stay out.
-      if (isPhone && site.status === 'Abgeschlossen') continue
+      // On a phone the done sites stay out; service calls are no sites to follow.
+      if ((isPhone && site.status === 'Abgeschlossen') || site.isService) continue
       const plannedThisYear =
         site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
       // Planned for this year, or without a Baubeginn yet (those go last).
@@ -364,7 +364,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
       if (!site || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
-      if (isPhone && site.status === 'Abgeschlossen') continue
+      if ((isPhone && site.status === 'Abgeschlossen') || site.isService) continue
       const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
@@ -1008,7 +1008,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const createSite = async (input: SiteInput) => {
     const site = await api.createSite(input)
     // A new site with its Baubeginn (e.g. Abriss dragged in): asked about the standard flow once the day is saved.
-    if (canEdit && site.plannedStart) setFlowSite(site)
+    if (canEdit && site.plannedStart && !site.isService) setFlowSite(site)
     setPlan((current) =>
       current && { ...current, sites: [...current.sites, site].sort((a, b) => a.name.localeCompare(b.name, 'de')) },
     )
@@ -1019,7 +1019,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const updateSite = async (id: number, input: SiteInput) => {
     const before = siteById.get(id)
     const site = await api.updateSite(id, input)
-    if (canEdit && site.plannedStart && !before?.plannedStart) setFlowSite(site)
+    if (canEdit && site.plannedStart && !before?.plannedStart && !site.isService) setFlowSite(site)
     setPlan(
       (current) =>
         current && {

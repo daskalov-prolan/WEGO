@@ -172,6 +172,12 @@ public class Site
 
     public SiteNameSource NameSource { get; set; } = SiteNameSource.Auftraggeber;
 
+    /// <summary>
+    /// A service call (Serviceeinsatz): work done at one appointment, created from the day of the plan. It is a site
+    /// for the plan, the way there and the costing, but stays out of the lists of sites.
+    /// </summary>
+    public bool IsService { get; set; }
+
     public SiteStatus Status { get; set; } = SiteStatus.Angebot;
 
     /// <summary>The planner (Planer A or G) in charge of the site.</summary>
@@ -208,9 +214,15 @@ public class Site
     public List<SiteHourlyRate> HourlyRates { get; set; } = [];
 
     /// <summary>Sets <see cref="Name"/> from the chosen field; call after changing client, street or source.</summary>
-    public void UpdateName() => Name = (NameSource == SiteNameSource.Strasse
-        ? $"{Street} {HouseNumber}"
-        : Client ?? "").Trim();
+    public void UpdateName()
+    {
+        var name = (NameSource == SiteNameSource.Strasse ? $"{Street} {HouseNumber}" : Client ?? "").Trim();
+        // A service call says so in the plan.
+        Name = IsService ? $"{ServicePrefix}{name}" : name;
+    }
+
+    /// <summary>SE: Serviceeinsatz, short enough for a field of the calendar.</summary>
+    public const string ServicePrefix = "SE: ";
 }
 /// <summary>
 /// The wage per hour of an employee on one site, changed in its costing afterwards. It takes the place of

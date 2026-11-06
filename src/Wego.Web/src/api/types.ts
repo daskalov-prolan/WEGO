@@ -76,6 +76,8 @@ export interface SiteInput {
   status?: SiteStatus
   /** The planner in charge; a new site without one goes to whoever creates it. */
   responsiblePlannerId?: number | null
+  /** A service call (Serviceeinsatz): work at one appointment, kept out of the lists of sites. */
+  isService?: boolean
 }
 
 /** A planner who can be in charge of a site. */

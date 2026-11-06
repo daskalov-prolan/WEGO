@@ -18,7 +18,7 @@ export const emptySite: SiteInput = {
 
 export function toSiteInput(site: Site): SiteInput {
   const { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description } = site
-  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone, responsiblePlannerId } = site
+  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone, responsiblePlannerId, isService } = site
   return {
     client,
     clientPhone,
@@ -33,12 +33,14 @@ export function toSiteInput(site: Site): SiteInput {
     plannedStart,
     plannedEnd,
     responsiblePlannerId,
+    isService,
   }
 }
 
-/** The name the plan shows, worked out the same way as on the server. */
+/** The name the plan shows, worked out the same way as on the server (a service call says so). */
 export function siteName(site: SiteInput): string {
-  return (site.nameSource === 'Strasse' ? `${site.street ?? ''} ${site.houseNumber ?? ''}` : (site.client ?? '')).trim()
+  const name = (site.nameSource === 'Strasse' ? `${site.street ?? ''} ${site.houseNumber ?? ''}` : (site.client ?? '')).trim()
+  return site.isService && name ? `SE: ${name}` : name
 }
 
 /** "Hauptstraße 12, Hinterhaus, 13125 Berlin", or null without any address. */

@@ -14,11 +14,12 @@ import {
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, PlanEmployee, Site, SiteInput } from '../api/types'
-import { activityLabel, allowedActivities, defaultActivity, entryStyle, isFree, isOpen } from '../lib/activities'
+import { activityLabel, allowedActivities, defaultActivity, entryStyle, isFree, isOpen, onlyHalfDay } from '../lib/activities'
 import { formatDateLong, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
 import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
+import { ServiceForm, serviceTimes, type ServiceTime } from './ServiceForm'
 import { TimeSelect } from './TimeSelect'
 
 interface Props {
@@ -81,6 +82,24 @@ function toInputs(rows: Row[]): DayEntryInput[] {
   }))
 }
 
+/**
+ * Half a day on sites and nothing kept free for the rest: the other half, to be saved as "verfügbar". Rows
+ * without a site yet do not count as work (they would be free anyway). Null when the day is something else:
+ * a whole day, both halves taken, a free row already there, or Urlaub or Krank.
+ */
+export function otherHalfFree(rows: Pick<Row, 'type' | 'siteId' | 'activity' | 'free' | 'start' | 'end'>[]) {
+  if (rows.some((row) => row.type !== 'Baustelle' || row.free)) return null
+  const work = rows.filter((row) => row.siteId !== null)
+  // Each with its time window and together no more than half a day (the site name only marks it as no free row).
+  const half = onlyHalfDay(
+    work.map((row) => ({ type: row.type, activity: row.activity, siteName: 'Baustelle', startTime: row.start || null, endTime: row.end || null })),
+  )
+  if (!half) return null
+  if (work.every((row) => row.end <= '12:00')) return HALF_DAYS[1]
+  if (work.every((row) => row.start >= '12:00')) return HALF_DAYS[0]
+  return null
+}
+
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
   const { employee, date, entries, sites, onCreateSite, onGoToSite, canAbsence = false, onClose, onSave, onCopy } = props
@@ -126,6 +145,10 @@ export function DayEditor(props: Props) {
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Saving half a day: the other half asked to be set "verfügbar" first (see otherHalfFree).
+  const [freeHalf, setFreeHalf] = useState<{ start: string; end: string } | null>(null)
+  // Any change of the rows asks again.
+  useEffect(() => setFreeHalf(null), [rows])
 
   // A site created here goes onto the day at once, with the activity of its row (e.g. the one dragged in):
   // saved as soon as the new site is in its row.
@@ -133,6 +156,17 @@ export function DayEditor(props: Props) {
   const createSite = async (input: SiteInput) => {
     const site = await onCreateSite(input)
     createdSite.current = site.id
+    return site
+  }
+
+  // A service call: created on the spot and put on the day in place of rows still without a site; saved then.
+  const [addingService, setAddingService] = useState(false)
+  const createService = async (input: SiteInput, time: ServiceTime) => {
+    const site = await createSite(input)
+    setRows((current) => [
+      ...current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
+      { ...emptyRow('Baustelle', site.id, defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
+    ])
     return site
   }
 
@@ -161,11 +195,23 @@ export function DayEditor(props: Props) {
       return [...kept(current), ...sites.map((row, i) => (i < HALF_DAYS.length ? { ...row, ...HALF_DAYS[i] } : row))]
     })
 
-  const save = async () => {
+  const save = async (confirmed = false) => {
+    const other = otherHalfFree(rows)
+    if (other && !confirmed) {
+      setFreeHalf(other)
+      return
+    }
+    // The other half of the day becomes a row kept free, in place of rows still without a site.
+    const saved = other
+      ? [...rows.filter((row) => row.siteId !== null), { ...emptyRow('Baustelle'), free: true, ...other }].sort((a, b) =>
+          a.start.localeCompare(b.start),
+        )
+      : rows
+    setFreeHalf(null)
     setBusy(true)
     setError('')
     try {
-      await onSave(toInputs(rows))
+      await onSave(toInputs(saved))
     } catch (e) {
       setError(messageOf(e))
       setBusy(false)
@@ -328,6 +374,11 @@ export function DayEditor(props: Props) {
             <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
               + Baustelle
             </Button>
+            <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
+              <Button size="xs" variant="light" onClick={() => setAddingService(true)}>
+                + Service
+              </Button>
+            </Tooltip>
             <Tooltip label="Zwei Hälften: 07:30–11:30 und 12:00–16:00; die zweite kann eine Baustelle bekommen oder verfügbar bleiben">
               <Button size="xs" variant="light" onClick={splitDay}>
                 ½ Tag
@@ -349,14 +400,32 @@ export function DayEditor(props: Props) {
             </Alert>
           )}
 
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
-              Abbrechen
-            </Button>
-            <Button type="submit" loading={busy}>
-              Speichern
-            </Button>
-          </Group>
+          {addingService && <ServiceForm date={date} onCreate={createService} onClose={() => setAddingService(false)} />}
+
+          {freeHalf ? (
+            <Alert color="wego" variant="light" title="Nur ½ Tag eingetragen">
+              <Text size="sm">
+                Die andere Hälfte des Tages ({freeHalf.start}–{freeHalf.end}) wird auf „verfügbar“ gesetzt.
+              </Text>
+              <Group justify="flex-end" mt="sm">
+                <Button variant="default" onClick={() => setFreeHalf(null)}>
+                  Zurück
+                </Button>
+                <Button loading={busy} onClick={() => void save(true)} data-autofocus>
+                  OK, speichern
+                </Button>
+              </Group>
+            </Alert>
+          ) : (
+            <Group justify="flex-end">
+              <Button variant="default" onClick={onClose}>
+                Abbrechen
+              </Button>
+              <Button type="submit" loading={busy}>
+                Speichern
+              </Button>
+            </Group>
+          )}
         </Stack>
       </form>
     </Sheet>

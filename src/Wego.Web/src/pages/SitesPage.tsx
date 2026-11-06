@@ -29,7 +29,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
  * Which sites the list shows: the active ones, all, those in one status, or those starting in a period (by
  * their planned start).
  */
-type Show = 'active' | 'all' | 'last6' | `year:${number}` | `status:${SiteStatus}`
+type Show = 'active' | 'all' | 'last6' | 'service' | `year:${number}` | `status:${SiteStatus}`
 
 /** Active: the construction has begun (planned start today or before) and the site is not done yet. */
 const isActive = (site: Site, today: string) => isOpen(site.status) && !!site.plannedStart && site.plannedStart <= today
@@ -37,6 +37,9 @@ const isActive = (site: Site, today: string) => isOpen(site.status) && !!site.pl
 function shows(site: Site, show: Show, today: string): boolean {
   // Cancelled sites (from before there was no cancelling any more) are not shown at all.
   if (site.status === 'Storniert') return false
+  // Service calls only on their own: they are no sites to follow.
+  if (show === 'service') return !!site.isService
+  if (site.isService) return false
   if (show === 'all') return true
   if (show === 'active') return isActive(site, today)
   if (show.startsWith('status:')) return site.status === show.slice(7)
@@ -216,6 +219,7 @@ export function SitesPage() {
               label: `Status ${status.label}`,
             })),
             { value: 'last6', label: 'Start in den letzten 6 Monaten' },
+            { value: 'service', label: 'Serviceeinsätze' },
             ...years.map((year) => ({ value: `year:${year}`, label: `Start im Jahr ${year}` })),
           ]}
         />
@@ -362,7 +366,7 @@ export function SitesPage() {
             setSites((current) => [...current, site])
             setCreating(false)
             notifications.show({ message: `Baustelle „${site.name}“ angelegt.`, color: 'green' })
-            if (site.plannedStart) setFlowSite(site)
+            if (site.plannedStart && !site.isService) setFlowSite(site)
           }}
         />
       )}

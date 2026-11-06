@@ -109,7 +109,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
         {canEdit && history.length > 0 && (
           <Popover position="bottom-start" withArrow shadow="md">
             <Popover.Target>
-              <Button size="compact-sm" radius="xl" variant="subtle" color="gray">
+              <Button size="compact-sm" radius="xl" variant="default">
                 Verlauf
               </Button>
             </Popover.Target>
