@@ -15,6 +15,7 @@ import { SitePage } from './pages/SitePage'
 import { SitesPage } from './pages/SitesPage'
 import { CURRENT_YEAR } from './lib/dates'
 import { useIsPhone } from './lib/useIsPhone'
+import { goHome } from './lib/home'
 
 function useHashRoute(): string[] {
   const [hash, setHash] = useState(window.location.hash)
@@ -39,7 +40,14 @@ export default function App() {
   const signedIn = Boolean(user && !user.mustChangePassword)
 
   useEffect(() => {
-    api.me().then(setUser, () => setUser(null))
+    api.me().then(
+      (signedIn) => {
+        // On a phone the app always opens with the own plan, whatever page was open before.
+        if (signedIn.showInPlan && window.matchMedia?.('(max-width: 720px)').matches) window.location.hash = '#/mein-plan'
+        setUser(signedIn)
+      },
+      () => setUser(null),
+    )
     const onUnauthorized = () => setUser(null)
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
@@ -137,6 +145,11 @@ export default function App() {
       // The year in the header only where a page needs it and has no choice of its own.
       showYear={page === 'baustellen' || page === 'verwaltung' || (page === 'mitarbeiter' && Boolean(selectedId && isAdmin))}
       onLogout={() => api.logout().finally(() => setUser(null))}
+      homePage={user.showInPlan ? 'mein-plan' : startPage}
+      onHome={() => {
+        setYear(CURRENT_YEAR)
+        goHome()
+      }}
     >
       {content}
     </AppShell>

@@ -2465,3 +2465,9 @@ html.zoomed .plan-scroll {
     display: inline;
   }
 }
+
+/* The logo as the way back to the start. */
+.shell-home {
+  display: flex;
+  flex: none;
+}

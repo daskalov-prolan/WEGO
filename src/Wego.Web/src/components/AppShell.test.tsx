@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { User } from '../api/types'
 import { renderWithProviders } from '../test-utils'
@@ -8,7 +8,7 @@ const user = (role: User['role'], seesOffers: boolean): User => ({
   id: 1, name: 'Test', userName: 'test', role, showInPlan: true, mustChangePassword: false, seesOffers,
 })
 
-const menu = () => screen.getAllByRole('link').map((link) => link.getAttribute('aria-label'))
+const menu = () => within(screen.getByRole('navigation')).getAllByRole('link').map((link) => link.getAttribute('aria-label'))
 
 describe('AppShell', () => {
   it('shows the plan per phase next to each other and the records on the right', () => {
