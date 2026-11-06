@@ -46,14 +46,13 @@ export function SiteSummary({
             (site.client ?? '–')
           )}
         </Fact>
-        {planner !== undefined && <Fact label="Bearbeiter">{planner ?? '–'}</Fact>}
+        <Fact label="Telefon">{site.clientPhone ? <CallButton phone={site.clientPhone} size="xs" /> : '–'}</Fact>
       </section>
       <section className="form-section">
         <h3>Adresse</h3>
         <Stack gap="xs">
           <Text size="sm">{address ?? '–'}</Text>
           <SiteWayButtons site={site} size="xs" />
-          <Fact label="Telefon Kunde">{site.clientPhone ? <CallButton phone={site.clientPhone} size="xs" /> : '–'}</Fact>
         </Stack>
       </section>
       <section className="form-section">
@@ -63,7 +62,8 @@ export function SiteSummary({
             <StatusBadge status={site.status} />
           </Fact>
         )}
-        <Fact label="Geplanter Start">{site.plannedStart ? formatDate(site.plannedStart) : '–'}</Fact>
+        <Fact label="Baubeginn">{site.plannedStart ? formatDate(site.plannedStart) : '–'}</Fact>
+        {planner !== undefined && <Fact label="Bearbeiter">{planner ?? '–'}</Fact>}
         {site.description && (
           // The description speaks for itself, without a label.
           <Text size="sm" mt={6} className="site-description" style={{ whiteSpace: 'pre-wrap' }}>

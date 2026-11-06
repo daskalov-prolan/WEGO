@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Alert,
-  Anchor,
   Button,
   ColorSwatch,
   Group,
@@ -108,34 +107,45 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
 
   return (
     <div className="page">
-      {/* A narrow head that stays at the top while the plan below is scrolled. */}
+      {/* The head stays at the top while the plan below is scrolled: back, the name, the status, and the actions on the right. */}
       <div className="site-page-head">
-        <Anchor size="sm" className="site-page-head-back" onClick={() => window.history.back()}>
-          ‹ Zurück
-        </Anchor>
-        <Title order={3} className="site-page-head-name" title={site?.name}>
-          {site?.name ?? report?.siteName ?? 'Baustelle'}
-        </Title>
+        <ActionIcon
+          variant="default"
+          radius="xl"
+          className="site-page-head-back"
+          aria-label="Zurück"
+          title="Zurück"
+          onClick={() => window.history.back()}
+        >
+          ‹
+        </ActionIcon>
+        <div className="site-page-head-title">
+          <Title order={3} className="site-page-head-name" title={site?.name}>
+            {site?.name ?? report?.siteName ?? 'Baustelle'}
+          </Title>
+        </div>
         {site && (
           <>
-            <SiteStatusPanel
-              site={site}
-              canEdit
-              onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
-            />
-            <Group gap={6} wrap="nowrap" className="site-page-head-actions">
-              <Button size="compact-sm" radius="xl" px="md" variant="light" onClick={() => setEditing(true)}>
+            <div className="site-page-head-status">
+              <SiteStatusPanel
+                site={site}
+                canEdit
+                onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
+              />
+            </div>
+            <Group gap={8} wrap="nowrap" className="site-page-head-actions">
+              <Button size="compact-sm" radius="xl" variant="default" onClick={() => setEditing(true)}>
                 Bearbeiten
               </Button>
               {/* The standard flow also later, e.g. when the Baubeginn was entered without the question. */}
-              {site.plannedStart && (
-                <Button size="compact-sm" radius="xl" px="md" variant="outline" color="wegoRed" onClick={() => setFlowSite(site)}>
+              {site.plannedStart && !site.isService && (
+                <Button size="compact-sm" radius="xl" variant="default" className="flow-button" onClick={() => setFlowSite(site)}>
                   Standardablauf
                 </Button>
               )}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target>
-                  <ActionIcon variant="subtle" color="gray" aria-label="Weitere Aktionen">
+                  <ActionIcon variant="default" radius="xl" aria-label="Weitere Aktionen">
                     ⋯
                   </ActionIcon>
                 </Menu.Target>
@@ -206,7 +216,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
             setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))
             setEditing(false)
             notifications.show({ message: 'Baustelle gespeichert.', color: 'green' })
-            if (saved.plannedStart && !site.plannedStart) setFlowSite(saved)
+            if (saved.plannedStart && !site.plannedStart && !saved.isService) setFlowSite(saved)
           }}
         />
       )}

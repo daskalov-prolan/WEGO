@@ -325,6 +325,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<bool>("IsService")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LabelProjectNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");

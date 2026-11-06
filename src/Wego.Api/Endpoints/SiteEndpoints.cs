@@ -10,7 +10,7 @@ public static class SiteEndpoints
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
-        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId);
+        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -18,7 +18,8 @@ public static class SiteEndpoints
     public record SiteInput(string? Client, string? Street, string? HouseNumber, string? AddressAddition,
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
-        string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null);
+        string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null,
+        bool? IsService = null);
 
     public record StatusRequest(SiteStatus Status);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
@@ -291,7 +292,7 @@ public static class SiteEndpoints
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
-        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId);
+        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService);
 
     private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
         plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
@@ -337,6 +338,8 @@ public static class SiteEndpoints
         site.LabelProjectNumber = Clean(input.LabelProjectNumber);
         site.PlannedStart = input.PlannedStart;
         site.PlannedEnd = input.PlannedEnd;
+        // Left out: it stays as it is (a site does not turn into a service call by being changed).
+        if (input.IsService is { } isService) site.IsService = isService;
         site.UpdateName();
         return null;
     }

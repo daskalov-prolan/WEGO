@@ -40,9 +40,10 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           style={{ flex: 1 }}
           value={value === null ? null : String(value)}
           onChange={(next) => onChange(next === null ? null : Number(next))}
-          // Done and cancelled sites are not offered for new work; one chosen before stays visible.
+          // Done and cancelled sites are not offered for new work, nor service calls (each is for its one day);
+          // one chosen before stays visible.
           data={sites
-            .filter((site) => isOpen(site.status) || site.id === value)
+            .filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
             .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' ? `${site.name} (Angebot)` : site.name }))}
           filter={({ options, search }) => {
             const needle = search.trim().toLowerCase()
@@ -84,23 +85,28 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
       </Group>
       {chosen && (
         <div className="site-contact">
-          <Text size="sm">
-            <span className="muted-inline">Adresse: </span>
-            {chosenAddress ?? '–'}
-          </Text>
-          <Text size="sm">
-            <span className="muted-inline">Telefon Kunde: </span>
-            {chosen.clientPhone ? <CallButton phone={chosen.clientPhone} size="compact-xs" /> : '–'}
-          </Text>
-          <Group gap="md" mt={2}>
-            {/* Straight to the page of the site, to add or correct its details. */}
-            {onGoToSite && (
-              <Button size="compact-xs" variant="light" onClick={() => onGoToSite(chosen.id)}>
-                Zur Baustelle
-              </Button>
-            )}
+          {/* Each line its label, the value and its buttons right behind it. */}
+          <Group gap={8} className="site-contact-line">
+            <Text size="sm">
+              <span className="muted-inline">Adresse: </span>
+              {chosenAddress ?? '–'}
+            </Text>
             <SiteWayButtons site={chosen} size="compact-xs" />
           </Group>
+          <Group gap={8} className="site-contact-line">
+            <Text size="sm" className="muted-inline">
+              Telefon Kunde:
+            </Text>
+            {chosen.clientPhone ? <CallButton phone={chosen.clientPhone} size="compact-xs" /> : <Text size="sm">–</Text>}
+          </Group>
+          {/* Straight to the page of the site, to add or correct its details. */}
+          {onGoToSite && (
+            <Group mt={2}>
+              <Button size="compact-xs" color="wegoRed" onClick={() => onGoToSite(chosen.id)}>
+                Zur Baustelle
+              </Button>
+            </Group>
+          )}
         </div>
       )}
       {creating && (
