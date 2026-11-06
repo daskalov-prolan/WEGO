@@ -17,6 +17,9 @@ interface Props {
   /** false: the page chooses its year itself, or needs none. */
   showYear?: boolean
   onLogout: () => void
+  /** Where the logo leads: the start page, shown at today. */
+  homePage?: string
+  onHome?: () => void
   children: ReactNode
 }
 
@@ -31,7 +34,7 @@ const NAV = [
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
-export function AppShell({ user, page, year, onYearChange, onLogout, showYear = true, children }: Props) {
+export function AppShell({ user, page, year, onYearChange, onLogout, showYear = true, homePage, onHome, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
   // A year paged to in the plan beyond these is offered as well.
   const years = [...new Set([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year])].sort((a, b) => a - b).map(String)
@@ -39,7 +42,10 @@ export function AppShell({ user, page, year, onYearChange, onLogout, showYear = 
   return (
     <div className="shell">
       <header className="shell-header">
-        <img src={logo} alt="WEGO Badcenter" />
+        {/* The logo leads back to the start, at today. */}
+        <a href={`#/${homePage ?? page}`} className="shell-home" onClick={onHome} aria-label="Zur Startansicht">
+          <img src={logo} alt="WEGO Badcenter" />
+        </a>
         <span className="shell-title">Personaleinsatzplanung</span>
         <Group gap="xs" ml="auto" wrap="nowrap">
           {/* Pages with a year of their own (Mein Plan, Planung, Mein Bereich) or none (the list of employees) do without. */}
@@ -61,9 +67,8 @@ export function AppShell({ user, page, year, onYearChange, onLogout, showYear = 
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>
-                {user.name} · {roleLabel(user.role)}
-              </Menu.Label>
+              {/* The name only for craftsmen; planners see their rights as well. */}
+              <Menu.Label>{user.role === 'Handwerker' ? user.name : `${user.name} · ${roleLabel(user.role)}`}</Menu.Label>
               <Menu.Item onClick={() => setChangingPassword(true)}>Passwort ändern</Menu.Item>
               <Menu.Item color="red" onClick={onLogout}>
                 Abmelden

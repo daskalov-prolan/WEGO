@@ -9,6 +9,8 @@ import { formatAddress } from '../lib/sites'
 import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { holidaysByDate, useSwipe } from '../lib/ui'
+import { HOME_EVENT } from '../lib/home'
+import { useWindowEvent } from '@mantine/hooks'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
 const FIRST_YEAR = 2026
@@ -37,13 +39,15 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   const end = `${lastYear}-12-31`
   const inRange = (iso: string) => iso >= start && iso <= end
   const firstWeekOf = (y: number) => mondayOf(today.startsWith(`${y}-`) ? today : `${Math.max(y, FIRST_YEAR)}-01-01`)
+  // Where a year opens: today right at the top in the current year, else its first week.
+  const firstDayOf = (y: number) => (today.startsWith(`${y}-`) ? today : firstWeekOf(y))
 
   const [plans, setPlans] = useState<Map<number, Plan>>(new Map())
   const [error, setError] = useState('')
   // The week in view while scrolling (its Monday), shown in the head.
   const [inView, setInView] = useState<string>(() => firstWeekOf(year))
   // Scrolled to once the days are there: at the start, and after another year was chosen.
-  const scrollTo = useRef<string | null>(firstWeekOf(year))
+  const scrollTo = useRef<string | null>(firstDayOf(year))
   // The year last reported by scrolling (or chosen): another one from outside means to go there.
   const reported = useRef(year)
   const listRef = useRef<HTMLDivElement>(null)
@@ -118,8 +122,12 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
     return list
   }, [start, end])
 
-  const scrollToWeek = useCallback((monday: string) => {
-    const section = listRef.current?.querySelector<HTMLElement>(`[data-week="${monday}"]`)
+  /** Scrolls to a week (its Monday), or to today: then today is the first day under the head. */
+  const scrollToWeek = useCallback((iso: string) => {
+    const monday = mondayOf(iso)
+    const section =
+      (iso === todayIso() ? listRef.current?.querySelector<HTMLElement>(`[data-day="${iso}"]`) : null) ??
+      listRef.current?.querySelector<HTMLElement>(`[data-week="${monday}"]`)
     // Right below the head that stays on top, in whatever scrolls the page.
     const scroller = section?.closest<HTMLElement>('.shell-main') ?? document.scrollingElement
     if (section && scroller?.scrollBy) {
@@ -152,9 +160,12 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       onYearChange?.(reported.current)
       return
     }
-    scrollToWeek(mondayOf(day))
+    scrollToWeek(day === today ? today : mondayOf(day))
     follow(mondayOf(day))
   }
+  // The logo: today right at the top.
+  useWindowEvent(HOME_EVENT, () => go(today))
+
   const swipe = useSwipe(
     () => go(addDays(inView, 7)),
     () => go(addDays(inView, -7)),
@@ -165,7 +176,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
     if (year === reported.current) return
     reported.current = year
     setShownYear(year)
-    const target = firstWeekOf(year)
+    const target = firstDayOf(year)
     if (loaded) scrollToWeek(target)
     else scrollTo.current = target
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a year chosen from outside moves the list

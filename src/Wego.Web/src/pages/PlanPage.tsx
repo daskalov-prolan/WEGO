@@ -12,6 +12,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useWindowEvent } from '@mantine/hooks'
+import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
@@ -304,6 +305,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     onOpenNote: (note: CalendarNote) =>
       canEdit ? setNoteDialog({ employee: employeeOfNote(note), date: note.date, note }) : setNoteRead(note),
   }
+
+  // The logo, with this plan as the start: to today.
+  useWindowEvent(HOME_EVENT, () => goToday())
 
   useWindowEvent('keydown', (event) => {
     if (event.key !== 'Escape') return
