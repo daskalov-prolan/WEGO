@@ -123,13 +123,13 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
               canEdit
               onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
             />
-            <Group gap={4} wrap="nowrap" className="site-page-head-actions">
-              <Button size="compact-sm" variant="light" onClick={() => setEditing(true)}>
+            <Group gap={6} wrap="nowrap" className="site-page-head-actions">
+              <Button size="compact-sm" radius="xl" px="md" variant="light" onClick={() => setEditing(true)}>
                 Bearbeiten
               </Button>
               {/* The standard flow also later, e.g. when the Baubeginn was entered without the question. */}
               {site.plannedStart && (
-                <Button size="compact-sm" color="wegoRed" onClick={() => setFlowSite(site)}>
+                <Button size="compact-sm" radius="xl" px="md" variant="outline" color="wegoRed" onClick={() => setFlowSite(site)}>
                   Standardablauf
                 </Button>
               )}

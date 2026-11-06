@@ -376,7 +376,7 @@ describe('PlanPage', () => {
     // Bernd's main activity (Verwaltung) is Sanitär.
     expect(screen.getByText('1 · Sanitär · Familie Schulze')).toBeInTheDocument()
     expect(document.querySelector('.site-contact')).toHaveTextContent('Adresse: Hauptstraße 12, 13125 Berlin')
-    expect(screen.getByRole('link', { name: '030 123 45' })).toHaveAttribute('href', 'tel:03012345')
+    expect(screen.getByRole('link', { name: 'Anrufen: 030 123 45' })).toHaveAttribute('href', 'tel:03012345')
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))

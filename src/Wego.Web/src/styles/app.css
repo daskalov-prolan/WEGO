@@ -2198,7 +2198,8 @@ body.stretching * {
     font-size: 0.5rem;
   }
 
-  .timeline .day-row th.week-start {
+  .timeline .day-row th.week-start,
+  .timeline .day-row th.today {
     scroll-snap-align: start;
     scroll-margin-left: var(--name-col);
   }
@@ -2379,4 +2380,88 @@ body.stretching * {
   width: 18px;
   height: 2px;
   transform: translateX(-50%);
+}
+
+/* Phone: the tab bar at the bottom in the petrol of the header, closed by the red line of the logo, so it
+   stands out from the page; the open page as a white tab. */
+@media (max-width: 720px) {
+  .shell-nav {
+    background: linear-gradient(100deg, var(--wego-navy) 0%, var(--wego-teal-dark) 45%, var(--wego-teal) 100%);
+    border-top: 3px solid var(--wego-red);
+    box-shadow: 0 -4px 14px rgba(7, 42, 54, 0.28);
+  }
+
+  .shell-nav a {
+    height: auto;
+    min-height: 40px;
+    padding: 4px 3px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.1;
+    /* Each as wide as its words, Mein Bereich on two lines, so that every page fits. */
+    flex: 1 1 auto;
+    min-width: min-content;
+    white-space: normal;
+  }
+
+  .shell-nav a:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .shell-nav a[aria-current='page'],
+  .shell-nav a.nav-angebotsphase[aria-current='page'] {
+    background: #fff;
+    color: var(--wego-teal-dark);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Phone: fields with writing of 16px, so that the phone does not zoom in by itself when one is tapped. */
+@media (max-width: 720px) and (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Zoomed in with two fingers: nothing snaps into place while moving about (see main.tsx). */
+html.zoomed .plan-scroll {
+  scroll-snap-type: none;
+}
+
+/* The description of a site, in red, so that it is read. */
+.site-description {
+  color: var(--wego-red);
+  font-weight: 600;
+}
+
+/* Customer name in the record of a site: goes to the page of the site. */
+.site-sheet-title,
+.site-client-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Bauphase | Erledigt in capitals, like the badge of the status beside it. */
+.status-slider.caps .mantine-SegmentedControl-label {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.shell-nav .nav-short {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .shell-nav .nav-long {
+    display: none;
+  }
+
+  .shell-nav .nav-short {
+    display: inline;
+  }
 }

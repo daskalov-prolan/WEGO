@@ -29,10 +29,13 @@ export function StatusSlider({
   site,
   onChange,
   size = 'sm',
+  caps = false,
 }: {
   site: Site
   onChange: (status: SiteStatus) => void
   size?: 'xs' | 'sm'
+  /** In capitals, like the badge of the status beside it in the list of sites. */
+  caps?: boolean
 }) {
   const done = site.status === 'Abgeschlossen'
   return (
@@ -42,7 +45,7 @@ export function StatusSlider({
       fullWidth
       radius="xl"
       // A slider: a sunk track, the coloured part lifted with a knob at its inner edge (see .status-slider).
-      className={done ? 'status-slider done' : 'status-slider'}
+      className={`status-slider${done ? ' done' : ''}${caps ? ' caps' : ''}`}
       color={done ? 'green' : 'wegoRed'}
       aria-label={`${site.name}: Bauphase oder erledigt`}
       value={done ? 'Abgeschlossen' : 'Bauphase'}
@@ -86,7 +89,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
       <Group gap={6} align="center" wrap="nowrap">
         {/* In the construction phase or done: the slider between both; else the status and its next steps. */}
         {canEdit && (site.status === 'Bauphase' || site.status === 'Abgeschlossen') ? (
-          <StatusSlider site={site} onChange={(status) => change(status)} />
+          <StatusSlider site={site} size="xs" onChange={(status) => change(status)} />
         ) : (
           <StatusBadge status={site.status} />
         )}
@@ -106,7 +109,7 @@ export function SiteStatusPanel({ site, canEdit, onChanged }: Props) {
         {canEdit && history.length > 0 && (
           <Popover position="bottom-start" withArrow shadow="md">
             <Popover.Target>
-              <Button size="compact-sm" variant="subtle" color="gray">
+              <Button size="compact-sm" radius="xl" variant="subtle" color="gray">
                 Verlauf
               </Button>
             </Popover.Target>

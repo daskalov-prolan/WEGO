@@ -171,4 +171,3 @@ export function workdaysOf(monday: string, publicHolidays: Set<string>): string[
   return [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset)).filter((iso) => !publicHolidays.has(iso))
 }
 
-export const percent = (share: number | null) => (share === null ? '–' : `${Math.round(share * 100)} %`)

@@ -1,4 +1,4 @@
-import { Alert, Anchor, Button, Group, SegmentedControl, Select, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Button, Group, SegmentedControl, Select, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
@@ -11,18 +11,11 @@ import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
 import { useIsPhone } from '../lib/useIsPhone'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
+import { CallButton, SiteWayButtons } from '../components/SiteActions'
 
-/** The telephone number of the customer as a link that dials it, without opening the site. */
+/** The telephone number of the customer as a button that dials it, without opening the site. */
 function PhoneLink({ phone }: { phone: string }) {
-  return (
-    <Anchor
-      href={`tel:${phone.replace(/[^+0-9]/g, '')}`}
-      onClick={(event) => event.stopPropagation()}
-      style={{ whiteSpace: 'nowrap' }}
-    >
-      {phone}
-    </Anchor>
-  )
+  return <CallButton phone={phone} size="compact-xs" />
 }
 
 type SortKey = 'name' | 'plannedStart'
@@ -157,7 +150,7 @@ export function SitesPage() {
   // Only a site in the construction phase can be done, and only a done one goes back.
   const doneSwitch = (site: Site) =>
     (site.status === 'Bauphase' || site.status === 'Abgeschlossen') && (
-      <StatusSlider site={site} size="xs" onChange={(status) => setDone(site, status === 'Abgeschlossen').catch(() => {})} />
+      <StatusSlider site={site} size="xs" caps onChange={(status) => setDone(site, status === 'Abgeschlossen').catch(() => {})} />
     )
 
   // The rows in groups, in the order of the sort within each group.
@@ -288,6 +281,7 @@ export function SitesPage() {
                     <StatusBadge status={site.status} />
                   </div>
                   {formatAddress(site) && <div>{formatAddress(site)}</div>}
+                  <SiteWayButtons site={site} size="compact-xs" />
                   <div className="site-card-meta">
                     {site.clientPhone && <PhoneLink phone={site.clientPhone} />}
                     {plannerName(site) && <span>Zuständig: {plannerName(site)}</span>}

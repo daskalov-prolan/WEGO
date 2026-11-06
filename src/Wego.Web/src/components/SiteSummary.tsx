@@ -1,10 +1,9 @@
-import { Anchor, Text } from '@mantine/core'
+import { Stack, Text } from '@mantine/core'
 import type { ReactNode } from 'react'
 import type { Site } from '../api/types'
 import { formatDate } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
-import { SiteLocation } from './SiteLocation'
-import { SiteMapLink } from './SitesMap'
+import { CallButton, SiteWayButtons } from './SiteActions'
 import { StatusBadge } from './SiteStatus'
 
 /** One value of the summary with its label; nothing when there is no value. */
@@ -21,26 +20,41 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
  * What is known of a site, in the groups of its form: the customer, the address and the planning, each on a
  * white card with a petrol edge. The planner in charge (Bearbeiter) only where it is known, i.e. for planners.
  */
-export function SiteSummary({ site, withStatus = true, planner }: { site: Site; withStatus?: boolean; planner?: string | null }) {
+export function SiteSummary({
+  site,
+  withStatus = true,
+  planner,
+  clientHref,
+}: {
+  site: Site
+  withStatus?: boolean
+  planner?: string | null
+  /** Where the name of the customer leads (the page of the site); without, it is plain text. */
+  clientHref?: string
+}) {
   const address = formatAddress(site)
   return (
     <div className="site-summary">
       <section className="form-section">
         <h3>Kunde</h3>
-        <Fact label="Auftraggeber">{site.client ?? '–'}</Fact>
+        <Fact label="Auftraggeber">
+          {site.client && clientHref ? (
+            <a href={clientHref} className="site-client-link">
+              {site.client}
+            </a>
+          ) : (
+            (site.client ?? '–')
+          )}
+        </Fact>
         {planner !== undefined && <Fact label="Bearbeiter">{planner ?? '–'}</Fact>}
       </section>
       <section className="form-section">
         <h3>Adresse</h3>
-        {address ? <SiteLocation location={address} /> : <Text>–</Text>}
-        <SiteMapLink site={site} />
-        <Fact label="Telefon Kunde">
-          {site.clientPhone ? (
-            <Anchor href={`tel:${site.clientPhone.replace(/[^+0-9]/g, '')}`}>{site.clientPhone}</Anchor>
-          ) : (
-            '–'
-          )}
-        </Fact>
+        <Stack gap="xs">
+          <Text size="sm">{address ?? '–'}</Text>
+          <SiteWayButtons site={site} size="xs" />
+          <Fact label="Telefon Kunde">{site.clientPhone ? <CallButton phone={site.clientPhone} size="xs" /> : '–'}</Fact>
+        </Stack>
       </section>
       <section className="form-section">
         <h3>Planung</h3>
@@ -52,7 +66,7 @@ export function SiteSummary({ site, withStatus = true, planner }: { site: Site; 
         <Fact label="Geplanter Start">{site.plannedStart ? formatDate(site.plannedStart) : '–'}</Fact>
         {site.description && (
           // The description speaks for itself, without a label.
-          <Text size="sm" mt={6} style={{ whiteSpace: 'pre-wrap' }}>
+          <Text size="sm" mt={6} className="site-description" style={{ whiteSpace: 'pre-wrap' }}>
             {site.description}
           </Text>
         )}

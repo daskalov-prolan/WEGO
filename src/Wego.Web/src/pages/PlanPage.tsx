@@ -40,10 +40,10 @@ import {
 } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
 import { DayEditor } from '../components/DayEditor'
-import { shortNames, SiteTimeline, TimelineMatrix, type OpenTask, type SiteRow } from '../components/PlanMatrix'
+import { shortNames, SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
 import { CellMenu, ClipMenu } from '../components/CellMenu'
-import { NoteDialog } from '../components/CalendarNotes'
+import { NoteDialog, NoteView } from '../components/CalendarNotes'
 import { useStretch } from '../lib/stretch'
 import { copyEntries, pasteChanges, setClip, useClip, type PasteTarget } from '../lib/clipboard'
 import { dragSource, dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
@@ -59,7 +59,6 @@ import {
   todayIso,
   weekOf,
 } from '../lib/dates'
-import { openTasksBySite as openTasks } from '../lib/tasks'
 import { cellKey, holidaysByDate, onDay, toInput } from '../lib/ui'
 import { useIsPhone } from '../lib/useIsPhone'
 
@@ -272,6 +271,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // Notes in the fields of the employees: the menu of a right click on one, and the note being written.
   const [noteMenu, setNoteMenu] = useState<{ note: CalendarNote; x: number; y: number } | null>(null)
   const closeNoteMenu = useCallback(() => setNoteMenu(null), [])
+  // A note opened to read, by those who may not change it.
+  const [noteRead, setNoteRead] = useState<CalendarNote | null>(null)
   const [noteDialog, setNoteDialog] = useState<{ employee: { id: number; name: string }; date: string; note?: CalendarNote } | null>(null)
   const notesByCell = useMemo(() => {
     const result = new Map<string, CalendarNote[]>()
@@ -299,7 +300,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const noteProps = {
     notesOf: (employeeId: number, date: string) => notesByCell.get(cellKey(employeeId, date)) ?? [],
     onNoteMenu: canEdit ? (note: CalendarNote, at: { x: number; y: number }) => setNoteMenu({ note, ...at }) : undefined,
-    onOpenNote: canEdit ? (note: CalendarNote) => setNoteDialog({ employee: employeeOfNote(note), date: note.date, note }) : undefined,
+    // A tap on a note opens it: to change it, or else to read it.
+    onOpenNote: (note: CalendarNote) =>
+      canEdit ? setNoteDialog({ employee: employeeOfNote(note), date: note.date, note }) : setNoteRead(note),
   }
 
   useWindowEvent('keydown', (event) => {
@@ -329,7 +332,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // open with activities still to plan; in the order the work starts there.
   // The activities each open site still needs in its status: not marked as not needed and not planned yet
   // (counted over all entries, whoever is shown).
-  const openTasksBySite = useMemo(() => (plan ? openTasks(plan.sites, plan.entries) : new Map<number, OpenTask[]>()), [plan])
 
   // Everybody who can be planned: the columns of the plan and the planners otherwise not shown.
   const everyone = useMemo(() => [...(plan?.employees ?? []), ...(plan?.planners ?? [])], [plan])
@@ -351,17 +353,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       if (isPhone && site.status === 'Abgeschlossen') continue
       const plannedThisYear =
         site.plannedStart && site.plannedStart <= `${year}-12-31` && (site.plannedEnd ?? site.plannedStart) >= `${year}-01-01`
-      // Planned for this year, or with activities still to plan (sites without dates go last).
-      const tasks = openTasksBySite.get(site.id) ?? []
-      if (plannedThisYear || tasks.length > 0)
-        rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart ?? '9999-12-31', openTasks: tasks })
+      // Planned for this year, or without a Baubeginn yet (those go last).
+      if (plannedThisYear || !site.plannedStart) rows.set(site.id, { site, byDate: new Map(), start: site.plannedStart ?? '9999-12-31' })
     }
     for (const entry of plan.entries) {
       if (entry.siteId === null || !shown.has(entry.employeeId)) continue
       const site = siteById.get(entry.siteId)
       if (!site || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
       if (isPhone && site.status === 'Abgeschlossen') continue
-      const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date, openTasks: openTasksBySite.get(site.id) ?? [] }
+      const row = rows.get(site.id) ?? { site, byDate: new Map(), start: entry.date }
       if (entry.date < row.start) row.start = entry.date
       const list = row.byDate.get(entry.date)
       if (list) list.push(entry)
@@ -373,7 +373,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     return [...rows.values()].sort((a, b) =>
       isPhone ? a.site.name.localeCompare(b.site.name, 'de') : begin(a).localeCompare(begin(b)) || a.site.name.localeCompare(b.site.name, 'de'),
     )
-  }, [plan, phase, phaseEmployees, siteById, year, openTasksBySite, isPhone])
+  }, [plan, phase, phaseEmployees, siteById, year, isPhone])
 
   // Open sites with work before today: shown as a hint, since the plan always opens at today.
   const earlierWork = useMemo(() => {
@@ -438,8 +438,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   const scrollNow = (iso: string, smooth: boolean) => {
-    // A phone shows the plan week by week: from the Monday on (if that is in the year).
-    const monday = isPhone && view === 'week' ? weekOf(iso)[0].iso : iso
+    // A phone shows the plan week by week: from the Monday on (if that is in the year). Today, on opening the
+    // plan or with Heute, starts the view itself: what is past lies to the left.
+    const monday = isPhone && view === 'week' && iso !== today ? weekOf(iso)[0].iso : iso
     const column = document.getElementById(`col-${monday}`) ?? document.getElementById(`col-${iso}`)
     if (!scroller.current || !column) return false
     pinned.current = column.id.slice(4)
@@ -1587,6 +1588,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           ]}
         />
       )}
+      {noteRead && <NoteView note={noteRead} employeeName={employeeOfNote(noteRead).name} onClose={() => setNoteRead(null)} />}
       {noteDialog && (
         <NoteDialog
           employee={noteDialog.employee}

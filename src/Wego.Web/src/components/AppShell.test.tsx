@@ -8,7 +8,7 @@ const user = (role: User['role'], seesOffers: boolean): User => ({
   id: 1, name: 'Test', userName: 'test', role, showInPlan: true, mustChangePassword: false, seesOffers,
 })
 
-const menu = () => screen.getAllByRole('link').map((link) => link.textContent)
+const menu = () => screen.getAllByRole('link').map((link) => link.getAttribute('aria-label'))
 
 describe('AppShell', () => {
   it('shows the plan per phase next to each other and the records on the right', () => {

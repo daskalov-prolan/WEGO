@@ -4,7 +4,6 @@ import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, PlanEmployee, Site } from '../api/types'
 import {
-  activitiesOfStatus,
   activityLabel,
   allowedActivities,
   defaultActivity,
@@ -17,8 +16,7 @@ import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dra
 import { onDay, toInput } from '../lib/ui'
 import { Chip } from './Chip'
 import { LaneCell, StripGrid, StripNav } from './DayStrip'
-import { percent, useDayStrip, workdaysOf } from '../lib/useDayStrip'
-import type { OpenTask } from './PlanMatrix'
+import { useDayStrip, workdaysOf } from '../lib/useDayStrip'
 import { SiteDayDialog } from './SiteDayDialog'
 
 interface Props {
@@ -27,8 +25,7 @@ interface Props {
 }
 
 /**
- * Planning on the page of a site: one lane per employee who works there or whose main activity is still open
- * there, with the days as columns
+ * Planning on the page of a site: one lane per employee who works there, with the days as columns
  * that scroll sideways (about a week in view, one and a half when there is room; weekends narrow). The work
  * at this site stands out.
  */
@@ -52,43 +49,15 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
   })()
   const hereOn = (date: string) => entries.filter((entry) => entry.date === date && entry.siteId === site.id)
 
-  // Activities of the current status that have no entry at this site yet (in the loaded years).
-  const openTasks: OpenTask[] = (() => {
-    if (!isOpen(site.status)) return []
-    const ofStatus = activitiesOfStatus(site.status)
-    return site.tasks
-      .filter((task) => ofStatus.includes(task.activity) && !task.notNeeded)
-      .map((task) => ({
-        activity: task.activity,
-        planned: entries.filter((entry) => entry.siteId === site.id && entry.activity === task.activity).length,
-        estimated: task.estimatedDays,
-      }))
-      .filter((task) => task.planned < task.estimated)
-  })()
-
-  // Who counts for how full a week is: everybody who can do an activity still to plan at this site.
-  const openActivities = new Set(openTasks.map((task) => task.activity))
-  const relevant = employees.filter((employee) =>
-    allowedActivities(employee, site.status).some((activity) => openActivities.has(activity)),
-  )
-  const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
-
-  /** Share of the working days (Mon–Fri, no public holidays) on which these people are planned anywhere. */
-  const load = (monday: string): number | null => {
-    if (relevant.length === 0) return null
-    const workdays = workdaysOf(monday, publicHolidays)
-    if (workdays.length === 0) return 1
-    const taken = workdays.reduce((sum, iso) => sum + relevant.filter((employee) => busy.has(`${employee.id}|${iso}`)).length, 0)
-    return taken / (workdays.length * relevant.length)
-  }
-
-  // Who can take one of the open activities.
-  const capable = relevant
   // The lanes of the calendar: only what concerns this site, i.e. who works here.
   const workedHere = new Set(entries.filter((entry) => entry.siteId === site.id).map((entry) => entry.employeeId))
   const lanes = employees.filter((employee) => workedHere.has(employee.id))
 
-  /** Of these, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
+  // Who may be free for the site: everybody who works on sites, and the days they are taken anywhere.
+  const capable = employees.filter((employee) => allowedActivities(employee, site.status).length > 0)
+  const busy = new Set(entries.map((entry) => `${entry.employeeId}|${entry.date}`))
+
+  /** Of them, who has no entry at all on the working days (Mon–Fri, no public holidays) of a week. */
   const freeIn = (monday: string): PlanEmployee[] => {
     const workdays = workdaysOf(monday, publicHolidays)
     if (workdays.length === 0) return []
@@ -144,22 +113,16 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
 
   const fail = (e: unknown) => notifications.show({ color: 'red', message: messageOf(e) })
 
-  /** A lane's day takes entries the employee can do and the open activities of this site they can do. */
+  /** A lane's day takes entries the employee can do. */
   const accepts = (employee: PlanEmployee, date: string, item: DragItem) =>
-    item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence'
+    item.kind !== 'entry'
       ? false
-      : item.kind === 'task'
-      ? item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
       : !staysPut(item.entry, { employeeId: employee.id, date, siteId: item.entry.siteId }) &&
         (item.entry.activity === null || allowedActivities(employee).includes(item.entry.activity))
 
-  /** Dropped there: an entry moves to this employee and day, an open activity is planned there. */
+  /** Dropped there: an entry moves to this employee and day. */
   const dropItem = (employee: PlanEmployee, date: string, item: DragItem) => {
-    if (item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return
-    if (item.kind === 'task') {
-      plan(item.activity, [employee.id], date).catch(fail)
-      return
-    }
+    if (item.kind !== 'entry') return
     const { entry } = item
     const changes = moveChanges(entry, { employeeId: employee.id, date, siteId: entry.siteId, activity: entry.activity }, entriesOf)
     save(changes, `${entryName(entry)} verschoben: ${employee.name}, ${formatDate(date)}.`).catch(fail)
@@ -183,11 +146,9 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
           today={today}
           nextFree={nextFree?.monday ?? null}
           nextFreeHint={
-            capable.length === 0
-              ? 'Niemand kann eine der offenen Tätigkeiten.'
-              : nextFree
-                ? `KW ${isoWeek(nextFree.monday)}: noch ganz frei sind ${nextFree.free.map((employee) => employee.name).join(', ')}`
-                : 'In den geladenen Jahren ist niemand mehr eine ganze Woche frei, der eine offene Tätigkeit kann.'
+            nextFree
+              ? `KW ${isoWeek(nextFree.monday)}: noch ganz frei sind ${nextFree.free.map((employee) => employee.name).join(', ')}`
+              : 'In den geladenen Jahren ist niemand mehr eine ganze Woche frei.'
           }
         >
           {site.plannedStart && (
@@ -207,15 +168,11 @@ export function SiteMiniPlan({ site, canEdit }: Props) {
         strip={strip}
         today={today}
         corner="Mitarbeiter"
-        mark={(monday) => percent(load(monday))}
-        markTitle="Auslastung der Mitarbeiter mit offener Haupttätigkeit"
         narrow={notHere}
       >
         {plans.length > 0 && lanes.length === 0 && (
           <Text size="sm" c="dimmed" className="mini-no-lanes">
-            {openTasks.length === 0
-              ? 'Noch niemand auf dieser Baustelle eingesetzt.'
-              : 'Niemand kann eine der offenen Tätigkeiten.'}
+            Noch niemand auf dieser Baustelle eingesetzt.
           </Text>
         )}
         {lanes.map((employee) => (

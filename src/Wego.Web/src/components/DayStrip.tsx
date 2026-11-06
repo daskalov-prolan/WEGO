@@ -46,32 +46,16 @@ export function StripNav({
   )
 }
 
-/** Head of a day column; Mondays carry the calendar week and how full it is. */
-function DayHead({
-  day,
-  today,
-  mark,
-  markTitle,
-  narrow,
-}: {
-  day: Day
-  today: string
-  mark: (monday: string) => string
-  markTitle: string
-  narrow: boolean
-}) {
+/** Head of a day column; Mondays carry the calendar week. */
+function DayHead({ day, today, narrow }: { day: Day; today: string; narrow: boolean }) {
   return (
     <div
       id={`mini-${day.iso}`}
       className={['mini-day', 'mini-day-head', day.isWeekend ? 'weekend' : '', narrow ? 'narrow' : '', day.iso === today ? 'today' : ''].join(' ')}
       title={narrow ? `${day.weekday} ${pad(day.dayOfMonth)}.${pad(day.month + 1)}.: hier nichts geplant, alle anderswo` : undefined}
     >
-      <span className="mini-week-mark" title={markTitle}>
-        {day.weekday === 'Mo' ? (
-          <>
-            <span className="kw">KW {isoWeek(day.iso)}</span> · {mark(day.iso)}
-          </>
-        ) :' '}
+      <span className="mini-week-mark">
+        {day.weekday === 'Mo' ? <span className="kw">KW {isoWeek(day.iso)}</span> :' '}
       </span>
       <span className="wd">{day.weekday}</span>
       {!day.isWeekend && (
@@ -92,8 +76,6 @@ export function StripGrid({
   strip,
   today,
   corner,
-  mark,
-  markTitle,
   className,
   narrow = () => false,
   children,
@@ -101,9 +83,6 @@ export function StripGrid({
   strip: DayStrip
   today: string
   corner: ReactNode
-  /** Shown next to the calendar week on Mondays, e.g. how full the week is. */
-  mark: (monday: string) => string
-  markTitle: string
   className?: string
   /** Working days of no interest here: narrow like the weekends, so that more days fit. */
   narrow?: (day: Day) => boolean
@@ -123,7 +102,7 @@ export function StripGrid({
         <div className="mini-corner">{corner}</div>
         {strip.days.map((day) => (
           <Fragment key={day.iso}>
-            <DayHead day={day} today={today} mark={mark} markTitle={markTitle} narrow={!day.isWeekend && narrow(day)} />
+            <DayHead day={day} today={today} narrow={!day.isWeekend && narrow(day)} />
           </Fragment>
         ))}
         {children}

@@ -2,23 +2,19 @@ import { Alert, Group, Paper, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Fragment, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, Site } from '../api/types'
-import { ACTIVITIES, activityLabel, allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
+import type { Activity, Entry, Site } from '../api/types'
+import { allowedActivities, defaultActivity, entryName, isOpen } from '../lib/activities'
 import { addDays, formatDate, isoWeek, todayIso, weekOf } from '../lib/dates'
 import { moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
-import { openTasksBySite, tasksForEmployee } from '../lib/tasks'
-import { onDay, toInput } from '../lib/ui'
-import { percent, useDayStrip, workdaysOf } from '../lib/useDayStrip'
+import { useDayStrip, workdaysOf } from '../lib/useDayStrip'
 import { Chip } from './Chip'
 import { DayEditor } from './DayEditor'
 import { LaneCell, StripGrid, StripNav } from './DayStrip'
-import type { OpenTask } from './PlanMatrix'
-import { TaskBox } from './TaskBox'
 
 interface Props {
   employeeId: number
   canEdit: boolean
-  /** Only these activities: other entries fade, sites and open tasks without them drop out. Empty: all. */
+  /** Only these activities: other entries fade, sites without them drop out. Empty: all. */
   activityFilter?: Set<Activity>
 }
 
@@ -27,10 +23,9 @@ const FIRST_LANES = 12
 const NO_FILTER = new Set<Activity>()
 
 /**
- * Planning on the page of an employee: one lane per site, the days as columns that scroll sideways. First
- * the sites the employee works on in the two weeks from the one in view (in the order of the work), then those with open
- * activities the employee can do (main activity first, each by planned start). The open activities stand at
- * the site's name; planners drag them onto a day of that lane, or an entry onto another day or site.
+ * Planning on the page of an employee: one lane per site, the days as columns that scroll sideways: the sites
+ * the employee works on in the two weeks from the one in view (in the order of the work). Planners drag an
+ * entry onto another day or site.
  * Colleagues on the same site and day are shown faintly. Vacation and sick days get a lane of their own.
  */
 export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILTER }: Props) {
@@ -50,41 +45,16 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
   const busy = new Set(own.map((entry) => entry.date))
   const absences = own.filter((entry) => entry.siteId === null && entry.date >= visible && entry.date <= addDays(visible, 13))
 
-  // The lanes: sites worked on in the two weeks from the one in view, in the order of the work; then those
-  // with open tasks. Scrolling to other weeks brings their sites up.
-  const lanes: { site: Site; tasks: OpenTask[] }[] = []
+  // The lanes: sites worked on in the two weeks from the one in view, in the order of the work. Scrolling to
+  // other weeks brings their sites up.
+  const lanes: { site: Site }[] = []
   const inView = { from: visible, to: addDays(visible, 13) }
   for (const entry of [...own].sort((a, b) => a.date.localeCompare(b.date))) {
     if (entry.siteId === null || entry.date < inView.from || entry.date > inView.to || !fits(entry.activity)) continue
     const site = siteById.get(entry.siteId)
-    if (site && !lanes.some((lane) => lane.site.id === site.id)) lanes.push({ site, tasks: [] })
-  }
-  const tasks = employee ? tasksForEmployee(employee, openTasksBySite(sites, entries), siteById, fits) : []
-  for (const { site, task } of tasks) {
-    const lane = lanes.find((candidate) => candidate.site.id === site.id)
-    if (lane) lane.tasks.push(task)
-    else lanes.push({ site, tasks: [task] })
+    if (site && !lanes.some((lane) => lane.site.id === site.id)) lanes.push({ site })
   }
   const shownLanes = allLanes ? lanes : lanes.slice(0, FIRST_LANES)
-
-  /**
-   * The activities of a lane's site the employee can do, in the order of the job: open ones stand out,
-   * planned ones are greyed but can be planned once more. Cancelled ones and done sites have none.
-   */
-  const stepsOf = (site: Site, open: OpenTask[]): { task: OpenTask; planned: boolean }[] => {
-    if (!employee || !isOpen(site.status)) return []
-    return allowedActivities(employee, site.status)
-      .filter((activity) => fits(activity))
-      .sort((a, b) => ACTIVITIES.findIndex((x) => x.value === a) - ACTIVITIES.findIndex((x) => x.value === b))
-      .flatMap<{ task: OpenTask; planned: boolean }>((activity) => {
-        const openTask = open.find((task) => task.activity === activity)
-        if (openTask) return [{ task: openTask, planned: false }]
-        const task = site.tasks.find((candidate) => candidate.activity === activity)
-        if (!task || task.notNeeded) return []
-        const count = entries.filter((entry) => entry.siteId === site.id && entry.activity === activity).length
-        return [{ task: { activity, planned: count, estimated: task.estimatedDays }, planned: true }]
-      })
-  }
 
   // Everybody's entries per site and day: the employee's own first, then colleagues.
   const atSite = new Map<string, Entry[]>()
@@ -94,12 +64,6 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
     atSite.set(key, [...(atSite.get(key) ?? []), entry])
   }
   for (const list of atSite.values()) list.sort((a, b) => Number(b.employeeId === employeeId) - Number(a.employeeId === employeeId))
-
-  /** Share of the working days (Mon–Fri, no public holidays) of a week on which the employee has an entry. */
-  const load = (monday: string): number => {
-    const workdays = workdaysOf(monday, publicHolidays)
-    return workdays.length === 0 ? 1 : workdays.filter((iso) => busy.has(iso)).length / workdays.length
-  }
 
   /** The next week after the first one in view without any entry on a working day; within the loaded years. */
   const nextFree = (() => {
@@ -120,36 +84,11 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
     reload()
   }
 
-  /** Puts an open activity of a site on the employee on that day, next to what is planned there already. */
-  const planTask = async (site: Site, activity: Activity, date: string) => {
-    const entry: DayEntryInput = {
-      type: 'Baustelle',
-      siteId: site.id,
-      activity,
-      startTime: null,
-      endTime: null,
-      note: null,
-      noteImportant: false,
-    }
-    await save(
-      [{ employeeId, date, entries: [...entriesOn(date).map(toInput), onDay(entry, entriesOn(date))] }],
-      `${activityLabel(activity)} auf ${site.name} am ${formatDate(date)} eingeplant.`,
-    )
-  }
-
-  const cancelTask = async (site: Site, activity: Activity) => {
-    const estimated = site.tasks.find((task) => task.activity === activity)?.estimatedDays ?? 1
-    await api.updateSiteTask(site.id, activity, estimated, true)
-    notifications.show({ message: `${activityLabel(activity)} auf ${site.name} storniert.` })
-    reload()
-  }
-
   const entriesOf = (id: number, iso: string) => entries.filter((other) => other.employeeId === id && other.date === iso)
 
-  /** A site's day takes the open activities of that site the employee can do, and the employee's site entries. */
+  /** A site's day takes the employee's site entries. */
   const acceptsOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee || item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return false
-    if (item.kind === 'task') return item.siteId === site.id && allowedActivities(employee, site.status).includes(item.activity)
+    if (!employee || item.kind !== 'entry') return false
     const { entry } = item
     return (
       entry.employeeId === employeeId &&
@@ -160,11 +99,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
   }
 
   const dropOnSite = (site: Site, date: string, item: DragItem) => {
-    if (!employee || item.kind === 'employee' || item.kind === 'activity' || item.kind === 'absence') return
-    if (item.kind === 'task') {
-      planTask(site, item.activity, date).catch(fail)
-      return
-    }
+    if (!employee || item.kind !== 'entry') return
     const { entry } = item
     // The activity stays if it fits the site, else the employee's own one there.
     const activity =
@@ -216,9 +151,7 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
         <StripGrid
           strip={strip}
           today={today}
-          corner="Baustelle · offen"
-          mark={(monday) => percent(load(monday))}
-          markTitle={`Anteil der Arbeitstage mit Termin von ${employee.name}`}
+          corner="Baustelle"
         >
           {absences.length > 0 && (
             <>
@@ -248,30 +181,15 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
           )}
           {plans.length > 0 && lanes.length === 0 && (
             <Text size="sm" c="dimmed" className="mini-no-lanes">
-              Keine Einsätze in diesen Wochen und keine offene Tätigkeit, die {employee.name} kann.
+              Keine Einsätze in diesen Wochen.
             </Text>
           )}
-          {shownLanes.map(({ site, tasks: open }) => (
+          {shownLanes.map(({ site }) => (
             <Fragment key={site.id}>
               <div className="mini-lane-name site-lane">
                 <a className="name" href={`#/baustellen/${site.id}`} title={site.name}>
                   {site.name}
                 </a>
-                {stepsOf(site, open).map(({ task, planned }) => (
-                  <TaskBox
-                    key={task.activity}
-                    planned={planned}
-                    task={task}
-                    employees={[employee]}
-                    employee={employee}
-                    defaultDate={weekOf(visible).find((day) => !day.isWeekend && day.iso >= today)?.iso ?? visible}
-                    minDate={`${years[0]}-01-01`}
-                    maxDate={`${years[years.length - 1]}-12-31`}
-                    onPlan={canEdit ? (_, date) => planTask(site, task.activity, date) : undefined}
-                    onCancel={canEdit && !planned ? () => cancelTask(site, task.activity) : undefined}
-                    siteId={site.id}
-                  />
-                ))}
               </div>
               {days.map((day) => (
                 <LaneCell

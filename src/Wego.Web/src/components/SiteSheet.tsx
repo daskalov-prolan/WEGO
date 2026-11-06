@@ -14,10 +14,24 @@ interface Props {
 
 /** The record of a construction site, opened from a cell of the plan. */
 export function SiteSheet({ site, canEdit, showPageLink = true, onEdit, onClose }: Props) {
+  // The name of the customer leads to the page of the site, for those who may open it.
+  const page = canEdit && showPageLink ? `#/baustellen/${site.id}` : undefined
   return (
-    <Sheet onClose={onClose} title={<Text fw={700}>{site.name}</Text>} size="md">
+    <Sheet
+      onClose={onClose}
+      title={
+        page ? (
+          <Text fw={700} component="a" href={page} onClick={onClose} className="site-sheet-title">
+            {site.name}
+          </Text>
+        ) : (
+          <Text fw={700}>{site.name}</Text>
+        )
+      }
+      size="md"
+    >
       <Stack gap="sm">
-        <SiteSummary site={site} />
+        <SiteSummary site={site} clientHref={page} />
         <Group justify="flex-end" gap="xs">
           {canEdit && (
             <>
