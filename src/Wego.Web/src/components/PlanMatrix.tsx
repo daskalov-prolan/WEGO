@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
-import type { Activity, CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import type { CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
 import { formatDateLong, HALF_DAYS, MONTHS } from '../lib/dates'
@@ -484,19 +484,10 @@ export function TimelineMatrix(props: MatrixProps) {
   )
 }
 
-export interface OpenTask {
-  activity: Activity
-  /** Employee days planned with this activity at the site, and how many are expected. */
-  planned: number
-  estimated: number
-}
-
 export interface SiteRow {
   site: Site
   /** The entries at this site, per day. */
   byDate: Map<string, Entry[]>
-  /** Activities of the current status that are not fully planned yet. */
-  openTasks: OpenTask[]
 }
 
 interface SiteTimelineProps {

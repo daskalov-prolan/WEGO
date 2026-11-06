@@ -110,7 +110,7 @@ describe('SitesPage', () => {
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     expect(await within(chung).findByText('Planer G')).toBeInTheDocument()
     expect(within(chung).getByText('Alt-Karow 53, 13125 Berlin')).toBeInTheDocument()
-    expect(within(chung).getByRole('link', { name: '030 123 45' })).toHaveAttribute('href', 'tel:03012345')
+    expect(within(chung).getByRole('link', { name: 'Anrufen: 030 123 45' })).toHaveAttribute('href', 'tel:03012345')
   })
 
   it('shows the sites of the chosen view on the map of Berlin', async () => {

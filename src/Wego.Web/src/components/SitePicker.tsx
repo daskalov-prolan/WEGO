@@ -1,10 +1,10 @@
-import { Anchor, Button, Group, Select, Text } from '@mantine/core'
+import { Button, Group, Select, Text } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress } from '../lib/sites'
 import { SiteForm } from './SiteForm'
-import { SiteMapLink } from './SitesMap'
+import { CallButton, SiteWayButtons } from './SiteActions'
 
 interface Props {
   sites: Site[]
@@ -90,13 +90,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           </Text>
           <Text size="sm">
             <span className="muted-inline">Telefon Kunde: </span>
-            {chosen.clientPhone ? (
-              <Anchor size="sm" href={`tel:${chosen.clientPhone.replace(/[^+0-9]/g, '')}`}>
-                {chosen.clientPhone}
-              </Anchor>
-            ) : (
-              '–'
-            )}
+            {chosen.clientPhone ? <CallButton phone={chosen.clientPhone} size="compact-xs" /> : '–'}
           </Text>
           <Group gap="md" mt={2}>
             {/* Straight to the page of the site, to add or correct its details. */}
@@ -105,7 +99,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
                 Zur Baustelle
               </Button>
             )}
-            <SiteMapLink site={chosen} />
+            <SiteWayButtons site={chosen} size="compact-xs" />
           </Group>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { Button, Group, HoverCard, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import { useState, type MouseEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { CalendarNote } from '../api/types'
@@ -6,7 +7,8 @@ import { formatDateLong } from '../lib/dates'
 
 /**
  * The notes in a field of the plan: the short title, the explanation when pointing at it (or tapping it).
- * `onMenu`: planners, a right click on a note (change or delete it); `onOpen`: planners, a click on it.
+ * `onMenu`: planners, a right click on a note (change or delete it); `onOpen`: a click on it (planners change
+ * it, the others read it, also where pointing at it is not possible, on a phone).
  */
 export function CellNotes({
   notes,
@@ -17,10 +19,12 @@ export function CellNotes({
   onMenu?: (note: CalendarNote, event: MouseEvent) => void
   onOpen?: (note: CalendarNote) => void
 }) {
+  // A finger opens the note itself; the card for pointing at it would only get in the way.
+  const touch = useMediaQuery('(pointer: coarse)')
   return (
     <span className="cell-notes">
       {notes.map((note) => (
-        <HoverCard key={note.id} width={260} shadow="md" openDelay={150} position="bottom" withArrow withinPortal>
+        <HoverCard key={note.id} disabled={touch && !!onOpen} width={260} shadow="md" openDelay={150} position="bottom" withArrow withinPortal>
           <HoverCard.Target>
             <span
               className="cell-note"
@@ -161,6 +165,29 @@ export function NoteDialog({
           </Group>
         </Stack>
       </form>
+    </Modal>
+  )
+}
+
+/** A note opened by those who may not change it: its title and explanation, to read. */
+export function NoteView({ note, employeeName, onClose }: { note: CalendarNote; employeeName: string; onClose: () => void }) {
+  return (
+    <Modal opened onClose={onClose} title={`Notiz · ${employeeName} · ${formatDateLong(note.date)}`} centered>
+      <Stack gap="sm">
+        <Text fw={700}>{note.title}</Text>
+        {note.text ? (
+          <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+            {note.text}
+          </Text>
+        ) : (
+          <Text size="sm" c="dimmed">
+            Keine Erklärung.
+          </Text>
+        )}
+        <Group justify="flex-end">
+          <Button onClick={onClose}>Schließen</Button>
+        </Group>
+      </Stack>
     </Modal>
   )
 }

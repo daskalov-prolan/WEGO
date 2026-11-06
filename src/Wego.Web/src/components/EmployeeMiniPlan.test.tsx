@@ -34,7 +34,7 @@ const plan: Plan = {
   ],
   schoolHolidays: [],
   // Bernd works in KW 10 and KW 11; KW 12 is free.
-  entries: [entry(1, '2026-03-03', 13, 'Meier'), entry(2, '2026-03-10', 13, 'Meier')],
+  entries: [entry(1, '2026-03-03', 13, 'Meier'), entry(2, '2026-03-10', 13, 'Meier'), entry(3, '2026-03-04', 11, 'Fliesen spät')],
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -60,39 +60,23 @@ const batch = () => {
 const laneNames = () => [...document.querySelectorAll('.mini-lane-name .name')].map((name) => name.textContent)
 
 describe('EmployeeMiniPlan', () => {
-  it('has a lane per site: first those worked on, then those with open tasks by planned start', async () => {
+  it('has a lane per site the employee works on in the weeks in view, without open activities', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     await screen.findByText(byText('KW 10 · ab 02.03.'))
-    // A craftsman does every activity of the construction phase; the open tasks stand at their site.
-    expect(laneNames()).toEqual(['Meier', 'Abriss früh', 'Fliesen früh', 'Fliesen spät'])
-    const early = document.querySelectorAll('.mini-lane-name')[2] as HTMLElement
-    expect(within(early).getAllByRole('button').map((button) => button.textContent)).toEqual(['Sanitär', 'Fliesenarbeiten'])
+    expect(laneNames()).toEqual(['Meier', 'Fliesen spät'])
+    // No boxes of open activities at the sites.
+    expect(within(document.querySelector('.mini-lane-name.site-lane') as HTMLElement).queryAllByRole('button')).toEqual([])
   })
 
-  it('opens at the current week, jumps to the next free week and plans a dragged task on a day of its site', async () => {
+  it('opens at the current week with only the calendar week above it, and jumps to the next free week', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit />)
     expect(await screen.findByText(byText('KW 10 · ab 02.03.'))).toBeInTheDocument()
-    expect(screen.getByText(byText('KW 10 · 20 %'))).toBeInTheDocument()
+    expect(screen.getAllByText(byText('KW 10')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument()
     expect(within(screen.getByRole('button', { name: 'Meier, 2026-03-03' })).getAllByText('Bernd').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Nächste freie Woche/ }))
-    expect(screen.getByText(byText('KW 12 · ab 16.03.'))).toBeInTheDocument()
-
-    const lane = [...document.querySelectorAll<HTMLElement>('.mini-lane-name')].find((name) => name.textContent?.startsWith('Abriss früh'))!
-    const box = within(lane).getByRole('button', { name: 'Abriss / Baubeginn' })
-    // Only a day of its own site takes it.
-    fireEvent.dragStart(box)
-    expect(fireEvent.dragOver(screen.getByRole('button', { name: 'Fliesen spät, 2026-03-17' }))).toBe(true)
-    const day = screen.getByRole('button', { name: 'Abriss früh, 2026-03-17' })
-    expect(fireEvent.dragOver(day)).toBe(false)
-    fireEvent.drop(day)
-    fireEvent.dragEnd(box)
-    await waitFor(() => expect(batch()).not.toBeNull())
-    expect(batch()).toEqual([
-      { employeeId: 2, date: '2026-03-17', entries: [expect.objectContaining({ siteId: 10, activity: 'Abriss' })] },
-    ])
-    // Still the week it was planned in.
     expect(screen.getByText(byText('KW 12 · ab 16.03.'))).toBeInTheDocument()
   })
 
@@ -113,10 +97,10 @@ describe('EmployeeMiniPlan', () => {
     ])
   })
 
-  it('follows the activity filter: only sites and open tasks with those activities', async () => {
+  it('follows the activity filter: only sites with those activities', async () => {
     renderWithProviders(<EmployeeMiniPlan employeeId={2} canEdit activityFilter={new Set(['Abriss'])} />)
     await screen.findByText(byText('KW 10 · ab 02.03.'))
-    // Meier only has Fliesen, the Fliesen tasks drop out.
-    expect(laneNames()).toEqual(['Abriss früh'])
+    // Bernd only lays tiles in these weeks.
+    expect(laneNames()).toEqual([])
   })
 })

@@ -1,10 +1,10 @@
-import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
+import { Badge, Group, Modal, Stack, Text } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import type { Entry, Plan, Site } from '../api/types'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { formatDate, formatDateLong, formatDayTime } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
-import { SiteMapLink } from './SitesMap'
+import { CallButton, SiteWayButtons } from './SiteActions'
 
 interface Props {
   /** The entry tapped: its day, time and note. */
@@ -61,17 +61,8 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
         {address && (
           <Row label="Adresse">
             <Text fw={600}>{address}</Text>
-            <Group gap="xs" mt={6}>
-              <Button
-                component="a"
-                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`}
-                target="_blank"
-                rel="noreferrer"
-                size="sm"
-              >
-                Navigation starten
-              </Button>
-              <SiteMapLink site={site} size="sm" />
+            <Group mt={6}>
+              <SiteWayButtons site={site} />
             </Group>
           </Row>
         )}
@@ -80,16 +71,18 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
           <Row label="Kunde">
             {site.client && <Text fw={600}>{site.client}</Text>}
             {site.clientPhone && (
-              <Button component="a" href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="sm" mt={6}>
-                Anrufen: {site.clientPhone}
-              </Button>
+              <Group mt={6}>
+                <CallButton phone={site.clientPhone} />
+              </Group>
             )}
           </Row>
         )}
 
         {site.description && (
           <Row label="Was ist zu tun">
-            <Text style={{ whiteSpace: 'pre-line' }}>{site.description}</Text>
+            <Text className="site-description" style={{ whiteSpace: 'pre-line' }}>
+              {site.description}
+            </Text>
           </Row>
         )}
 

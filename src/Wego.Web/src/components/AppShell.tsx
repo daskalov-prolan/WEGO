@@ -23,7 +23,7 @@ interface Props {
 // Left the plans (the own one, and the plan of everybody per phase), right the records.
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
-  { page: 'angebotsphase', label: 'Planung Angebotsphase', visible: (user: User) => user.seesOffers !== false },
+  { page: 'angebotsphase', label: 'Planung Angebotsphase', short: 'Angebot', visible: (user: User) => user.seesOffers !== false },
   { page: 'bauphase', label: 'Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
@@ -81,8 +81,17 @@ export function AppShell({ user, page, year, onYearChange, onLogout, showYear = 
             aria-current={page === item.page ? 'page' : undefined}
             // The first of the records starts the group on the right.
             className={item.right && !shown[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
+            aria-label={item.label}
           >
-            {item.label}
+            {/* On a phone the short name, so that all pages fit into the bar. */}
+            {'short' in item ? (
+              <>
+                <span className="nav-long">{item.label}</span>
+                <span className="nav-short">{item.short}</span>
+              </>
+            ) : (
+              item.label
+            )}
           </a>
         ))}
       </nav>

@@ -113,13 +113,13 @@ describe('SiteMiniPlan', () => {
     expect([...document.querySelectorAll('.mini-lane-name')].map((lane) => lane.textContent)).toEqual(['Anna'])
   })
 
-  it('shows a lane per employee who worked here and the weekly load of all craftsmen', async () => {
+  it('shows a lane per employee who worked here and only the calendar week above the days', async () => {
     renderWithProviders(<SiteMiniPlan site={site} canEdit />)
 
     // The first entry is on Thursday 5 March: the weeks begin on Monday 2 March.
-    // Anna and Bernd can both do the open work; each works one of five days in KW 10, none in KW 11.
-    expect(await screen.findByText(byText('KW 10 · 20 %'))).toBeInTheDocument()
-    expect(screen.getByText(byText('KW 11 · 0 %'))).toBeInTheDocument()
+    expect((await screen.findAllByText(byText('KW 10'))).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(byText('KW 11')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument()
 
     // A lane only for who worked here: Anna, not Bernd.
     expect(screen.getByRole('button', { name: 'Anna, 2026-03-05' })).toBeInTheDocument()

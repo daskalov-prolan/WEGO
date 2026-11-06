@@ -1,4 +1,4 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core'
+import { createTheme, Drawer, Modal, type MantineColorsTuple } from '@mantine/core'
 
 // The dark petrol of the WEGO vans (#0f6378 is shade 7, #08394a shade 9).
 const wego: MantineColorsTuple = [
@@ -26,4 +26,9 @@ export const theme = createTheme({
   headings: { fontFamily: "'europa', 'Segoe UI', system-ui, sans-serif" },
   defaultRadius: 'md',
   cursorType: 'pointer',
+  components: {
+    // An open dialog locks the page from scrolling, but not from zooming with two fingers.
+    Modal: Modal.extend({ defaultProps: { removeScrollProps: { allowPinchZoom: true } } }),
+    Drawer: Drawer.extend({ defaultProps: { removeScrollProps: { allowPinchZoom: true } } }),
+  },
 })

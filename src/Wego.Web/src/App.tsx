@@ -14,6 +14,7 @@ import { PlanPage } from './pages/PlanPage'
 import { SitePage } from './pages/SitePage'
 import { SitesPage } from './pages/SitesPage'
 import { CURRENT_YEAR } from './lib/dates'
+import { useIsPhone } from './lib/useIsPhone'
 
 function useHashRoute(): string[] {
   const [hash, setHash] = useState(window.location.hash)
@@ -32,6 +33,7 @@ export default function App() {
   // Kept in memory only, so that somebody with an initial password does not have to type it twice.
   const [loginPassword, setLoginPassword] = useState('')
   const [page, param] = useHashRoute()
+  const phone = useIsPhone()
   // The activities are kept under Verwaltung: loaded once signed in, and again when they change there.
   const [activities, setActivitiesVersion] = useState(0)
   const signedIn = Boolean(user && !user.mustChangePassword)
@@ -62,6 +64,8 @@ export default function App() {
       <LoginPage
         onLogin={(signedIn, password) => {
           setLoginPassword(password)
+          // On a phone the day begins with the own plan, whatever page was open before.
+          if (phone && signedIn.showInPlan) window.location.hash = '#/mein-plan'
           setUser(signedIn)
         }}
       />
@@ -88,7 +92,8 @@ export default function App() {
   const selectedId = param ? Number(param) : null
 
   // Craftsmen start with their own week, planners with the plan of everybody (in the construction phase).
-  const startPage = user.showInPlan && !canPlan ? 'mein-plan' : 'bauphase'
+  // On a phone everybody in the plan starts with his own plan.
+  const startPage = user.showInPlan && (!canPlan || phone) ? 'mein-plan' : 'bauphase'
   // The plan has a page per phase; "plan" (older links) is the construction phase, and so is the offer
   // phase for whoever may not see it.
   const offers = user.seesOffers !== false

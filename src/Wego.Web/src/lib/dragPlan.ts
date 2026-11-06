@@ -9,7 +9,6 @@ import { onDay, toInput } from './ui'
  */
 export type DragItem =
   | { kind: 'entry'; entry: Entry }
-  | { kind: 'task'; siteId: number; activity: Activity }
   | { kind: 'employee'; employeeId: number; name: string }
   | { kind: 'activity'; activity: Activity; label: string }
   | { kind: 'absence'; type: Exclude<EntryType, 'Baustelle'> }
@@ -36,7 +35,7 @@ export function dragSource(item: DragItem, enabled: boolean) {
       }
       current = item
       document.body.classList.add('plan-dragging')
-      const text = item.kind === 'entry' ? (item.entry.siteName ?? item.entry.activity ?? item.entry.type) : item.kind === 'task' ? item.activity : item.kind === 'employee' ? item.name : item.kind === 'absence' ? item.type : item.label
+      const text = item.kind === 'entry' ? (item.entry.siteName ?? item.entry.activity ?? item.entry.type) : item.kind === 'employee' ? item.name : item.kind === 'absence' ? item.type : item.label
       event.dataTransfer?.setData('text/plain', text)
       if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
     },

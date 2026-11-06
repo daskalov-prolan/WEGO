@@ -46,7 +46,7 @@ describe('SitePage', () => {
   it('sums up customer, address and planning', async () => {
     renderWithProviders(<SitePage year={2026} siteId={7} />)
     expect(await screen.findByText('Telefon Kunde')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '030 55 66' })).toHaveAttribute('href', 'tel:0305566')
+    expect(screen.getByRole('link', { name: 'Anrufen: 030 55 66' })).toHaveAttribute('href', 'tel:0305566')
     expect(screen.getByText('Geplanter Start').nextElementSibling).toHaveTextContent(/16.11./)
     expect(screen.queryByText(/Label/)).not.toBeInTheDocument()
   })

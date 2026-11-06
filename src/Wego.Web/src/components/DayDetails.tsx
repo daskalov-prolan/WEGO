@@ -4,7 +4,7 @@ import { formatAddress } from '../lib/sites'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
 import { Sheet } from './Sheet'
-import { SiteLocation } from './SiteLocation'
+import { CallButton, SiteWayButtons } from './SiteActions'
 
 interface Props {
   employee: NamedItem
@@ -35,7 +35,13 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
           return (
             <div key={entry.id} className="day-details-entry">
               <Chip entry={entry} withActivity />
-              {address && <SiteLocation location={address} />}
+              {address && <Text size="sm">{address}</Text>}
+              {site && (
+                <Group gap="xs">
+                  <SiteWayButtons site={site} size="xs" />
+                  {site.clientPhone && <CallButton phone={site.clientPhone} size="xs" />}
+                </Group>
+              )}
             </div>
           )
         })}
