@@ -81,6 +81,12 @@ public class Employee
     /// <summary>Set when a planner assigned the password, so that only the employee knows the final one.</summary>
     public bool MustChangePassword { get; set; }
 
+    /// <summary>
+    /// Deleted by a Planer G: no login, no longer to be planned or changed. The entries in the plan stay, and the
+    /// lists show the employee at the end as deleted.
+    /// </summary>
+    public DateTime? DeletedAt { get; set; }
+
     public List<PlanEntry> Entries { get; set; } = [];
 }
 

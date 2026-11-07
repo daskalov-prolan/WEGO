@@ -273,10 +273,12 @@ export interface Employee {
   /** Usual wage per hour in euros, for the costing of a site (Planer G only). */
   hourlyRate?: number | null
   phone?: string | null
+  /** Deleted by a Planer G: the entries stay, the lists show them at the end. */
+  isDeleted?: boolean
 }
 
 /** An employee in the list for all planners: no login, no wage. */
-export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone'>
+export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone' | 'isDeleted'>
 
 /** The wage per hour of an employee on one site, where it differs from the usual one. */
 export interface SiteHourlyRate {

@@ -130,6 +130,7 @@ export const api = {
   employeesOverview: () => request<EmployeeOverview[]>('GET', '/api/employees/overview'),
   createEmployee: (input: EmployeeInput) => request<Employee>('POST', '/api/employees', input),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>('PUT', `/api/employees/${id}`, input),
+  deleteEmployee: (id: number) => request<void>('DELETE', `/api/employees/${id}`),
   siteHourlyRates: (siteId: number) => request<SiteHourlyRate[]>('GET', `/api/sites/${siteId}/hourly-rates`),
   /** The wage of an employee on this site only; null goes back to the usual one. */
   setSiteHourlyRate: (siteId: number, employeeId: number, hourlyRate: number | null) =>

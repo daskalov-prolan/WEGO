@@ -31,6 +31,17 @@ afterEach(() => {
 })
 
 describe('EmployeesPage', () => {
+  it('shows a deleted employee at the end as such, not to be opened', async () => {
+    fetchMock.mockImplementation(async () =>
+      new Response(JSON.stringify([...employees, employee(9, 'Dieter', false, { isDeleted: true })]), { status: 200 }))
+    renderWithProviders(<EmployeesPage canEdit />)
+    await screen.findByRole('link', { name: 'Anna' })
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(rows.at(-1)!.textContent).toContain('Dieter')
+    expect(rows.at(-1)!.textContent).toContain('gelöscht')
+    expect(screen.queryByRole('link', { name: 'Dieter' })).not.toBeInTheDocument()
+  })
+
   it('lists the active employees for Planer G with their wage, and opens one in the administration', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EmployeesPage canEdit />)

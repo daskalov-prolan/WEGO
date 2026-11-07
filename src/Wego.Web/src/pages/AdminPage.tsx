@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -6,6 +7,7 @@ import {
   Code,
   CopyButton,
   Group,
+  Menu,
   NumberInput,
   Paper,
   PasswordInput,
@@ -96,7 +98,7 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
   // Opened from the list of employees: that employee's form, once.
   const opened = useRef(false)
   useEffect(() => {
-    const employee = employees.find((candidate) => candidate.id === openId)
+    const employee = employees.find((candidate) => candidate.id === openId && !candidate.isDeleted)
     if (!employee || opened.current) return
     opened.current = true
     setEditing({ id: employee.id, input: toEmployeeInput(employee) })
@@ -111,6 +113,24 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
         ...created,
         ...current.filter((a) => !created.some((c) => c.employeeId === a.employeeId)),
       ])
+      load()
+    } catch (e) {
+      setError(messageOf(e))
+    }
+  }
+
+  // The entries in the plan stay; the employee stands at the end of the lists as deleted.
+  const remove = async (employee: Employee) => {
+    if (
+      !window.confirm(
+        `${employee.name} löschen? Die Einträge im Kalender bleiben erhalten. Die Anmeldung wird entfernt, und ${employee.name} steht in der Mitarbeiterliste am Ende als gelöscht.`,
+      )
+    )
+      return
+    setError('')
+    try {
+      await api.deleteEmployee(employee.id)
+      notifications.show({ message: `${employee.name} gelöscht.`, color: 'green' })
       load()
     } catch (e) {
       setError(messageOf(e))
@@ -201,40 +221,64 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
         </Alert>
       )}
 
-      <Table.ScrollContainer minWidth={760}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="xs">
+      {/* Calm rows: the state under the name, the role written out, one button and a menu for the rest. */}
+      <Table.ScrollContainer minWidth={820}>
+        <Table striped highlightOnHover withTableBorder verticalSpacing="sm" className="admin-employees">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>
-              <Table.Th>Benutzername</Table.Th>
               <Table.Th>Rolle</Table.Th>
+              <Table.Th>Benutzername</Table.Th>
               <Table.Th>Telefon</Table.Th>
               <Table.Th ta="right">Urlaubstage</Table.Th>
               <Table.Th ta="right">Stundensatz</Table.Th>
               <Table.Th ta="right">Reihenfolge</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th />
+              <Table.Th w={150} />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {employees.map((employee) => (
-              <Table.Tr key={employee.id} opacity={employee.isActive ? 1 : 0.55}>
-                <Table.Td fw={600}>{employee.name}</Table.Td>
+              <Table.Tr key={employee.id} className={employee.isActive ? undefined : 'admin-employee-off'}>
                 <Table.Td>
-                  {employee.userName ?? (
-                    <Text size="sm" c="dimmed">
-                      keine Anmeldung
-                    </Text>
+                  <Text fw={600} size="sm">
+                    {employee.name}
+                  </Text>
+                  {(employee.isDeleted || !employee.isActive || !employee.showInPlan) && (
+                    <Group gap={4} mt={2}>
+                      {employee.isDeleted ? (
+                        <Badge size="xs" color="red" variant="light">
+                          gelöscht
+                        </Badge>
+                      ) : (
+                        !employee.isActive && (
+                          <Badge size="xs" color="gray">
+                            inaktiv
+                          </Badge>
+                        )
+                      )}
+                      {!employee.isDeleted && !employee.showInPlan && (
+                        <Badge size="xs" color="gray" variant="outline">
+                          nicht im Plan
+                        </Badge>
+                      )}
+                    </Group>
                   )}
                 </Table.Td>
                 <Table.Td>
-                  <Badge variant="light" color={employee.role === 'Handwerker' ? 'gray' : 'wego'}>
+                  <Badge variant="light" color={employee.role === 'Handwerker' ? 'gray' : 'wego'} className="admin-role">
                     {roleLabel(employee.role)}
                   </Badge>
                 </Table.Td>
-                <Table.Td>{employee.phone}</Table.Td>
+                <Table.Td>
+                  {employee.userName ?? (
+                    <Text size="sm" c="dimmed">
+                      –
+                    </Text>
+                  )}
+                </Table.Td>
+                <Table.Td className="nowrap">{employee.phone}</Table.Td>
                 <Table.Td ta="right">{employee.vacationDaysPerYear}</Table.Td>
-                <Table.Td ta="right">
+                <Table.Td ta="right" className="nowrap">
                   {employee.hourlyRate == null ? (
                     <Text size="sm" c="dimmed">
                       –
@@ -245,42 +289,43 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                 </Table.Td>
                 <Table.Td ta="right">{employee.sortOrder}</Table.Td>
                 <Table.Td>
-                  <Group gap={4}>
-                    {!employee.isActive && <Badge color="gray">inaktiv</Badge>}
-                    {!employee.showInPlan && (
-                      <Badge color="gray" variant="outline">
-                        nicht im Plan
-                      </Badge>
-                    )}
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={4} justify="flex-end" wrap="nowrap">
-                    <Button
-                      size="compact-sm"
-                      variant="default"
-                      onClick={() =>
-                        setEditing({ id: employee.id, input: toEmployeeInput(employee) })
-                      }
-                    >
-                      Bearbeiten
-                    </Button>
-                    {employee.isActive && (
+                  {/* A deleted employee is no longer changed. */}
+                  {!employee.isDeleted && (
+                    <Group gap={6} justify="flex-end" wrap="nowrap">
                       <Button
                         size="compact-sm"
-                        variant="light"
-                        onClick={() =>
-                          (!employee.hasPassword ||
-                            window.confirm(
-                              `Neues Startpasswort für ${employee.name} erzeugen? Das bisherige Passwort gilt dann nicht mehr.`,
-                            )) &&
-                          createAccesses([employee])
-                        }
+                        variant="default"
+                        onClick={() => setEditing({ id: employee.id, input: toEmployeeInput(employee) })}
                       >
-                        {employee.hasPassword ? 'Passwort zurücksetzen' : 'Zugang anlegen'}
+                        Bearbeiten
                       </Button>
-                    )}
-                  </Group>
+                      <Menu position="bottom-end" withinPortal>
+                        <Menu.Target>
+                          <ActionIcon variant="default" radius="xl" aria-label={`Weitere Aktionen: ${employee.name}`}>
+                            ⋯
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {employee.isActive && (
+                            <Menu.Item
+                              onClick={() =>
+                                (!employee.hasPassword ||
+                                  window.confirm(
+                                    `Neues Startpasswort für ${employee.name} erzeugen? Das bisherige Passwort gilt dann nicht mehr.`,
+                                  )) &&
+                                createAccesses([employee])
+                              }
+                            >
+                              {employee.hasPassword ? 'Passwort zurücksetzen' : 'Zugang anlegen'}
+                            </Menu.Item>
+                          )}
+                          <Menu.Item color="red" onClick={() => void remove(employee)}>
+                            Löschen …
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Group>
+                  )}
                 </Table.Td>
               </Table.Tr>
             ))}

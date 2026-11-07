@@ -9,10 +9,11 @@ namespace Wego.Api.Endpoints;
 public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
-    public record EmployeeOverviewDto(int Id, string Name, string Role, bool IsActive, bool ShowInPlan, string? Phone);
+    public record EmployeeOverviewDto(int Id, string Name, string Role, bool IsActive, bool ShowInPlan, string? Phone,
+        bool IsDeleted);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
-        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone);
+        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
@@ -34,14 +35,16 @@ public static class EmployeeEndpoints
 
         // The list of employees for everybody: role and telephone, nothing of login or wage.
         app.MapGet("/api/employees/overview", async (WegoDbContext db) =>
-            await db.Employees.OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
-                .Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone))
+            // The deleted ones at the end.
+            await db.Employees.OrderBy(e => e.DeletedAt != null).ThenBy(e => e.SortOrder).ThenBy(e => e.Name)
+                .Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone, e.DeletedAt != null))
                 .ToListAsync()).RequireAuthorization();
 
         var group = app.MapGroup("/api/employees").RequireAuthorization(Policies.Admin);
 
         group.MapGet("/", async (WegoDbContext db) =>
-            (await db.Employees.OrderBy(e => e.SortOrder).ThenBy(e => e.Name).ToListAsync()).Select(ToDto));
+            (await db.Employees.OrderBy(e => e.DeletedAt != null).ThenBy(e => e.SortOrder).ThenBy(e => e.Name).ToListAsync())
+            .Select(ToDto));
 
         group.MapPost("/", async (EmployeeInput input, ClaimsPrincipal user, WegoDbContext db,
             IPasswordHasher<Employee> hasher) =>
@@ -67,6 +70,7 @@ public static class EmployeeEndpoints
         {
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
+            if (employee.DeletedAt is not null) return ApiErrors.BadRequest("Dieser Mitarbeiter ist gelöscht.");
 
             var before = ToDto(employee);
             var error = await Apply(employee, input, db, hasher);
@@ -88,6 +92,29 @@ public static class EmployeeEndpoints
             return Results.Ok(ToDto(employee));
         });
 
+        // Deletes an employee: the entries in the plan stay (as history), the login goes, and the lists show them
+        // at the end as deleted. Nobody deletes themselves, and one Planer G with a login stays.
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var employee = await db.Employees.FindAsync(id);
+            if (employee is null) return Results.NotFound();
+            if (employee.DeletedAt is not null) return Results.NoContent();
+            if (id == user.EmployeeId()) return ApiErrors.BadRequest("Sie können sich nicht selbst löschen.");
+            var otherAdmins = await db.Employees.AnyAsync(e =>
+                e.Id != id && e.IsActive && e.Role == Roles.PlanerG && e.UserName != null && e.PasswordHash != null);
+            if (!otherAdmins) return ApiErrors.BadRequest("Es muss mindestens ein aktiver Planer G mit Anmeldung übrig bleiben.");
+
+            var before = ToDto(employee);
+            employee.DeletedAt = DateTime.UtcNow;
+            employee.IsActive = false;
+            employee.UserName = null;
+            employee.PasswordHash = null;
+            employee.MustChangePassword = false;
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter, "Gelöscht", id, before, ToDto(employee));
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         // Creates the login of an employee (user name from the name) or resets a forgotten password.
         // The employee has to choose their own password at the first sign-in.
         group.MapPost("/{id:int}/access", async (int id, ClaimsPrincipal user, WegoDbContext db,
@@ -95,7 +122,7 @@ public static class EmployeeEndpoints
         {
             var employee = await db.Employees.FindAsync(id);
             if (employee is null) return Results.NotFound();
-            if (!employee.IsActive) return ApiErrors.BadRequest("Für inaktive Mitarbeiter gibt es keinen Zugang.");
+            if (!employee.IsActive) return ApiErrors.BadRequest("Für inaktive oder gelöschte Mitarbeiter gibt es keinen Zugang.");
 
             var before = ToDto(employee);
             employee.UserName ??= await UniqueUserName(db, employee.Name);
@@ -184,5 +211,5 @@ public static class EmployeeEndpoints
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
         e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities,
-        e.HourlyRate, e.Phone);
+        e.HourlyRate, e.Phone, e.DeletedAt is not null);
 }

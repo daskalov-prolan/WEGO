@@ -2570,3 +2570,22 @@ html.zoomed .plan-scroll {
 .site-contact-line {
   row-gap: 4px;
 }
+
+/* Verwaltung, employees: role and figures in one line; employees not active are paler. */
+.admin-employees .nowrap,
+.admin-employees .admin-role {
+  white-space: nowrap;
+}
+
+/* A badge is as wide as its word, never cut to "P.". */
+.admin-employees .mantine-Badge-root {
+  min-width: max-content;
+}
+
+.admin-employees tr.admin-employee-off td {
+  color: var(--mantine-color-dimmed);
+}
+
+.admin-employees tr.admin-employee-off td:first-child .mantine-Text-root:first-child {
+  color: var(--mantine-color-dimmed);
+}
