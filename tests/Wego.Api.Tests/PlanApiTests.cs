@@ -906,6 +906,43 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_deleted_employee_keeps_their_entries_and_stands_at_the_end_of_the_list()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateEmployeeAsync(g, "Ausgeschieden", "ausgeschieden", "ausgeschieden-pw");
+        var site = await CreateSiteAsync(g, "Alte Baustelle");
+        await g.PutAsJsonAsync($"/api/plan/{id}/2029-03-05", new object[] { new { type = "Baustelle", siteId = site } });
+        var gone = await LoginAsync("ausgeschieden", "ausgeschieden-pw");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/employees/{id}")).StatusCode);
+
+        // The entry stays in the plan, under their name.
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2029");
+        Assert.Contains(plan.GetProperty("entries").EnumerateArray(), e => e.GetProperty("employeeId").GetInt32() == id);
+        Assert.Contains(plan.GetProperty("employees").EnumerateArray(), e => e.GetProperty("id").GetInt32() == id);
+        // At the end of both lists, as deleted; without login.
+        var list = (await g.GetFromJsonAsync<JsonElement>("/api/employees")).EnumerateArray().ToList();
+        Assert.Equal(id, list.Last(e => e.GetProperty("isDeleted").GetBoolean()).GetProperty("id").GetInt32());
+        Assert.True(list.SkipWhile(e => !e.GetProperty("isDeleted").GetBoolean()).All(e => e.GetProperty("isDeleted").GetBoolean()));
+        var deleted = list.Single(e => e.GetProperty("id").GetInt32() == id);
+        Assert.Equal(JsonValueKind.Null, deleted.GetProperty("userName").ValueKind);
+        Assert.False(deleted.GetProperty("isActive").GetBoolean());
+        var overview = (await g.GetFromJsonAsync<JsonElement>("/api/employees/overview")).EnumerateArray().ToList();
+        Assert.True(overview.Single(e => e.GetProperty("id").GetInt32() == id).GetProperty("isDeleted").GetBoolean());
+        // Signed out at once, and no longer to be changed.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await gone.GetAsync("/api/auth/me")).StatusCode);
+        var change = await g.PutAsJsonAsync($"/api/employees/{id}", new
+        {
+            name = "Wieder da", sortOrder = 0, isActive = true, showInPlan = true, vacationDaysPerYear = 30, role = "Handwerker",
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, change.StatusCode);
+
+        // Nobody deletes themselves.
+        var me = (await g.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.DeleteAsync($"/api/employees/{me}")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_company_closure_can_be_changed_and_its_vacation_moves_along()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

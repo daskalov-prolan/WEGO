@@ -10,6 +10,8 @@ type Show = 'active' | 'craftsmen' | 'planners' | 'inactive' | 'all'
 
 function shows(employee: EmployeeOverview, show: Show): boolean {
   if (show === 'all') return true
+  // The deleted ones stand at the end of the list (the server sends them last).
+  if (employee.isDeleted) return show === 'active' || show === 'inactive'
   if (show === 'inactive') return !employee.isActive
   if (!employee.isActive) return false
   if (show === 'craftsmen') return employee.showInPlan
@@ -158,9 +160,9 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
             {shown.map((employee) => (
               <Table.Tr
                 key={employee.id}
-                className={canEdit ? 'site-row' : undefined}
+                className={canEdit && !employee.isDeleted ? 'site-row' : undefined}
                 opacity={employee.isActive ? 1 : 0.55}
-                onClick={canEdit ? () => (window.location.hash = `#/verwaltung/${employee.id}`) : undefined}
+                onClick={canEdit && !employee.isDeleted ? () => (window.location.hash = `#/verwaltung/${employee.id}`) : undefined}
               >
                 <Table.Td>
                   <Group gap={4}>
@@ -176,17 +178,23 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
                   </Group>
                 </Table.Td>
                 <Table.Td fw={600}>
-                  {canEdit ? (
+                  {canEdit && !employee.isDeleted ? (
                     <a href={`#/verwaltung/${employee.id}`} onClick={(event) => event.stopPropagation()}>
                       {employee.name}
                     </a>
                   ) : (
                     employee.name
                   )}
-                  {!employee.isActive && (
-                    <Badge color="gray" size="xs" ml={6}>
-                      inaktiv
+                  {employee.isDeleted ? (
+                    <Badge color="red" variant="light" size="xs" ml={6}>
+                      gelöscht
                     </Badge>
+                  ) : (
+                    !employee.isActive && (
+                      <Badge color="gray" size="xs" ml={6}>
+                        inaktiv
+                      </Badge>
+                    )
                   )}
                 </Table.Td>
                 <Table.Td>
