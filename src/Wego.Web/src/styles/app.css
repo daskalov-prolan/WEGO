@@ -2420,6 +2420,32 @@ body.stretching * {
   color: var(--wego-red);
 }
 
+/* Planer G: the vacation of everybody. What is left in turquoise, below zero in red; the stretches of one
+   employee open under their row. */
+.team-vacation tbody td.team-vacation-left {
+  color: var(--wego-teal);
+  font-weight: 700;
+}
+
+.team-vacation tbody td.team-vacation-over {
+  color: var(--wego-red);
+  font-weight: 700;
+}
+
+.team-vacation-name {
+  font-weight: 600;
+  color: var(--wego-teal);
+}
+
+.team-vacation tr.open {
+  background: var(--mantine-color-wego-light);
+}
+
+.team-vacation tbody td.team-vacation-blocks {
+  padding: 8px 12px 12px;
+  color: inherit;
+}
+
 /* The lower edge of the marked entry: dragged down, the stretch goes to the employees below. */
 .stretch-handle.down {
   top: auto;

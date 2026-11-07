@@ -404,7 +404,7 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
 /** The years the holidays can be kept for: from 2026 on, five years ahead of the current one. */
 const HOLIDAY_YEARS = Array.from({ length: Math.max(CURRENT_YEAR + 5, 2031) - 2026 + 1 }, (_, i) => 2026 + i)
 
-function SchoolHolidaysSection({ year: planYear }: { year: number }) {
+export function SchoolHolidaysSection({ year: planYear }: { year: number }) {
   const [year, setYear] = useState(Math.max(planYear, 2026))
   const [holidays, setHolidays] = useState<SchoolHoliday[]>([])
   const [name, setName] = useState('')
@@ -412,6 +412,7 @@ function SchoolHolidaysSection({ year: planYear }: { year: number }) {
   const [kind, setKind] = useState<HolidayKind>('Feiertag')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [changing, setChanging] = useState<SchoolHoliday | null>(null)
 
   const load = useCallback(() => {
     api.plan(year).then((plan) => setHolidays(plan.schoolHolidays), (e) => setError(messageOf(e)))
@@ -475,7 +476,7 @@ function SchoolHolidaysSection({ year: planYear }: { year: number }) {
               <Table.Th w={160}>Art</Table.Th>
               <Table.Th w={150}>Von</Table.Th>
               <Table.Th w={150}>Bis</Table.Th>
-              <Table.Th w={100} />
+              <Table.Th w={190} />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -496,23 +497,32 @@ function SchoolHolidaysSection({ year: planYear }: { year: number }) {
                 </Table.Td>
                 <Table.Td>{formatDate(holiday.startDate)}</Table.Td>
                 <Table.Td>{formatDate(holiday.endDate)}</Table.Td>
-                <Table.Td ta="right">
-                  <Button
-                    size="compact-sm"
-                    color="red"
-                    variant="subtle"
-                    onClick={() => {
-                      // Betriebsferien take the vacation they gave with them.
-                      if (holiday.kind === 'Betriebsferien' && !window.confirm('Betriebsferien löschen? Der Urlaub aller Handwerker an diesen Tagen wird wieder entfernt.'))
-                        return
-                      void run(async () => {
-                        await api.deleteSchoolHoliday(holiday.id)
-                        return ''
-                      })
-                    }}
-                  >
-                    Löschen
-                  </Button>
+                <Table.Td>
+                  {/* Framed buttons, as in the list of employees: to be seen as such. */}
+                  <Group gap={6} justify="flex-end" wrap="nowrap">
+                    {/* Betriebsferien can be moved; their vacation moves along. */}
+                    {holiday.kind === 'Betriebsferien' && holiday.id > 0 && (
+                      <Button size="compact-sm" variant="default" onClick={() => setChanging(holiday)}>
+                        Bearbeiten
+                      </Button>
+                    )}
+                    <Button
+                      size="compact-sm"
+                      color="red"
+                      variant="outline"
+                      onClick={() => {
+                        // Betriebsferien take the vacation they gave with them.
+                        if (holiday.kind === 'Betriebsferien' && !window.confirm('Betriebsferien löschen? Der Urlaub aller Handwerker an diesen Tagen wird wieder entfernt.'))
+                          return
+                        void run(async () => {
+                          await api.deleteSchoolHoliday(holiday.id)
+                          return ''
+                        })
+                      }}
+                    >
+                      Löschen
+                    </Button>
+                  </Group>
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -556,6 +566,79 @@ function SchoolHolidaysSection({ year: planYear }: { year: number }) {
           </Button>
         </Group>
       </Paper>
+
+      {changing && (
+        <ClosureEditor
+          closure={changing}
+          onClose={() => setChanging(null)}
+          onSaved={() => {
+            setChanging(null)
+            notifications.show({ message: 'Betriebsferien geändert: Der Urlaub der Handwerker ist angepasst.', color: 'green' })
+            load()
+          }}
+        />
+      )}
     </Stack>
+  )
+}
+
+/**
+ * Changes the name and days of Betriebsferien. The vacation they gave goes from the old days and comes on the new
+ * ones; what is planned on the new days is replaced, as when they are entered.
+ */
+function ClosureEditor({ closure, onClose, onSaved }: { closure: SchoolHoliday; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(closure.name)
+  const [range, setRange] = useState<[string | null, string | null]>([closure.startDate, closure.endDate])
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [start, end] = range
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!start || !end) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.updateSchoolHoliday(closure.id, name, start, end, 'Betriebsferien')
+      onSaved()
+    } catch (e) {
+      setError(messageOf(e))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet onClose={onClose} title={<Text fw={700}>Betriebsferien bearbeiten</Text>} size="md">
+      <form onSubmit={save}>
+        <Stack gap="sm">
+          <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} maxLength={200} required data-autofocus />
+          <DatePickerInput
+            type="range"
+            label="Zeitraum"
+            value={range}
+            onChange={(value) => setRange(value as [string | null, string | null])}
+            valueFormat="DD.MM.YYYY"
+            required
+          />
+          <Text size="sm" c="dimmed">
+            Der Urlaub aller Handwerker wird an den neuen Zeitraum angepasst: An weggefallenen Tagen wird er entfernt, an
+            neuen Werktagen eingetragen. Was an neuen Tagen geplant ist, wird ersetzt.
+          </Text>
+          {error && (
+            <Alert color="red" variant="light">
+              {error}
+            </Alert>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={onClose}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={busy} disabled={!start || !end || !name.trim()}>
+              Speichern
+            </Button>
+          </Group>
+        </Stack>
+      </form>
+    </Sheet>
   )
 }

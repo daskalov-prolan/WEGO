@@ -825,6 +825,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var before = await me.GetFromJsonAsync<JsonElement>("/api/me/vacation?year=2026");
         Assert.False(before.GetProperty("counted").GetBoolean());
         Assert.Empty(before.GetProperty("blocks").EnumerateArray());
+
+        // Planer G sees the vacation of everybody just as they see it themselves; nobody else does.
+        var all = await g.GetFromJsonAsync<JsonElement>("/api/vacation?year=2027");
+        var hers = all.EnumerateArray().Single(e => e.GetProperty("employeeId").GetInt32() == id);
+        Assert.Equal("Urlauberin", hers.GetProperty("name").GetString());
+        Assert.Equal(vacation.GetRawText(), hers.GetProperty("vacation").GetRawText());
+        Assert.Equal(HttpStatusCode.Forbidden, (await me.GetAsync("/api/vacation?year=2027")).StatusCode);
     }
 
     [Fact]
@@ -893,6 +900,40 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
                 .Select(e => (e.GetProperty("date").GetString()!, e.GetProperty("type").GetString()!)).ToList();
         Assert.Equal([("2028-08-07", "Urlaub"), ("2028-08-08", "Urlaub"), ("2028-08-10", "Urlaub"), ("2028-08-11", "Urlaub")],
             await DaysOf());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/schoolholidays/{id}")).StatusCode);
+        Assert.Empty(await DaysOf());
+    }
+
+    [Fact]
+    public async Task A_company_closure_can_be_changed_and_its_vacation_moves_along()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var craftsman = await CreateEmployeeAsync(g, "Verschiebehandwerker", null, null);
+        var site = await CreateSiteAsync(g, "Nach der Pause");
+        // Monday 4 to Wednesday 6 September 2028; Friday 8 is planned.
+        var created = await g.PostAsJsonAsync("/api/schoolholidays",
+            new { name = "Pause", kind = "Betriebsferien", startDate = "2028-09-04", endDate = "2028-09-06" });
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        await g.PutAsJsonAsync($"/api/plan/{craftsman}/2028-09-08", new object[] { new { type = "Baustelle", siteId = site } });
+
+        async Task<List<(string Date, string Type)>> DaysOf() =>
+            (await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2028")).GetProperty("entries").EnumerateArray()
+                .Where(e => e.GetProperty("employeeId").GetInt32() == craftsman)
+                .Select(e => (e.GetProperty("date").GetString()!, e.GetProperty("type").GetString()!)).ToList();
+
+        // Moved to Wednesday 6 to Friday 8: the vacation leaves Monday and Tuesday and takes the planned Friday.
+        var changed = await g.PutAsJsonAsync($"/api/schoolholidays/{id}",
+            new { name = "Spätsommerpause", kind = "Betriebsferien", startDate = "2028-09-06", endDate = "2028-09-08" });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        Assert.Equal("Spätsommerpause", (await changed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString());
+        Assert.Equal([("2028-09-06", "Urlaub"), ("2028-09-07", "Urlaub"), ("2028-09-08", "Urlaub")], await DaysOf());
+
+        // Wrong days are refused and change nothing.
+        var wrong = await g.PutAsJsonAsync($"/api/schoolholidays/{id}",
+            new { name = "Pause", kind = "Betriebsferien", startDate = "2028-09-08", endDate = "2028-09-01" });
+        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+        Assert.Equal(3, (await DaysOf()).Count);
 
         Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/schoolholidays/{id}")).StatusCode);
         Assert.Empty(await DaysOf());
