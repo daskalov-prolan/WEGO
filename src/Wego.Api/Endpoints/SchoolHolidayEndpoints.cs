@@ -51,7 +51,8 @@ public static class SchoolHolidayEndpoints
     /// Company closure: every active craftsman gets vacation on its working days. What was planned on those
     /// days gives way (the change log keeps it).
     /// </summary>
-    private static async Task EnterClosureAsync(WegoDbContext db, ClaimsPrincipal user, SchoolHoliday closure)
+    private static async Task EnterClosureAsync(WegoDbContext db, ClaimsPrincipal user, SchoolHoliday closure,
+        string action = "Betriebsferien eingetragen", object? before = null)
     {
         var days = await ClosureDaysAsync(db, closure);
         var craftsmen = await db.Employees.Where(e => e.IsActive && e.ShowInPlan).Select(e => e.Id).ToListAsync();
@@ -65,8 +66,8 @@ public static class SchoolHolidayEndpoints
                 db.PlanEntries.Add(new PlanEntry { EmployeeId = employeeId, Date = day, Type = EntryType.Urlaub });
             db.ClosureVacations.Add(new ClosureVacation { Holiday = closure, EmployeeId = employeeId });
         }
-        ChangeLog.Add(db, user, ChangeArea.Plan, "Betriebsferien eingetragen", null,
-            replaced.Select(e => new { e.EmployeeId, e.Date, e.Type, e.SiteId, e.Activity, e.StartTime, e.EndTime, e.Note }).ToList(),
+        ChangeLog.Add(db, user, ChangeArea.Plan, action, null,
+            before ?? replaced.Select(e => new { e.EmployeeId, e.Date, e.Type, e.SiteId, e.Activity, e.StartTime, e.EndTime, e.Note }).ToList(),
             new { closure.Name, closure.StartDate, closure.EndDate, Employees = craftsmen.Count, Days = days.Count }, closure.StartDate);
     }
 
@@ -121,7 +122,7 @@ public static class SchoolHolidayEndpoints
     }
 
     /// <summary>The closure is taken back: the vacation it gave on its working days goes again.</summary>
-    private static async Task RemoveClosureAsync(WegoDbContext db, ClaimsPrincipal user, SchoolHoliday closure)
+    private static async Task RemoveClosureAsync(WegoDbContext db, ClaimsPrincipal? user, SchoolHoliday closure)
     {
         var days = await ClosureDaysAsync(db, closure);
         var craftsmen = await db.Employees.Where(e => e.ShowInPlan).Select(e => e.Id).ToListAsync();
@@ -129,8 +130,22 @@ public static class SchoolHolidayEndpoints
             .Where(e => e.Type == EntryType.Urlaub && craftsmen.Contains(e.EmployeeId) && days.Contains(e.Date))
             .ToListAsync();
         db.PlanEntries.RemoveRange(vacation);
-        ChangeLog.Add(db, user, ChangeArea.Plan, "Betriebsferien gelöscht", null,
-            new { closure.Name, closure.StartDate, closure.EndDate, Days = days.Count }, null, closure.StartDate);
+        // Without a user it is part of a change, which is logged as one.
+        if (user is not null)
+            ChangeLog.Add(db, user, ChangeArea.Plan, "Betriebsferien gelöscht", null,
+                new { closure.Name, closure.StartDate, closure.EndDate, Days = days.Count }, null, closure.StartDate);
+    }
+
+    /// <summary>The input checked; null when it is right, else what is wrong with it.</summary>
+    private static string? Problem(SchoolHolidayInput input)
+    {
+        var name = input.Name?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Length > 200) return "Bitte eine Bezeichnung mit höchstens 200 Zeichen angeben.";
+        if (input.EndDate < input.StartDate) return "Das Ende darf nicht vor dem Beginn liegen.";
+        if (!Enum.IsDefined(input.Kind)) return "Unbekannte Art.";
+        if (input.Kind == HolidayKind.Feiertag && input.EndDate != input.StartDate)
+            return "Ein Feiertag ist ein einzelner Tag. Für mehrere Tage bitte Betriebsferien oder Schulferien wählen.";
+        return null;
     }
 
     public static void MapSchoolHolidayEndpoints(this IEndpointRouteBuilder app)
@@ -139,22 +154,43 @@ public static class SchoolHolidayEndpoints
 
         group.MapPost("/", async (SchoolHolidayInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var name = input.Name?.Trim();
-            if (string.IsNullOrEmpty(name) || name.Length > 200)
-                return ApiErrors.BadRequest("Bitte eine Bezeichnung mit höchstens 200 Zeichen angeben.");
-            if (input.EndDate < input.StartDate)
-                return ApiErrors.BadRequest("Das Ende darf nicht vor dem Beginn liegen.");
-            if (!Enum.IsDefined(input.Kind)) return ApiErrors.BadRequest("Unbekannte Art.");
-            if (input.Kind == HolidayKind.Feiertag && input.EndDate != input.StartDate)
-                return ApiErrors.BadRequest("Ein Feiertag ist ein einzelner Tag. Für mehrere Tage bitte Betriebsferien oder Schulferien wählen.");
+            if (Problem(input) is { } problem) return ApiErrors.BadRequest(problem);
 
             var holiday = new SchoolHoliday
             {
-                Name = name, Kind = input.Kind, StartDate = input.StartDate, EndDate = input.EndDate,
+                Name = input.Name.Trim(), Kind = input.Kind, StartDate = input.StartDate, EndDate = input.EndDate,
             };
             db.SchoolHolidays.Add(holiday);
             if (holiday.Kind == HolidayKind.Betriebsferien) await EnterClosureAsync(db, user, holiday);
             await db.SaveChangesAsync();
+            return Results.Ok(new SchoolHolidayDto(holiday.Id, holiday.Name, holiday.Kind, holiday.StartDate,
+                holiday.EndDate));
+        });
+
+        // Changes name, kind or days. Betriebsferien move their vacation along: it goes from the days left and
+        // comes on the new ones, where what was planned gives way (as when they are entered).
+        group.MapPut("/{id:int}", async (int id, SchoolHolidayInput input, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            if (Problem(input) is { } problem) return ApiErrors.BadRequest(problem);
+            var holiday = await db.SchoolHolidays.FindAsync(id);
+            if (holiday is null) return Results.NotFound();
+
+            var before = new { holiday.Name, holiday.Kind, holiday.StartDate, holiday.EndDate };
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            if (holiday.Kind == HolidayKind.Betriebsferien)
+            {
+                await RemoveClosureAsync(db, input.Kind == HolidayKind.Betriebsferien ? null : user, holiday);
+                db.ClosureVacations.RemoveRange(db.ClosureVacations.Where(c => c.HolidayId == holiday.Id));
+                await db.SaveChangesAsync();
+            }
+            holiday.Name = input.Name.Trim();
+            holiday.Kind = input.Kind;
+            holiday.StartDate = input.StartDate;
+            holiday.EndDate = input.EndDate;
+            if (holiday.Kind == HolidayKind.Betriebsferien)
+                await EnterClosureAsync(db, user, holiday, "Betriebsferien geändert", before);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
             return Results.Ok(new SchoolHolidayDto(holiday.Id, holiday.Name, holiday.Kind, holiday.StartDate,
                 holiday.EndDate));
         });

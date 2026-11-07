@@ -173,6 +173,13 @@ export interface MyVacation {
   blocks: VacationBlock[]
 }
 
+/** Planer G: the vacation of one employee, as they see it in "Mein Bereich". */
+export interface EmployeeVacation {
+  employeeId: number
+  name: string
+  vacation: MyVacation
+}
+
 /** A note in the field of an employee and a day of the plan, not tied to a site. */
 export interface CalendarNote {
   id: number

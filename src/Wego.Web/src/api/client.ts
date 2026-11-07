@@ -11,6 +11,7 @@ import type {
   EmployeeOverview,
   EmployeeReport,
   MyVacation,
+  EmployeeVacation,
   Entry,
   HolidayKind,
   NamedItem,
@@ -121,6 +122,7 @@ export const api = {
   employeeReport: (id: number, year: number) =>
     request<EmployeeReport>('GET', `/api/reports/employees/${id}?year=${year}`),
   myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
+  teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
 
   employeeNames: () => request<NamedItem[]>('GET', '/api/employees/names'),
@@ -146,6 +148,8 @@ export const api = {
 
   addSchoolHoliday:(name: string, startDate: string, endDate: string, kind: HolidayKind) =>
     request<SchoolHoliday>('POST', '/api/schoolholidays', { name, startDate, endDate, kind }),
+  updateSchoolHoliday: (id: number, name: string, startDate: string, endDate: string, kind: HolidayKind) =>
+    request<SchoolHoliday>('PUT', `/api/schoolholidays/${id}`, { name, startDate, endDate, kind }),
   deleteSchoolHoliday: (id: number) => request<void>('DELETE', `/api/schoolholidays/${id}`),
   importSchoolHolidays: (year: number) =>
     request<{ imported: number; total: number }>('POST', `/api/schoolholidays/import?year=${year}`),

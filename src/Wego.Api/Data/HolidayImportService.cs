@@ -6,7 +6,8 @@ namespace Wego.Api.Data;
 /// <summary>
 /// Fetches the Berlin school holidays (and public holidays) by itself: at the start and once a day, for every year
 /// from 2026 to two years ahead that has no school holidays yet. A year the API does not know yet is tried again
-/// the next day.
+/// the next day. Only school holidays that begin in the year count: the Christmas holidays of the year before reach
+/// into January and do not make the year loaded.
 /// </summary>
 public class HolidayImportService(IServiceScopeFactory scopes, IHttpClientFactory httpClients, ILogger<HolidayImportService> logger)
     : BackgroundService
@@ -38,7 +39,7 @@ public class HolidayImportService(IServiceScopeFactory scopes, IHttpClientFactor
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<WegoDbContext>();
                 var (from, to) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
-                if (await db.SchoolHolidays.AnyAsync(h => h.Kind == HolidayKind.Schulferien && h.StartDate <= to && h.EndDate >= from, stoppingToken))
+                if (await db.SchoolHolidays.AnyAsync(h => h.Kind == HolidayKind.Schulferien && h.StartDate >= from && h.StartDate <= to, stoppingToken))
                     continue;
                 var result = await SchoolHolidayEndpoints.ImportYearAsync(db,
                     httpClients.CreateClient(SchoolHolidayEndpoints.OpenHolidaysClient), year);

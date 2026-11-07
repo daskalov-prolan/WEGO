@@ -28,40 +28,67 @@ public static class MyEndpoints
         new[] { new DateOnly(year, 12, 24), new DateOnly(year, 12, 31) }
             .Where(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday));
 
+    /// <summary>The vacation of one employee in the overview of all (Planer G).</summary>
+    public record EmployeeVacationDto(int EmployeeId, string Name, MyVacationDto Vacation);
+
     public static void MapMyEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/me/vacation", async (int year, ClaimsPrincipal user, WegoDbContext db) =>
         {
             var employee = await db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == user.EmployeeId());
             if (employee is null) return Results.NotFound();
-            if (year < VacationCountedFrom)
-                return Results.Ok(new MyVacationDto(year, false, VacationCountedFrom, employee.VacationDaysPerYear, 0, 0,
-                    employee.VacationDaysPerYear, []));
+            if (year >= VacationCountedFrom) await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
+            var vacation = await VacationsAsync(db, [employee], year);
+            return Results.Ok(vacation[employee.Id]);
+        }).RequireAuthorization();
 
-            await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
-            var (from, to) = PlanEndpoints.YearRange(year);
-            var publicHolidays = await SchoolHolidayEndpoints.PublicHolidaysAsync(db, from, to);
-            // Saturdays, Sundays and public holidays do not use up vacation days (as in the reports).
-            var days = (await db.PlanEntries.AsNoTracking()
-                    .Where(e => e.EmployeeId == employee.Id && e.Type == EntryType.Urlaub && e.Date >= from && e.Date <= to)
-                    .Select(e => e.Date)
-                    .ToListAsync())
+        // Planer G: the vacation of every active employee, as each sees it under "Mein Bereich". More than the
+        // entitlement can be entered; what is left is then below zero.
+        app.MapGet("/api/vacation", async (int year, WegoDbContext db) =>
+        {
+            if (year >= VacationCountedFrom) await SchoolHolidayEndpoints.CatchUpClosuresAsync(db);
+            var employees = await db.Employees.AsNoTracking().Where(e => e.IsActive)
+                .OrderBy(e => e.SortOrder).ThenBy(e => e.Name).ToListAsync();
+            var vacation = await VacationsAsync(db, employees, year);
+            return Results.Ok(employees.Select(e => new EmployeeVacationDto(e.Id, e.Name, vacation[e.Id])).ToList());
+        }).RequireAuthorization(Policies.Admin);
+    }
+
+    /// <summary>The vacation of the employees in a year: the days entered, used up, taken and left.</summary>
+    private static async Task<Dictionary<int, MyVacationDto>> VacationsAsync(WegoDbContext db, IReadOnlyList<Employee> employees,
+        int year)
+    {
+        if (year < VacationCountedFrom)
+            return employees.ToDictionary(e => e.Id, e => new MyVacationDto(year, false, VacationCountedFrom,
+                e.VacationDaysPerYear, 0, 0, e.VacationDaysPerYear, []));
+
+        var (from, to) = PlanEndpoints.YearRange(year);
+        var publicHolidays = await SchoolHolidayEndpoints.PublicHolidaysAsync(db, from, to);
+        var ids = employees.Select(e => e.Id).ToList();
+        // Saturdays, Sundays and public holidays do not use up vacation days (as in the reports).
+        var entered = (await db.PlanEntries.AsNoTracking()
+                .Where(e => ids.Contains(e.EmployeeId) && e.Type == EntryType.Urlaub && e.Date >= from && e.Date <= to)
+                .Select(e => new { e.EmployeeId, e.Date })
+                .ToListAsync())
+            .ToLookup(e => e.EmployeeId, e => e.Date);
+
+        // Full days, and the half days of 24 and 31 December (also when entered as a whole day of vacation).
+        var halves = HalfVacationDays(year).ToList();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return employees.ToDictionary(e => e.Id, employee =>
+        {
+            var whole = entered[employee.Id]
                 .Where(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && !publicHolidays.Contains(d))
+                .Where(d => !halves.Contains(d))
                 .Distinct()
                 .Order()
                 .ToList();
-
-            // Full days, and the half days of 24 and 31 December (also when entered as a whole day of vacation).
-            var halves = HalfVacationDays(year).ToList();
-            var whole = days.Where(d => !halves.Contains(d)).ToList();
             var blocks = Blocks(whole).Concat(halves.Select(d => new VacationBlock(d, d, 0.5m))).OrderBy(b => b.From).ToList();
-
-            var today = DateOnly.FromDateTime(DateTime.Today);
             var used = blocks.Sum(b => b.Days);
             var taken = whole.Count(d => d <= today) + 0.5m * halves.Count(d => d <= today);
-            return Results.Ok(new MyVacationDto(year, true, VacationCountedFrom, employee.VacationDaysPerYear, used,
-                taken, employee.VacationDaysPerYear - used, blocks));
-        }).RequireAuthorization();
+            return new MyVacationDto(year, true, VacationCountedFrom, employee.VacationDaysPerYear, used, taken,
+                employee.VacationDaysPerYear - used, blocks);
+        });
     }
 
     /// <summary>Joins the days (weekdays, in order) to stretches; only a weekend may lie between two of them.</summary>
