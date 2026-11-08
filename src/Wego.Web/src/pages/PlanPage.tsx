@@ -1595,6 +1595,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onCreateSite={createSite}
             onGoToSite={canEdit ? shared.onOpenSite : undefined}
             canAbsence={canAbsence}
+            onConfirm={async (site, asService) => {
+              await api.confirmSite(site.id, asService)
+              // Its days got their activities on the server: the plan anew.
+              setPlan(await api.plan(year))
+              setOpen(null)
+              notifications.show({
+                color: 'green',
+                message: `${site.name.replace(/^\? /, '')}: bestätigt als ${asService ? 'Serviceauftrag' : 'Baustelle'}.`,
+              })
+            }}
             onClose={() => setOpen(null)}
             onSave={async (entries) => {
               await save(

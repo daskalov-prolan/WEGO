@@ -5,7 +5,7 @@ import { api, messageOf } from '../api/client'
 import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SitesMap } from '../components/SitesMap'
-import { StatusBadge, StatusSlider } from '../components/SiteStatus'
+import { StatusBadge, StatusSlider, TentativeBadge } from '../components/SiteStatus'
 import { finishSite, showDoneHint } from '../lib/siteDone'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
@@ -30,7 +30,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
  * Which sites the list shows: the active ones, all, those in one status, or those starting in a period (by
  * their planned start).
  */
-type Show = 'active' | 'all' | 'last6' | 'service' | `year:${number}` | `status:${SiteStatus}`
+type Show = 'active' | 'all' | 'last6' | 'service' | 'tentative' | `year:${number}` | `status:${SiteStatus}`
 
 /** Active: the construction has begun (planned start today or before) and the site is not done yet. */
 const isActive = (site: Site, today: string) => isOpen(site.status) && !!site.plannedStart && site.plannedStart <= today
@@ -41,6 +41,9 @@ function shows(site: Site, show: Show, today: string): boolean {
   // Service calls only on their own: they are no sites to follow.
   if (show === 'service') return !!site.isService
   if (site.isService) return false
+  // Appointments not confirmed yet: with the open sites (also the usual view of the Bauphase), and on their own.
+  if (show === 'tentative') return !!site.isTentative
+  if (site.isTentative) return ['active', 'all', 'status:Angebot', 'status:Bauphase'].includes(show)
   if (show === 'all') return true
   if (show === 'active') return isActive(site, today)
   if (show.startsWith('status:')) return site.status === show.slice(7)
@@ -228,6 +231,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
             })),
             { value: 'last6', label: 'Start in den letzten 6 Monaten' },
             { value: 'service', label: 'Serviceeinsätze' },
+            { value: 'tentative', label: 'Unbestätigte Termine' },
             ...years.map((year) => ({ value: `year:${year}`, label: `Start im Jahr ${year}` })),
           ]}
         />
@@ -287,7 +291,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
                 >
                   <div className="site-card-head">
                     <a href={`#/baustellen/${site.id}`}>{site.name}</a>
-                    <StatusBadge status={site.status} />
+                    {site.isTentative ? <TentativeBadge /> : <StatusBadge status={site.status} />}
                   </div>
                   {formatAddress(site) && <div>{formatAddress(site)}</div>}
                   <SiteWayButtons site={site} size="compact-xs" />
@@ -345,7 +349,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
                         </Table.Td>
                         <Table.Td>{site.plannedStart && formatDate(site.plannedStart)}</Table.Td>
                         <Table.Td>
-                          <StatusBadge status={site.status} />
+                          {site.isTentative ? <TentativeBadge /> : <StatusBadge status={site.status} />}
                         </Table.Td>
                         <Table.Td>{plannerName(site)}</Table.Td>
                         <Table.Td>{formatAddress(site)}</Table.Td>

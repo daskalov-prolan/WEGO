@@ -45,6 +45,8 @@ interface Props {
   fillFree?: boolean
   /** The plan the day is edited in: in the Bauphase an offer site is reserved (no activity) until its Baubeginn. */
   phase?: 'Angebot' | 'Bauphase'
+  /** The customer confirmed an appointment of the day: it becomes a service call or a site. */
+  onConfirm?: (site: Site, asService: boolean) => Promise<void>
 }
 
 interface Row {
@@ -120,6 +122,7 @@ export function DayEditor(props: Props) {
     return props.phase === 'Bauphase' && site?.status === 'Angebot' && !site.plannedStart
   }
   const siteName = (siteId: number | null) => sites.find((site) => site.id === siteId)?.name
+  const tentativeSite = (siteId: number | null) => sites.find((site) => site.id === siteId && site.isTentative)
   // A site row is titled with its activity (there is no field for it: it comes from what was dragged in, the
   // employee and the site) and its site.
   const rowTitle = (row: Row) =>
@@ -159,15 +162,27 @@ export function DayEditor(props: Props) {
     return site
   }
 
-  // A service call: created on the spot and put on the day in place of rows still without a site; saved then.
-  const [addingService, setAddingService] = useState(false)
+  // A service call (or an appointment not confirmed yet, without an activity): created on the spot and put on the
+  // day in place of rows still without a site; saved then.
+  const [addingService, setAddingService] = useState<'service' | 'tentative' | null>(null)
   const createService = async (input: SiteInput, time: ServiceTime) => {
     const site = await createSite(input)
     setRows((current) => [
       ...current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
-      { ...emptyRow('Baustelle', site.id, defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
+      { ...emptyRow('Baustelle', site.id, input.isTentative ? null : defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
     ])
     return site
+  }
+  const [confirming, setConfirming] = useState(false)
+  const confirm = async (site: Site, asService: boolean) => {
+    setConfirming(true)
+    setError('')
+    try {
+      await props.onConfirm!(site, asService)
+    } catch (e) {
+      setError(messageOf(e))
+      setConfirming(false)
+    }
   }
 
   const update = (index: number, change: Partial<Row>) =>
@@ -253,8 +268,13 @@ export function DayEditor(props: Props) {
                 + Baustelle
               </Button>
               <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
-                <Button size="sm" color="wegoRed.6" onClick={() => setAddingService(true)}>
+                <Button size="sm" color="wegoRed.6" onClick={() => setAddingService('service')}>
                   + Serviceauftrag
+                </Button>
+              </Tooltip>
+              <Tooltip label="Für einen Kunden reservieren, der den Termin noch nicht bestätigt hat: im Kalender ohne Farbe">
+                <Button size="sm" variant="outline" onClick={() => setAddingService('tentative')}>
+                  + Termin (unbestätigt)
                 </Button>
               </Tooltip>
             </Group>
@@ -296,7 +316,23 @@ export function DayEditor(props: Props) {
                     onChange={(e) => update(index, { free: e.currentTarget.checked, siteId: null })}
                   />
                 )}
-                {row.type === 'Baustelle' && !row.free && reserves(row.siteId) && (
+                {/* An appointment not confirmed yet: once the customer says yes, it becomes a service call or a site. */}
+                {row.type === 'Baustelle' && tentativeSite(row.siteId) && props.onConfirm && (
+                  <Alert color="gray" variant="outline" p="xs" title="Unbestätigter Termin">
+                    <Text size="xs" mb={6}>
+                      Hat der Kunde bestätigt?
+                    </Text>
+                    <Group gap="xs">
+                      <Button size="xs" color="wegoRed.6" loading={confirming} onClick={() => void confirm(tentativeSite(row.siteId)!, true)}>
+                        Bestätigen als Serviceauftrag
+                      </Button>
+                      <Button size="xs" loading={confirming} onClick={() => void confirm(tentativeSite(row.siteId)!, false)}>
+                        Bestätigen als Baustelle
+                      </Button>
+                    </Group>
+                  </Alert>
+                )}
+                {row.type === 'Baustelle' && !row.free && reserves(row.siteId) && !tentativeSite(row.siteId) && (
                   <Text size="xs" c="dimmed">
                     Reserviert: die Baustelle ist noch im Angebot. Tätigkeiten gibt es, sobald der Baubeginn eingetragen ist.
                   </Text>
@@ -413,7 +449,14 @@ export function DayEditor(props: Props) {
             </Alert>
           )}
 
-          {addingService && <ServiceForm date={date} onCreate={createService} onClose={() => setAddingService(false)} />}
+          {addingService && (
+            <ServiceForm
+              date={date}
+              tentative={addingService === 'tentative'}
+              onCreate={createService}
+              onClose={() => setAddingService(null)}
+            />
+          )}
 
           {freeHalf ? (
             <Alert color="wego" variant="light" title="Nur ½ Tag eingetragen">

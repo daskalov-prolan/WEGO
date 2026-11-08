@@ -45,9 +45,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   const [plans, setPlans] = useState<Map<number, Plan>>(new Map())
   const [error, setError] = useState('')
   // The week in view while scrolling (its Monday), shown in the head.
-  const [inView, setInView] = useState<string>(() => firstWeekOf(year))
+  // Opened, the list always begins with today, whatever year was chosen last (here or in the plan).
+  const opensToday = inRange(today)
+  const [inView, setInView] = useState<string>(() => (opensToday ? mondayOf(today) : firstWeekOf(year)))
   // Scrolled to once the days are there: at the start, and after another year was chosen.
-  const scrollTo = useRef<string | null>(firstDayOf(year))
+  const scrollTo = useRef<string | null>(opensToday ? today : firstDayOf(year))
   // The year last reported by scrolling (or chosen): another one from outside means to go there.
   const reported = useRef(year)
   const listRef = useRef<HTMLDivElement>(null)
@@ -138,7 +140,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   }, [])
 
   // The year in the head: that of the topmost day in view (01.01.2027 shows 2027, even in KW 53).
-  const [shownYear, setShownYear] = useState(year)
+  const [shownYear, setShownYear] = useState(opensToday ? Number(today.slice(0, 4)) : year)
 
   // The day on top went into another year: the year follows (also in the plan), without jumping.
   const follow = (iso: string) => {
@@ -181,6 +183,15 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
     else scrollTo.current = target
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a year chosen from outside moves the list
   }, [year])
+
+  // Opened at today: the year of today is the chosen one again (in the plan as well).
+  useEffect(() => {
+    const current = Number(today.slice(0, 4))
+    if (!opensToday || year === current) return
+    reported.current = current
+    onYearChange?.(current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the page opens
+  }, [])
 
   // Once the days are there: to the week asked for.
   useLayoutEffect(() => {

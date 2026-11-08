@@ -12,6 +12,15 @@ const ACTION: Record<SiteStatus, string> = {
   Storniert: 'Stornieren',
 }
 
+/** An appointment the customer has not confirmed yet, in place of its status. */
+export function TentativeBadge() {
+  return (
+    <Badge color="gray" variant="outline" style={{ borderStyle: 'dashed' }}>
+      Unbestätigt
+    </Badge>
+  )
+}
+
 export function StatusBadge({ status }: { status: SiteStatus }) {
   const info = SITE_STATUSES.find((candidate) => candidate.value === status)!
   return (

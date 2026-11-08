@@ -1019,6 +1019,48 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task An_appointment_not_confirmed_yet_becomes_a_service_call_or_a_site_when_confirmed()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var craftsman = await CreateEmployeeAsync(g, "Terminhandwerker", null, null, mainActivity: "Fliesen");
+        async Task<JsonElement> Tentative(string client)
+        {
+            var created = await g.PostAsJsonAsync("/api/sites", new { client, nameSource = "Auftraggeber", isTentative = true });
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var site = await created.Content.ReadFromJsonAsync<JsonElement>();
+            await g.PutAsJsonAsync($"/api/plan/{craftsman}/2029-05-08",
+                new object[] { new { type = "Baustelle", siteId = site.GetProperty("id").GetInt32() } });
+            return site;
+        }
+
+        var winter = await Tentative("Winter");
+        Assert.Equal("? Winter", winter.GetProperty("name").GetString());
+        Assert.True(winter.GetProperty("isTentative").GetBoolean());
+        Assert.Equal("Angebot", winter.GetProperty("status").GetString());
+
+        // Confirmed as a service call: "SE:", in the Bauphase from its day, the day with the activity of the craftsman.
+        var id = winter.GetProperty("id").GetInt32();
+        var service = await (await g.PostAsJsonAsync($"/api/sites/{id}/confirm", new { asService = true }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("SE: Winter", service.GetProperty("name").GetString());
+        Assert.False(service.GetProperty("isTentative").GetBoolean());
+        Assert.True(service.GetProperty("isService").GetBoolean());
+        Assert.Equal("Bauphase", service.GetProperty("status").GetString());
+        Assert.Equal("2029-05-08", service.GetProperty("plannedStart").GetString());
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2029");
+        Assert.Equal("Fliesen", plan.GetProperty("entries").EnumerateArray()
+            .Single(e => e.GetProperty("siteId").GetInt32() == id).GetProperty("activity").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync($"/api/sites/{id}/confirm", new { asService = false })).StatusCode);
+
+        // Confirmed as a site: its plain name.
+        var sommer = (await Tentative("Sommer")).GetProperty("id").GetInt32();
+        var site = await (await g.PostAsJsonAsync($"/api/sites/{sommer}/confirm", new { asService = false }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Sommer", site.GetProperty("name").GetString());
+        Assert.False(site.GetProperty("isService").GetBoolean());
+    }
+
+    [Fact]
     public async Task A_company_closure_can_be_changed_and_its_vacation_moves_along()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

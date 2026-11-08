@@ -10,7 +10,7 @@ public static class SiteEndpoints
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
-        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService);
+        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService, bool IsTentative);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -19,9 +19,12 @@ public static class SiteEndpoints
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
         string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null,
-        bool? IsService = null);
+        bool? IsService = null, bool? IsTentative = null);
 
     public record StatusRequest(SiteStatus Status);
+
+    /// <summary>The customer confirmed the appointment: it becomes a service call or a site.</summary>
+    public record ConfirmRequest(bool AsService);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
 
     public record MergeRequest(int TargetId);
@@ -67,7 +70,9 @@ public static class SiteEndpoints
         // A new site starts as offer (Angebot), or directly in construction when the offer was made elsewhere.
         group.MapPost("/", async (SiteInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var site = new Site { Status = input.Status ?? SiteStatus.Angebot };
+            var site = new Site { Status = input.Status ?? SiteStatus.Angebot, IsTentative = input.IsTentative ?? false };
+            if (site.IsTentative && (site.Status != SiteStatus.Angebot || input.IsService == true))
+                return ApiErrors.BadRequest("Ein unbestätigter Termin beginnt im Angebot und ohne Service.");
             if (site.Status is not (SiteStatus.Angebot or SiteStatus.Bauphase))
                 return ApiErrors.BadRequest("Eine neue Baustelle beginnt im Angebot oder in der Bauphase.");
             var error = Apply(site, input) ?? await PlannerError(db, input.ResponsiblePlannerId);
@@ -126,6 +131,43 @@ public static class SiteEndpoints
             // Entering a status brings its activities along.
             site.GenerateTasks(await db.Activities.ToListAsync());
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Status", id, before, ToDto(site));
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(site));
+        }).RequireAuthorization(Policies.Plan);
+
+        // The customer confirmed: a service call or a site in the Bauphase, beginning on its first day. Its days
+        // without an activity get the one the employee usually does there.
+        group.MapPost("/{id:int}/confirm", async (int id, ConfirmRequest request, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var site = await db.Sites.Include(s => s.Tasks).Include(s => s.Entries).ThenInclude(e => e.Employee)
+                .FirstOrDefaultAsync(s => s.Id == id);
+            if (site is null) return Results.NotFound();
+            if (!site.IsTentative) return ApiErrors.BadRequest("Dieser Termin ist schon bestätigt.");
+
+            var before = ToDto(site);
+            site.IsTentative = false;
+            site.IsService = request.AsService;
+            site.PlannedStart ??= site.Entries.Count > 0 ? site.Entries.Min(e => e.Date) : null;
+            if (site.Status != SiteStatus.Bauphase)
+            {
+                db.SiteStatusChanges.Add(new SiteStatusChange
+                {
+                    SiteId = id, From = site.Status, To = SiteStatus.Bauphase, ChangedAt = DateTime.UtcNow,
+                    ChangedBy = user.Identity?.Name,
+                });
+                site.Status = SiteStatus.Bauphase;
+            }
+            var activities = await db.Activities.ToListAsync();
+            var construction = activities.Where(a => a.Phase == SiteStatus.Bauphase).OrderBy(a => a.SortOrder)
+                .Select(a => a.Key).ToList();
+            foreach (var entry in site.Entries.Where(e => e.Type == EntryType.Baustelle && e.Activity is null))
+            {
+                var own = new[] { entry.Employee.MainActivity }.Concat(entry.Employee.AdditionalActivities);
+                entry.Activity = own.FirstOrDefault(a => a is not null && construction.Contains(a));
+            }
+            site.UpdateName();
+            site.GenerateTasks(activities);
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Bestätigt", id, before, ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
         }).RequireAuthorization(Policies.Plan);
@@ -295,7 +337,7 @@ public static class SiteEndpoints
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
-        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService);
+        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService, s.IsTentative);
 
     private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
         plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
@@ -343,6 +385,8 @@ public static class SiteEndpoints
         site.PlannedEnd = input.PlannedEnd;
         // Left out: it stays as it is (a site does not turn into a service call by being changed).
         if (input.IsService is { } isService) site.IsService = isService;
+        // Only a new site starts as not confirmed; afterwards it is confirmed (see confirm), not changed back.
+        if (input.IsTentative is false) site.IsTentative = false;
         site.UpdateName();
         return null;
     }

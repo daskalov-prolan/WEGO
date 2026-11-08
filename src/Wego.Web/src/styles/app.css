@@ -2749,3 +2749,28 @@ html.zoomed .plan-scroll {
   line-height: 1;
   pointer-events: none;
 }
+
+/* An appointment the customer has not confirmed yet: no colour, framed in dashes, a "?" before the name. */
+.timeline .chip.tentative,
+.chip.tentative {
+  border: 1.5px dashed #5f7378;
+  background: #fff;
+  color: #14232a;
+  box-shadow: none;
+}
+
+.tentative-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin: 0 3px 0 -3px;
+  border-radius: 50%;
+  background: #5f7378;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: 0.05em;
+}

@@ -112,6 +112,8 @@ export const api = {
   deleteSite: (id: number, withEntries = false) =>
     request<void>('DELETE', `/api/sites/${id}${withEntries ? '?withEntries=true' : ''}`),
   changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
+  /** The customer confirmed the appointment: a service call or a site in the Bauphase. */
+  confirmSite: (id: number, asService: boolean) => request<Site>('POST', `/api/sites/${id}/confirm`, { asService }),
   updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
     request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
