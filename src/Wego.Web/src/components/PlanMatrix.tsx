@@ -2,7 +2,8 @@ import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEve
 import type { CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
-import { formatDateLong, HALF_DAYS, MONTHS } from '../lib/dates'
+import { formatDateLong, HALF_DAYS, isoWeek, MONTHS } from '../lib/dates'
+import { BirthdayIcon } from './BirthdayIcon'
 import { serviceName, entryName, entryStyle, entryTitle, isFree, onlyHalfDay } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
@@ -294,6 +295,8 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
               <th
                 key={day.iso}
                 id={`col-${day.iso}`}
+                // Every Monday names its calendar week (drawn by the style sheet).
+                data-kw={day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)}` : undefined}
                 className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}`}
                 title={holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso)}
               >
@@ -420,6 +423,8 @@ export function TimelineMatrix(props: MatrixProps) {
                 </span>
               )
               const isSelected = selected.has(cellKey(employee.id, day.iso))
+              // The birthday of the employee, every year on its day.
+              const birthday = !!employee.birthday && employee.birthday === day.iso.slice(5)
               return (
                 <td
                   key={day.iso}
@@ -434,9 +439,14 @@ export function TimelineMatrix(props: MatrixProps) {
                     aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
                     aria-pressed={isSelected || undefined}
                     data-cell={cellKey(employee.id, day.iso)}
-                    title={cellTitle(entries, entryTitle, notes)}
+                    title={[birthday ? `Geburtstag von ${employee.name}` : null, cellTitle(entries, entryTitle, notes)].filter(Boolean).join('\n') || undefined}
                     {...handlers(employeeIndex, dayIndex)}
                   >
+                    {birthday && (
+                      <span className="birthday-mark" role="img" aria-label={`Geburtstag von ${employee.name}`}>
+                        <BirthdayIcon />
+                      </span>
+                    )}
                     <span className="cell-full">
                       {/* Work in the afternoon only: the free morning comes first. */}
                       {free && afternoon && freeChip}

@@ -50,6 +50,7 @@ describe('EmployeesPage', () => {
       'Rolle',
       'Name',
       'Telefon',
+      'Geburtstag',
       'Stundensatz',
     ])
     expect(screen.getByText('38,50 €/Std.')).toBeInTheDocument()

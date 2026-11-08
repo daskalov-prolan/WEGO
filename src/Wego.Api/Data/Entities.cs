@@ -62,6 +62,12 @@ public class Employee
     public string? Phone { get; set; }
 
     /// <summary>
+    /// Date of birth, entered by a Planer G. Everybody else sees only the day and month (the birthday), in the
+    /// list of employees and in the plan.
+    /// </summary>
+    public DateOnly? BirthDate { get; set; }
+
+    /// <summary>
     /// Wage per hour in euros, for the costing of a site afterwards (Planer G only). A site can have its own
     /// rate for an employee, see <see cref="SiteHourlyRate"/>.
     /// </summary>

@@ -19,8 +19,9 @@ export function CellNotes({
   onMenu?: (note: CalendarNote, event: MouseEvent) => void
   onOpen?: (note: CalendarNote) => void
 }) {
-  // A finger opens the note itself; the card for pointing at it would only get in the way.
-  const touch = useMediaQuery('(pointer: coarse)')
+  // A finger opens the note itself; the card for pointing at it would only get in the way. A laptop with a
+  // touch screen still has a mouse: there the card shows.
+  const touch = useMediaQuery('(hover: none)')
   return (
     <span className="cell-notes">
       {notes.map((note) => (

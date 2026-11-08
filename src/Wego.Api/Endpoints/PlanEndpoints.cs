@@ -13,8 +13,9 @@ public static class PlanEndpoints
     /// <paramref name="IsCraftsman"/>: has a row in the plan and does all activities of the construction phase.
     /// Somebody can be both.
     /// </summary>
+    /// <summary><paramref name="Birthday"/>: day and month, "MM-dd"; marked in the plan.</summary>
     public record PlanEmployeeDto(int Id, string Name, string? MainActivity, IReadOnlyList<string> AdditionalActivities,
-        bool IsPlaner, bool IsCraftsman);
+        bool IsPlaner, bool IsCraftsman, string? Birthday = null);
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? SiteId, string? SiteName, string? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -228,7 +229,8 @@ public static class PlanEndpoints
         db.PlanEntries.AsNoTracking().Include(e => e.Site).Include(e => e.Employee);
 
     private static PlanEmployeeDto ToPlanEmployee(Employee e) =>
-        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role), e.ShowInPlan);
+        new(e.Id, e.Name, e.MainActivity, e.AdditionalActivities, Roles.CanPlan(e.Role), e.ShowInPlan,
+            EmployeeEndpoints.Birthday(e.BirthDate));
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
         e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant);

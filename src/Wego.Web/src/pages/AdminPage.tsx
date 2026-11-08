@@ -20,7 +20,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
+import { DateInput, DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
@@ -82,6 +82,7 @@ const newEmployee: EmployeeInput = {
   mainActivity: null,
   hourlyRate: null,
   phone: null,
+  birthDate: null,
 }
 
 function EmployeesSection({ openId = null }: { openId?: number | null }) {
@@ -404,6 +405,17 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                   maxLength={50}
                   value={editing.input.phone ?? ''}
                   onChange={(e) => change({ phone: e.currentTarget.value || null })}
+                />
+                <DateInput
+                  label="Geburtsdatum"
+                  description="Der Geburtstag steht für alle in der Mitarbeiterliste und im Kalender"
+                  placeholder="TT.MM.JJJJ"
+                  valueFormat="DD.MM.YYYY"
+                  clearable
+                  defaultLevel="decade"
+                  maxDate={new Date()}
+                  value={editing.input.birthDate ?? null}
+                  onChange={(value) => change({ birthDate: value || null })}
                 />
                 <NumberInput
                   label="Urlaubstage pro Jahr"
