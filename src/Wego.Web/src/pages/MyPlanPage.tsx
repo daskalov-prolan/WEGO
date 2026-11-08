@@ -128,7 +128,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   const scrollToWeek = useCallback((iso: string) => {
     const monday = mondayOf(iso)
     const section =
-      (iso === todayIso() ? listRef.current?.querySelector<HTMLElement>(`[data-day="${iso}"]`) : null) ??
+      // Today, or (should it not be shown) the first day after it.
+      (iso === todayIso()
+        ? [...(listRef.current?.querySelectorAll<HTMLElement>('[data-day]') ?? [])].find((day) => day.dataset.day! >= iso)
+        : null) ??
       listRef.current?.querySelector<HTMLElement>(`[data-week="${monday}"]`)
     // Right below the head that stays on top, in whatever scrolls the page.
     const scroller = section?.closest<HTMLElement>('.shell-main') ?? document.scrollingElement
@@ -286,8 +289,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           // A public holiday is free: vacation entered on it (e.g. by a company closure) is no vacation.
           const publicHoliday = holiday?.kind === 'Feiertag' && holiday.startDate === holiday.endDate
           const entries = (ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))
-          // Empty weekends only take up space.
-          if (day.isWeekend && entries.length === 0) return null
+          // Empty weekends only take up space; today always shows, it is where the list begins.
+          if (day.isWeekend && entries.length === 0 && day.iso !== today) return null
 
           return (
             <Paper
