@@ -243,6 +243,22 @@ export function DayEditor(props: Props) {
     >
       <form onSubmit={submit}>
         <Stack gap="sm">
+          {/* First the question what comes onto the day: a site or a service call. */}
+          <Group gap="sm" justify="space-between" wrap="wrap" className="day-add">
+            <Text fw={600} size="sm" c="wego.9">
+              Was soll eingetragen werden?
+            </Text>
+            <Group gap="xs">
+              <Button size="sm" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
+                + Baustelle
+              </Button>
+              <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
+                <Button size="sm" color="wegoRed.6" onClick={() => setAddingService(true)}>
+                  + Serviceauftrag
+                </Button>
+              </Tooltip>
+            </Group>
+          </Group>
           {rows.length === 0 && (
             <Text c="dimmed" size="sm">
               Keine Einträge. Speichern leert diesen Tag.
@@ -376,14 +392,6 @@ export function DayEditor(props: Props) {
           ])}
 
           <Group gap="xs">
-            <Button size="xs" variant="light" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
-              + Baustelle
-            </Button>
-            <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
-              <Button size="xs" variant="light" onClick={() => setAddingService(true)}>
-                + Service
-              </Button>
-            </Tooltip>
             <Tooltip label="Zwei Hälften: 07:30–11:30 und 12:00–16:00; die zweite kann eine Baustelle bekommen oder verfügbar bleiben">
               <Button size="xs" variant="light" onClick={splitDay}>
                 ½ Tag

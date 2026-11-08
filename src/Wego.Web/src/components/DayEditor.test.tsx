@@ -71,7 +71,7 @@ describe('DayEditor', () => {
     const props = { employee, date: '2026-11-06', entries: [], onCreateSite, onClose: () => {}, onSave }
     const { rerender } = renderWithProviders(<DayEditor {...props} sites={[site]} />)
 
-    await user.click(screen.getByRole('button', { name: '+ Service' }))
+    await user.click(screen.getByRole('button', { name: '+ Serviceauftrag' }))
     await user.type(await screen.findByRole('textbox', { name: 'Kunde' }), 'Familie Kurz')
     await user.type(screen.getByRole('textbox', { name: 'Was ist zu tun' }), 'Spülkasten tauschen')
     await user.click(screen.getByRole('button', { name: 'Service eintragen' }))

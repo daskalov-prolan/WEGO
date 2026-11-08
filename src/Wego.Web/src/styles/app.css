@@ -277,6 +277,10 @@ a:hover {
   flex: none;
   width: 13px;
   height: 13px;
+}
+
+/* The same everywhere: a white sheet with dark lines, also on entries with white writing. */
+.note-mark:not(.important) {
   color: #3d5054;
 }
 
@@ -307,7 +311,6 @@ a:hover {
 
 .timeline .chip .time,
 .timeline .chip .note:not(.important),
-.timeline .chip .note-mark:not(.important),
 .mini-cell .chip .time {
   color: var(--entry-text, #3d5054);
 }
@@ -1759,6 +1762,24 @@ a:hover {
   z-index: 1;
 }
 
+/* The entries of the site searched for in the plan. */
+.chip.found {
+  outline: 3px solid var(--wego-red);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.plan-found {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 340px;
+  padding: 2px 4px 2px 10px;
+  border: 2px solid var(--wego-red);
+  border-radius: 6px;
+  background: #fff;
+}
+
 .stretch-handle {
   position: absolute;
   top: 0;
@@ -2641,4 +2662,49 @@ html.zoomed .plan-scroll {
 
 .admin-employees tr.admin-employee-off td:first-child .mantine-Text-root:first-child {
   color: var(--mantine-color-dimmed);
+}
+
+/* The day dialog: what comes onto the day, asked first. */
+.day-add {
+  padding: 8px 10px;
+  border-left: 4px solid var(--wego-aqua);
+  border-radius: 6px;
+  background: #f1f8f9;
+}
+
+/* The search between the activities and Urlaub / Krank, in the middle of the second row. */
+.plan-search {
+  display: flex;
+  flex: 1 1 220px;
+  justify-content: center;
+  min-width: 200px;
+}
+
+.plan-search > * {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* One look over the whole head of the plan: every field and button 36 px high and round at the ends. */
+.plan-toolbar .mantine-Input-input {
+  border-radius: 999px;
+}
+
+.plan-toolbar .plan-found {
+  height: 36px;
+  border-radius: 999px;
+  padding-left: 14px;
+}
+
+.activity-row .absence-steps {
+  margin-left: 0;
+}
+
+/* The wrench of a service call before its name in the plan. */
+.service-icon {
+  flex: none;
+  /* Close to the left edge of the entry: more room for the name. */
+  margin-left: -5px;
+  margin-right: 1px;
+  vertical-align: -0.25em;
 }

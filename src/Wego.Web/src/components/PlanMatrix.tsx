@@ -3,7 +3,7 @@ import type { CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site 
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
 import { formatDateLong, HALF_DAYS, MONTHS } from '../lib/dates'
-import { entryName, entryStyle, entryTitle, isFree, onlyHalfDay } from '../lib/activities'
+import { serviceName, entryName, entryStyle, entryTitle, isFree, onlyHalfDay } from '../lib/activities'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -50,6 +50,8 @@ export interface MatrixProps {
   onFillFree?: (employee: PlanEmployee, date: string) => void
   /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
   marked?: { ids: Set<number>; first: number; last: number }
+  /** The entries of the site searched for: highlighted. */
+  found?: Set<number>
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged. */
@@ -449,6 +451,7 @@ export function TimelineMatrix(props: MatrixProps) {
                           draggable={draggable}
                           drop={props.dropOnEntry?.(entry)}
                           marked={props.marked?.ids.has(entry.id)}
+                          found={props.found?.has(entry.id)}
                           stretch={
                             props.onStretchStart && props.marked && (props.marked.first === entry.id || props.marked.last === entry.id)
                               ? {
@@ -467,7 +470,7 @@ export function TimelineMatrix(props: MatrixProps) {
                     {first && (
                       <Compact
                         entries={entries}
-                        text={entryName(first)}
+                        text={serviceName(entryName(first)) ?? entryName(first)}
                         dimmed={entries.every(isDimmed)}
                         reserved={props.isReserved?.(first)}
                         onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
@@ -520,6 +523,8 @@ interface SiteTimelineProps {
   onCellMenu?: (site: Site, date: string, at: { x: number; y: number; entryId?: number }) => void
   /** Planners: the marked entries (an employee's stretch of days at a site) and the entries at its ends. */
   marked?: { ids: Set<number>; first: number; last: number }
+  /** The entries of the site searched for: highlighted. */
+  found?: Set<number>
   /** Planners: a click on an employee in a cell marks the entry; a click elsewhere in the cell opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged, to the following days or back. */
@@ -595,6 +600,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                         draggable={draggable}
                         drop={props.dropOnEntry?.(entry)}
                         marked={marked?.ids.has(entry.id)}
+                        found={props.found?.has(entry.id)}
                         stretch={
                           props.onStretchStart && marked && (marked.first === entry.id || marked.last === entry.id)
                             ? {

@@ -1,6 +1,7 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import type { Entry } from '../api/types'
-import { activityLabel, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
+import { activityLabel, serviceName, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
+import { ServiceIcon } from './ServiceIcon'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange, WHOLE_DAY } from '../lib/dates'
 
@@ -18,6 +19,8 @@ interface Props {
   drop?: Record<string, unknown>
   /** Marked by a click: framed. */
   marked?: boolean
+  /** An entry of the site searched for in the plan. */
+  found?: boolean
   /** A reserved day of an offer site (see isReservation): framed in black on white. */
   reserved?: boolean
   /** Ends of a marked stretch: dragging them makes it longer or shorter. */
@@ -39,14 +42,26 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, reserved = false, stretch, drop }: Props) {
+/** The name of a site; a service call with the sign of a wrench in place of "SE:". */
+function SiteName({ name }: { name: string }) {
+  const service = serviceName(name)
+  if (service === null) return <>{name}</>
+  return (
+    <>
+      <ServiceIcon />
+      {service}
+    </>
+  )
+}
+
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, found = false, reserved = false, stretch, drop }: Props) {
   // The whole working day goes without saying: only part of a day shows its time.
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : ''].filter(Boolean).join(' ')
   const siteId = entry.siteId
   return (
     <span
-      className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : ''].filter(Boolean).join(' ')}
+      className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
       // With a note, pointing at the entry shows the note instead of site and activity.
       title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry)}
@@ -63,10 +78,10 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
             entry.type
           ) : onSiteClick && siteId !== null ? (
             <span className="site-link" role="link" onClick={(event) => onSiteClick(siteId, event)}>
-              {entry.siteName}
+              <SiteName name={entry.siteName ?? ''} />
             </span>
           ) : (
-            entryName(entry)
+            <SiteName name={entryName(entry)} />
           )}
         </span>
         {entry.note && <NoteMark important={entry.noteImportant} />}

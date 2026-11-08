@@ -40,6 +40,7 @@ import {
   worksInPhase,
 } from '../lib/activities'
 import { DayDetails } from '../components/DayDetails'
+import { PlanSearch } from '../components/PlanSearch'
 import { DayEditor } from '../components/DayEditor'
 import { shortNames, SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
@@ -88,6 +89,19 @@ const RETURN_KEY = 'wego.plan.returnTo'
 function loadReturnDate(): string | null {
   try {
     return sessionStorage.getItem(RETURN_KEY)
+  } catch {
+    return null
+  }
+}
+
+// The site searched for, handed to the plan of another year (it opens anew): its id and the day to show.
+const FOUND_KEY = 'wego.plan.found'
+
+function loadFound(): { siteId: number; day: string } | null {
+  try {
+    const stored = sessionStorage.getItem(FOUND_KEY)
+    sessionStorage.removeItem(FOUND_KEY)
+    return stored ? JSON.parse(stored) : null
   } catch {
     return null
   }
@@ -330,6 +344,42 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
 
   const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
+
+  // The search: the site looked for, its days in this plan (this year and phase), and its entries marked.
+  const [handedFound] = useState(loadFound)
+  const [foundId, setFoundId] = useState<number | null>(handedFound?.siteId ?? null)
+  const revealOnLoad = useRef(handedFound?.day ?? null)
+  const siteDays = useMemo(() => {
+    const map = new Map<number, { days: string[]; ids: Set<number> }>()
+    for (const entry of plan?.entries ?? []) {
+      const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
+      if (!site || entry.type !== 'Baustelle' || site.status === 'Storniert' || !inPhase(entry, site, phase)) continue
+      const found = map.get(site.id) ?? { days: [], ids: new Set<number>() }
+      if (!found.days.includes(entry.date)) found.days.push(entry.date)
+      found.ids.add(entry.id)
+      map.set(site.id, found)
+    }
+    for (const found of map.values()) found.days.sort()
+    return map
+  }, [plan, siteById, phase])
+  const foundSite = foundId === null ? null : (siteById.get(foundId) ?? null)
+  const foundIds = foundId === null ? undefined : siteDays.get(foundId)?.ids
+
+  /** Brings the first entry of the found site on this day into view, up or down (the day is in view already). */
+  const revealFound = (siteId: number, day: string) =>
+    window.setTimeout(() => {
+      const ids = siteDays.get(siteId)?.ids ?? new Set<number>()
+      const entry = plan?.entries.find((candidate) => candidate.date === day && ids.has(candidate.id))
+      const chip = entry && scroller.current?.querySelector<HTMLElement>(`[data-entry-id="${entry.id}"]`)
+      chip?.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+    }, 500)
+
+  // A site found in another year: its plan opens at the day (see openInYear), here it comes into view.
+  useEffect(() => {
+    if (!plan || plan.year !== year || foundId === null || !revealOnLoad.current) return
+    revealFound(foundId, revealOnLoad.current)
+    revealOnLoad.current = null
+  })
   const yearDays = useMemo(() => daysOfYear(year), [year])
 
   // The plan by site: every site of the phase with entries of the shown employees, planned in this year, or
@@ -554,6 +604,57 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   const goToday = () => (inYear(today) ? scrollToDate(today, true) : openInYear(today))
+
+  /** A day of the found site: the plan goes there and shows its entry. */
+  const showFound = (siteId: number, day: string) => {
+    scrollToDate(day, true)
+    revealFound(siteId, day)
+  }
+
+  /**
+   * A site searched for: its next day in this plan, else (no day this year) the plan of the year with its
+   * next day, else the last one it had.
+   */
+  const findSite = async (site: Site | null) => {
+    setFoundId(site?.id ?? null)
+    if (!site) return
+    const days = siteDays.get(site.id)?.days ?? []
+    const day = days.find((d) => d >= today) ?? days.at(-1)
+    if (day) {
+      showFound(site.id, day)
+      return
+    }
+    try {
+      const all = [...new Set((await api.siteReport(site.id)).entries.map((entry) => entry.date))].sort()
+      const other = all.find((d) => d >= today) ?? all.at(-1)
+      if (!other || Number(other.slice(0, 4)) === year) {
+        notifications.show({ message: `${site.name}: in diesem Jahr ist hier nichts eingeplant.`, autoClose: 4000 })
+        return
+      }
+      if (!onYearChange) return
+      notifications.show({ message: `${site.name}: Einsätze im Jahr ${other.slice(0, 4)}, der Plan wechselt dorthin.`, autoClose: 4000 })
+      try {
+        sessionStorage.setItem(FOUND_KEY, JSON.stringify({ siteId: site.id, day: other }))
+      } catch {
+        // Without storage the other year opens at the day, without the search.
+      }
+      openInYear(other)
+    } catch (e) {
+      notifications.show({ color: 'red', message: messageOf(e) })
+    }
+  }
+
+  const search = (
+    <PlanSearch
+      sites={plan?.sites ?? []}
+      daysOf={(siteId) => siteDays.get(siteId)?.days ?? []}
+      today={today}
+      year={year}
+      found={foundSite}
+      onFind={(site) => void findSite(site)}
+      onGo={(day) => foundId !== null && showFound(foundId, day)}
+    />
+  )
 
   if (error) return <p className="error page">{error}</p>
   if (!plan || plan.year !== year) return null
@@ -1285,6 +1386,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
               change what the employee does there; a phone cannot drag them, so they stay away there. */}
           {!isPhone && <PhaseActivities phase={phase} draggable={canEdit} />}
+          {/* The search in the middle, between the activities and Urlaub / Krank. */}
+          <div className="plan-search">{search}</div>
           {canEdit && perspective === 'employees' && (
             <span className="flow-steps absence-steps" role="group" aria-label="Abwesenheit eintragen">
               {(['Urlaub', 'Krank'] as const).map((type) => (
@@ -1392,6 +1495,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onFillFree={canEdit ? (employee, date) => setOpen({ employee, date, fillFree: true }) : undefined}
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
+            found={foundIds}
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('e')}
             corner={corner}
@@ -1415,6 +1519,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             dropOnEntry={canEdit ? dropOnEntry : undefined}
             onCellMenu={canEdit ? (site, date, { x, y, entryId }) => setCellMenu({ site, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
+            found={foundIds}
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('s')}
           />
