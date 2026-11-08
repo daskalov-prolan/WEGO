@@ -183,6 +183,15 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
           Soll der <strong>Standardablauf</strong> eingetragen werden, oder werden die Termine <strong>individuell</strong> geplant? Der
           Standardablauf ist eine Vorlage: Er lässt sich danach im Kalender wie jeder andere Eintrag ändern.
         </Text>
+        {/* The answer right under the question, not below the long list of days. */}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Individuell planen
+          </Button>
+          <Button loading={busy} disabled={!plans} onClick={enter}>
+            Standardablauf eintragen
+          </Button>
+        </Group>
         {error && (
           <Alert color="red" variant="light">
             {error}
@@ -247,14 +256,6 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
             </Text>
           </>
         )}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Individuell planen
-          </Button>
-          <Button loading={busy} disabled={!plans} onClick={enter}>
-            Standardablauf eintragen
-          </Button>
-        </Group>
       </Stack>
     </Sheet>
   )

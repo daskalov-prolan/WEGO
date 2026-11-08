@@ -369,7 +369,7 @@ describe('PlanPage', () => {
     // No buttons of recent sites, no field for the activity, no Urlaub or Krank (those are above the plan).
     expect(screen.queryByText('Baustellen dieser Wochen')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Tätigkeit')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Urlaub' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Urlaub' })).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText('hier wichtige Hinweise oder Notizen eintragen')).toBeInTheDocument()
     await user.click(input(/^Baustelle/))
     await user.click(await screen.findByRole('option', { name: /Familie Schulze/, hidden: true }))
@@ -486,10 +486,14 @@ describe('PlanPage', () => {
     expect(within(cell(/Anna, Donnerstag, 05.03.2026/)).getAllByText('Besichtigung')).not.toHaveLength(0)
   })
 
-  it('shows Urlaub and Krank above the plan to Planer G only', async () => {
+  it('tells Planer A that Urlaub is entered by the management only', async () => {
+    const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
     await screen.findByText(/KW 10/)
-    expect(screen.queryByRole('group', { name: 'Abwesenheit eintragen' })).not.toBeInTheDocument()
+    const vacation = within(screen.getByRole('group', { name: 'Abwesenheit eintragen' })).getByRole('button', { name: 'Urlaub' })
+    expect(vacation).not.toHaveAttribute('draggable', 'true')
+    await user.click(vacation)
+    expect(await screen.findByText('Urlaub wird nur seitens der Geschäftsleitung im Kalender eingetragen.')).toBeInTheDocument()
   })
 
   it('enters Krank by dragging it onto a day', async () => {

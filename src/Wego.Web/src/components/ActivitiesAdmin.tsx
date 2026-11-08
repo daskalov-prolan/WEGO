@@ -102,7 +102,7 @@ export function ActivitiesAdmin({ onChanged }: { onChanged: () => Promise<void> 
 
       {PHASES.map((phase) => (
         <Paper key={phase} withBorder p="sm">
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             {phaseLabel(phase)}
           </Title>
           <Table verticalSpacing={4}>
@@ -137,14 +137,14 @@ export function ActivitiesAdmin({ onChanged }: { onChanged: () => Promise<void> 
                         </ActionIcon>
                         <Button
                           size="compact-sm"
-                          variant="light"
+                          variant="default"
                           onClick={() =>
                             setEditing({ key: activity.key, input: { label: activity.label, phase: activity.phase, color: activity.color } })
                           }
                         >
                           Bearbeiten
                         </Button>
-                        <Button size="compact-sm" variant="subtle" color="red" onClick={() => remove(activity)}>
+                        <Button size="compact-sm" variant="outline" color="red" onClick={() => remove(activity)}>
                           Löschen
                         </Button>
                       </Group>

@@ -83,6 +83,9 @@ export function formatHours(hours: number): string {
 
 export const CURRENT_YEAR = new Date().getFullYear()
 
+/** The years of the calendar: always three years back and five ahead (their holidays come by themselves). */
+export const PLAN_YEARS = Array.from({ length: 9 }, (_, i) => CURRENT_YEAR - 3 + i)
+
 const WEEKDAYS_LONG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
 export function addDays(iso: string, count: number): string {

@@ -321,6 +321,26 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.BadRequest, closed.StatusCode);
     }
     [Fact]
+    public async Task Only_Planer_G_sets_a_site_done_or_takes_it_back()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Planer Fertig", "planer.fertig", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.fertig", "planer-a-pw");
+        var id = await CreateSiteAsync(a, "Fertigbaustelle");
+        Task<HttpResponseMessage> Change(HttpClient who, string status) => who.PostAsJsonAsync($"/api/sites/{id}/status", new { status });
+
+        // Planer A starts the construction phase, but does not set the site done.
+        Assert.Equal(HttpStatusCode.OK, (await Change(a, "Bauphase")).StatusCode);
+        var refused = await Change(a, "Abgeschlossen");
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("Geschäftsleitung", await refused.Content.ReadAsStringAsync());
+        // Planer G does; and only Planer G takes it back.
+        Assert.Equal(HttpStatusCode.OK, (await Change(g, "Abgeschlossen")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Change(a, "Bauphase")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Change(g, "Bauphase")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_status_brings_its_activities_as_tasks()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

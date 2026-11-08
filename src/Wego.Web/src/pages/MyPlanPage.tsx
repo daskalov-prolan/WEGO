@@ -6,7 +6,7 @@ import type { Entry, Plan, User } from '../api/types'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
-import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, isoWeek, todayIso, weekOf } from '../lib/dates'
+import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { holidaysByDate, useSwipe } from '../lib/ui'
 import { HOME_EVENT } from '../lib/home'
@@ -235,7 +235,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
         {onYearChange && (
           <YearPicker
             year={shownYear}
-            years={[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, shownYear].filter((y) => y >= FIRST_YEAR)}
+            years={[...PLAN_YEARS, shownYear].filter((y) => y >= FIRST_YEAR)}
             onChange={onYearChange}
           />
         )}

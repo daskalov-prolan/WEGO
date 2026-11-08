@@ -2,6 +2,7 @@ import { notifications } from '@mantine/notifications'
 import { useSyncExternalStore } from 'react'
 import type { CalendarNote, Entry, PlanEmployee, Site } from '../api/types'
 import { allowedActivities, defaultActivity, entryName, isOpen } from './activities'
+import { addDays } from './dates'
 import type { DayChange } from './dragPlan'
 import { toInput } from './ui'
 
@@ -33,12 +34,16 @@ export function useClip(): Clip | null {
   )
 }
 
-/** Puts these entries (one, or all of a day) and notes on the clipboard. */
+/** Puts these entries (one, all of a day, or the days of a selection) and notes on the clipboard. */
 export function copyEntries(entries: Entry[], cut: boolean, notes: CalendarNote[] = []) {
   if (entries.length === 0 && notes.length === 0) return
   const names = [...new Set(entries.map((entry) => entryName(entry)))]
-  setClip({ label: [...names, ...notes.map((note) => `Notiz „${note.title}“`)].join(' / '), entries, cut, notes })
+  const days = new Set(entries.map((entry) => entry.date)).size
+  const label = [...names, ...notes.map((note) => `Notiz „${note.title}“`)].join(' / ')
+  setClip({ label: days > 1 ? `${days} Tage: ${label}` : label, entries, cut, notes })
 }
+
+const dayDiff = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000)
 
 /**
  * Where to paste: the day, and what the cell decides. A cell of an employee gives the employee (the site
@@ -54,7 +59,11 @@ export interface PasteTarget {
  * The days to save for pasting: the copied entries are added to what is planned on the target days (a site
  * the employee is on that day already is not added twice). Who cannot do a copied activity gets their own
  * fitting one there. Cut entries leave their day in the same step. Vacation and sick days only go into cells
- * of employees.
+ * of employees. `isWorkday`: pasted into several fields, vacation leaves out weekends and public holidays.
+ *
+ * Entries of several days keep their distance in days: the first copied day goes to the first target day,
+ * the others follow. Copied from one employee, they go to each employee of the targets; copied from several,
+ * each employee keeps their own (only the days move).
  */
 export function pasteChanges(
   copied: Clip,
@@ -62,6 +71,7 @@ export function pasteChanges(
   entriesOf: (employeeId: number, date: string) => Entry[],
   employees: PlanEmployee[],
   siteById: Map<number, Site>,
+  isWorkday: (date: string) => boolean = () => true,
 ): DayChange[] {
   const cutIds = new Set(copied.cut ? copied.entries.map((entry) => entry.id) : [])
   const days = new Map<string, DayChange>()
@@ -77,25 +87,45 @@ export function pasteChanges(
   // Cut entries leave their days first, so pasting into the same day puts them back.
   for (const entry of copied.entries) if (cutIds.has(entry.id)) day(entry.employeeId, entry.date)
 
-  for (const target of targets) {
-    for (const entry of copied.entries) {
-      if (target.siteId !== undefined && entry.type !== 'Baustelle') continue
-      const employeeId = target.employeeId ?? entry.employeeId
-      const siteId = entry.type === 'Baustelle' ? (target.siteId ?? entry.siteId) : null
-      const change = day(employeeId, target.date)
-      // A site (or a vacation) only once a day; visits whose site is still open may be several.
-      const open = entry.type === 'Baustelle' && siteId === null
-      if (!open && change.entries.some((other) => other.type === entry.type && other.siteId === siteId)) continue
-      const employee = employees.find((candidate) => candidate.id === employeeId)
-      const site = siteId === null ? undefined : siteById.get(siteId)
-      const status = site && isOpen(site.status) ? site.status : undefined
-      const fits = !employee || entry.type !== 'Baustelle' || (entry.activity !== null && allowedActivities(employee, status).includes(entry.activity))
-      change.entries.push({
-        ...toInput(entry),
-        siteId,
-        activity: fits ? entry.activity : employee ? defaultActivity(employee, status) : entry.activity,
-      })
-    }
+  // Every copied entry with the day (and the cell) it goes to.
+  const copiedDays = [...new Set(copied.entries.map((entry) => entry.date))].sort()
+  let placed: { entry: Entry; date: string; target: PasteTarget }[]
+  if (copiedDays.length > 1 && targets.length > 0) {
+    const shift = dayDiff(copiedDays[0], targets.map((target) => target.date).sort()[0])
+    const oneEmployee = new Set(copied.entries.map((entry) => entry.employeeId)).size === 1
+    const employeeIds = [...new Set(targets.flatMap((target) => (target.employeeId === undefined ? [] : [target.employeeId])))]
+    // A site cell, or entries of several employees: one run of days; else one for each employee chosen.
+    const runs: PasteTarget[] =
+      oneEmployee && employeeIds.length > 0 ? employeeIds.map((employeeId) => ({ date: '', employeeId })) : [{ date: '', siteId: targets[0].siteId }]
+    placed = runs.flatMap((run) =>
+      copied.entries.map((entry) => {
+        const date = addDays(entry.date, shift)
+        return { entry, date, target: { ...run, date } }
+      }),
+    )
+  } else placed = targets.flatMap((target) => copied.entries.map((entry) => ({ entry, date: target.date, target })))
+  const several = new Set(placed.map(({ date, target }) => `${target.employeeId}|${date}`)).size > 1
+
+  for (const { entry, target } of placed) {
+    if (target.siteId !== undefined && entry.type !== 'Baustelle') continue
+    // Vacation over two weeks: Saturday, Sunday and public holidays are no vacation days. One field alone is
+    // what was meant.
+    if (entry.type === 'Urlaub' && several && !isWorkday(target.date)) continue
+    const employeeId = target.employeeId ?? entry.employeeId
+    const siteId = entry.type === 'Baustelle' ? (target.siteId ?? entry.siteId) : null
+    const change = day(employeeId, target.date)
+    // A site (or a vacation) only once a day; visits whose site is still open may be several.
+    const open = entry.type === 'Baustelle' && siteId === null
+    if (!open && change.entries.some((other) => other.type === entry.type && other.siteId === siteId)) continue
+    const employee = employees.find((candidate) => candidate.id === employeeId)
+    const site = siteId === null ? undefined : siteById.get(siteId)
+    const status = site && isOpen(site.status) ? site.status : undefined
+    const fits = !employee || entry.type !== 'Baustelle' || (entry.activity !== null && allowedActivities(employee, status).includes(entry.activity))
+    change.entries.push({
+      ...toInput(entry),
+      siteId,
+      activity: fits ? entry.activity : employee ? defaultActivity(employee, status) : entry.activity,
+    })
   }
   return [...days.values()]
 }

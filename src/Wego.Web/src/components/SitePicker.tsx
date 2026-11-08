@@ -4,7 +4,7 @@ import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress } from '../lib/sites'
 import { SiteForm } from './SiteForm'
-import { CallButton, SiteWayButtons } from './SiteActions'
+import { callHref, SiteWayButtons } from './SiteActions'
 
 interface Props {
   sites: Site[]
@@ -85,28 +85,33 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
       </Group>
       {chosen && (
         <div className="site-contact">
-          {/* Each line its label, the value and its buttons right behind it. */}
-          <Group gap={8} className="site-contact-line">
+          {/* At the left what is known, at the right all buttons together: calmer than a button behind every line. */}
+          <div className="site-contact-info">
             <Text size="sm">
               <span className="muted-inline">Adresse: </span>
               {chosenAddress ?? '–'}
             </Text>
-            <SiteWayButtons site={chosen} size="compact-xs" />
-          </Group>
-          <Group gap={8} className="site-contact-line">
-            <Text size="sm" className="muted-inline">
-              Telefon Kunde:
+            <Text size="sm">
+              <span className="muted-inline">Telefon Kunde: </span>
+              {chosen.clientPhone ?? '–'}
             </Text>
-            {chosen.clientPhone ? <CallButton phone={chosen.clientPhone} size="compact-xs" /> : <Text size="sm">–</Text>}
-          </Group>
-          {/* Straight to the page of the site, to add or correct its details. */}
-          {onGoToSite && (
-            <Group mt={2}>
-              <Button size="compact-xs" color="wegoRed" onClick={() => onGoToSite(chosen.id)}>
-                Zur Baustelle
-              </Button>
+          </div>
+          <div className="site-contact-actions">
+            <SiteWayButtons site={chosen} size="compact-xs" />
+            <Group gap="xs" justify="flex-end">
+              {chosen.clientPhone && (
+                <Button component="a" href={callHref(chosen.clientPhone)} size="compact-xs" aria-label={`Anrufen: ${chosen.clientPhone}`}>
+                  Anrufen
+                </Button>
+              )}
+              {/* Straight to the page of the site, to add or correct its details. */}
+              {onGoToSite && (
+                <Button size="compact-xs" color="wegoRed" onClick={() => onGoToSite(chosen.id)}>
+                  Zur Baustelle
+                </Button>
+              )}
             </Group>
-          )}
+          </div>
         </div>
       )}
       {creating && (

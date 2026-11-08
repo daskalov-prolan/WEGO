@@ -195,7 +195,7 @@ public static class PlanEndpoints
 
             // Urlaub and Krank are entered, changed and removed by Planer G only (everybody sees them).
             if (!user.IsPlanerG() && ChangeLog.ToJson(Absences(before)) != ChangeLog.ToJson(Absences(after)))
-                return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: Urlaub und Krank trägt nur Planer G ein.");
+                return ApiErrors.BadRequest($"{day.Date:dd.MM.yyyy}: Urlaub und Krankheitstage werden nur seitens der Geschäftsleitung im Kalender eingetragen.");
 
             // Saving a day unchanged (e.g. a selection that covers it) is no change worth logging.
             if (ChangeLog.ToJson(before) == ChangeLog.ToJson(after)) continue;

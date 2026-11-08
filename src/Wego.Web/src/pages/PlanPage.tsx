@@ -50,9 +50,9 @@ import { copyEntries, pasteChanges, setClip, useClip, type PasteTarget } from '.
 import { dragSource, dropTarget, moveChanges, staysPut, type DayChange, type DragItem } from '../lib/dragPlan'
 import {
   addDays,
+  PLAN_YEARS,
   addMonths,
   daysOfYear,
-  CURRENT_YEAR,
   formatDate,
   isoWeek,
   HALF_DAYS,
@@ -162,7 +162,7 @@ function YearSelect({ year, onChange, small = false }: { year: number; onChange?
   return (
     <YearPicker
       year={year}
-      years={[CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year]}
+      years={[...PLAN_YEARS, year]}
       onChange={onChange}
       size={small ? 'xs' : 'sm'}
       w={small ? 82 : undefined}
@@ -632,8 +632,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     }
   }
 
-  const applyToSelection = async (build: (employeeId: number, date: string) => DayEntryInput[], message: string) => {
-    const changes = [...selected].map(parseKey).map(({ employeeId, date }) => ({
+  const applyToSelection = async (
+    build: (employeeId: number, date: string) => DayEntryInput[],
+    message: string,
+    /** Days of the selection to leave as they are. */
+    skip: (date: string) => boolean = () => false,
+  ) => {
+    const changes = [...selected].map(parseKey).filter(({ date }) => !skip(date)).map(({ employeeId, date }) => ({
       employeeId,
       date,
       entries: build(employeeId, date),
@@ -794,8 +799,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   /** Adds the clipboard to these cells (see pasteChanges); cut entries leave their day in the same step. */
   const paste = async (targets: PasteTarget[]) => {
     if (!clip) return
+    // Copied Urlaub or Krank stays away for Planer A; the rest is pasted.
+    const absence = clip.entries.find((entry) => entry.type !== 'Baustelle')
+    if (absence && !canAbsence) absenceHint(absence.type as AbsenceType)
+    const entries = canAbsence ? clip.entries : clip.entries.filter((entry) => entry.type === 'Baustelle')
     const message = `${clip.label} in ${targets.length} ${targets.length === 1 ? 'Feld' : 'Felder'} eingefügt.`
-    if (clip.entries.length > 0) await save(pasteChanges(clip, targets, entriesOf, everyone, siteById), message)
+    if (entries.length > 0) await save(pasteChanges({ ...clip, entries }, targets, entriesOf, everyone, siteById, isWorkday), message)
     // The notes go into the fields of the employees (not onto a site).
     const notes = clip.notes ?? []
     for (const target of targets)
@@ -838,13 +847,31 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const absenceMessage = (type: AbsenceType, days: number) =>
     `${days} ${days === 1 ? 'Tag' : 'Tage'} als ${type === 'Urlaub' ? 'Urlaub' : 'krank'} eingetragen.`
 
+  /** Planer A may not enter Urlaub and Krank: they are told who does. */
+  const absenceHint = (type: AbsenceType) =>
+    notifications.show({
+      color: 'orange',
+      message:
+        type === 'Urlaub'
+          ? 'Urlaub wird nur seitens der Geschäftsleitung im Kalender eingetragen.'
+          : 'Krankheitstage werden nur seitens der Geschäftsleitung im Kalender eingetragen.',
+      autoClose: 5000,
+    })
+
   /** A click on Urlaub / Krank above the plan: into the selected fields, else how to use it. */
   const markAbsence = (type: AbsenceType) => {
+    if (!canAbsence) {
+      absenceHint(type)
+      return
+    }
     if (selected.size === 0) {
       notifications.show({ message: `${type} auf einen Tag ziehen, oder zuerst Felder auswählen.`, autoClose: 3000 })
       return
     }
-    applyToSelection(() => absenceDay(type), absenceMessage(type, selected.size))
+    // Vacation over several days leaves out weekends and public holidays; one day alone is what was meant.
+    const skip = (date: string) => type === 'Urlaub' && selected.size > 1 && !isWorkday(date)
+    const days = [...selected].map(parseKey).filter(({ date }) => !skip(date)).length
+    applyToSelection(() => absenceDay(type), absenceMessage(type, days), skip)
   }
 
   /** Dragging an end of the marked stretch along its row: the employee's row ('e') or the site's row ('s'). */
@@ -1108,8 +1135,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // First names, as in the plan.
   const paletteNames = shortNames(phaseEmployees)
 
-  const singleSelected = selected.size === 1 ? parseKey([...selected][0]) : null
-  const singleEntries = singleSelected ? entriesOf(singleSelected.employeeId, singleSelected.date) : []
+  // All entries of the marked fields, over several days and employees: copied together, they keep their days.
+  const selectedEntries = [...selected].map(parseKey).flatMap(({ employeeId, date }) => entriesOf(employeeId, date))
+  const copySelection = (cut: boolean) => {
+    copyEntries(selectedEntries, cut)
+    notifications.show({
+      message: `${cut ? 'Ausgeschnitten' : 'Kopiert'}: ${selected.size} ${selected.size === 1 ? 'Feld' : 'Felder'}. Das erste Feld wählen, in das eingefügt wird, und „Einfügen“.`,
+      autoClose: 4000,
+    })
+    setSelected(new Set())
+  }
 
   return (
     <div className="plan">
@@ -1250,12 +1285,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
               change what the employee does there; a phone cannot drag them, so they stay away there. */}
           {!isPhone && <PhaseActivities phase={phase} draggable={canEdit} />}
-          {canAbsence && perspective === 'employees' && (
+          {canEdit && perspective === 'employees' && (
             <span className="flow-steps absence-steps" role="group" aria-label="Abwesenheit eintragen">
               {(['Urlaub', 'Krank'] as const).map((type) => (
                 <Tooltip
                   key={type}
-                  label={`Auf einen Tag eines Mitarbeiters ziehen, oder Felder auswählen und hier klicken: ${type}`}
+                  label={
+                    canAbsence
+                      ? `Auf einen Tag eines Mitarbeiters ziehen, oder Felder auswählen und hier klicken: ${type}`
+                      : `${type} trägt nur die Geschäftsleitung ein.`
+                  }
                   multiline
                   w={260}
                 >
@@ -1270,7 +1309,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                       } as CSSProperties
                     }
                     onClick={() => markAbsence(type)}
-                    {...dragSource({ kind: 'absence', type }, !isPhone)}
+                    {...dragSource({ kind: 'absence', type }, !isPhone && canAbsence)}
                   >
                     {type === 'Urlaub' && <ActivityIcon type={type} size={11} />}
                     {type}
@@ -1392,17 +1431,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               <Button size="xs" onClick={() => setAssigning(true)}>
                 Baustelle …
               </Button>
-              {singleEntries.length > 0 && (
-                <Button
-                  size="xs"
-                  variant="default"
-                  onClick={() => {
-                    copyEntries(singleEntries, false)
-                    notifications.show({ message: 'Kopiert. Felder auswählen und „Einfügen“ wählen.', autoClose: 3000 })
-                  }}
-                >
-                  Kopieren
-                </Button>
+              {selectedEntries.length > 0 && (
+                <>
+                  <Button size="xs" variant="default" onClick={() => copySelection(false)}>
+                    Kopieren
+                  </Button>
+                  <Button size="xs" variant="default" onClick={() => copySelection(true)}>
+                    Ausschneiden
+                  </Button>
+                </>
               )}
               {clip && (
                 <Tooltip label={clip.label}>
@@ -1561,7 +1598,20 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               onOpenSite={shared.onOpenSite}
               onDelete={(entries) => remove(entries).catch(fail)}
               notes={employee ? (notesByCell.get(cellKey(employee.id, date)) ?? []) : []}
-              extra={employee ? [{ label: 'Notiz einfügen', onClick: () => setNoteDialog({ employee, date }) }] : []}
+              extra={
+                employee
+                  ? [
+                      // A field of a marking over several: the whole marking at once.
+                      ...(selected.size > 1 && selected.has(cellKey(employee.id, date)) && selectedEntries.length > 0
+                        ? [
+                            { label: `Markierung kopieren (${selected.size} Felder)`, onClick: () => copySelection(false) },
+                            { label: `Markierung ausschneiden (${selected.size} Felder)`, onClick: () => copySelection(true) },
+                          ]
+                        : []),
+                      { label: 'Notiz einfügen', onClick: () => setNoteDialog({ employee, date }) },
+                    ]
+                  : []
+              }
             />
           )
         })()}

@@ -130,6 +130,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
               <SiteStatusPanel
                 site={site}
                 canEdit
+                canFinish={canSeeEmployees}
                 onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
               />
             </div>
@@ -243,11 +244,11 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
 
           {byActivity.length > 0 && (
             <>
-              <Title order={4} mb="xs">
+              <Title order={4} mb="xs" className="section-heading">
                 Nach Tätigkeit
               </Title>
               <Table.ScrollContainer minWidth={380} mb="lg">
-                <Table withTableBorder>
+                <Table withTableBorder className="brand-table">
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Tätigkeit</Table.Th>
@@ -274,11 +275,11 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
             </>
           )}
 
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             Alle Einsätze
           </Title>
           <Table.ScrollContainer minWidth={380}>
-            <Table striped withTableBorder>
+            <Table striped withTableBorder className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Tag</Table.Th>
