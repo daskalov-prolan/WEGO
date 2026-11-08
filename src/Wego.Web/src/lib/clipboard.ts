@@ -59,7 +59,8 @@ export interface PasteTarget {
  * The days to save for pasting: the copied entries are added to what is planned on the target days (a site
  * the employee is on that day already is not added twice). Who cannot do a copied activity gets their own
  * fitting one there. Cut entries leave their day in the same step. Vacation and sick days only go into cells
- * of employees. `isWorkday`: pasted into several fields, vacation leaves out weekends and public holidays.
+ * of employees. `isWorkday`: pasted over several days, weekends and public holidays are kept free (a site as
+ * well as vacation); only weekends or holidays chosen on purpose, without a working day, are filled.
  *
  * Entries of several days keep their distance in days: the first copied day goes to the first target day,
  * the others follow. Copied from one employee, they go to each employee of the targets; copied from several,
@@ -105,12 +106,12 @@ export function pasteChanges(
     )
   } else placed = targets.flatMap((target) => copied.entries.map((entry) => ({ entry, date: target.date, target })))
   const several = new Set(placed.map(({ date, target }) => `${target.employeeId}|${date}`)).size > 1
+  const keepFree = several && placed.some(({ date }) => isWorkday(date))
 
   for (const { entry, target } of placed) {
     if (target.siteId !== undefined && entry.type !== 'Baustelle') continue
-    // Vacation over two weeks: Saturday, Sunday and public holidays are no vacation days. One field alone is
-    // what was meant.
-    if (entry.type === 'Urlaub' && several && !isWorkday(target.date)) continue
+    // Over two weeks: Saturday, Sunday and public holidays stay free. One field alone is what was meant.
+    if (keepFree && !isWorkday(target.date)) continue
     const employeeId = target.employeeId ?? entry.employeeId
     const siteId = entry.type === 'Baustelle' ? (target.siteId ?? entry.siteId) : null
     const change = day(employeeId, target.date)
