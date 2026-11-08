@@ -1,6 +1,6 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import type { Entry } from '../api/types'
-import { activityLabel, serviceName, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
+import { activityLabel, serviceName, tentativeName, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
 import { ServiceIcon } from './ServiceIcon'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange, WHOLE_DAY } from '../lib/dates'
@@ -44,6 +44,16 @@ export function NoteMark({ important }: { important: boolean }) {
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
 /** The name of a site; a service call with the sign of a wrench in place of "SE:". */
 function SiteName({ name }: { name: string }) {
+  const tentative = tentativeName(name)
+  if (tentative !== null)
+    return (
+      <>
+        <span className="tentative-mark" aria-label="unbestätigt">
+          ?
+        </span>
+        {tentative}
+      </>
+    )
   const service = serviceName(name)
   if (service === null) return <>{name}</>
   return (
@@ -57,7 +67,11 @@ function SiteName({ name }: { name: string }) {
 export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, found = false, reserved = false, stretch, drop }: Props) {
   // The whole working day goes without saying: only part of a day shows its time.
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
-  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : ''].filter(Boolean).join(' ')
+  // An appointment not confirmed yet: without colour, framed in dashes.
+  const tentative = entry.type === 'Baustelle' && tentativeName(entry.siteName ?? '') !== null
+  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '']
+    .filter(Boolean)
+    .join(' ')
   const siteId = entry.siteId
   return (
     <span

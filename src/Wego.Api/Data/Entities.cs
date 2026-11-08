@@ -190,6 +190,12 @@ public class Site
     /// </summary>
     public bool IsService { get; set; }
 
+    /// <summary>
+    /// An appointment kept for a customer who has not confirmed it yet (unbestätigter Termin). It shows in the plan
+    /// without colour and in the list of sites; once confirmed it becomes a site or a service call.
+    /// </summary>
+    public bool IsTentative { get; set; }
+
     public SiteStatus Status { get; set; } = SiteStatus.Angebot;
 
     /// <summary>The planner (Planer A or G) in charge of the site.</summary>
@@ -229,9 +235,12 @@ public class Site
     public void UpdateName()
     {
         var name = (NameSource == SiteNameSource.Strasse ? $"{Street} {HouseNumber}" : Client ?? "").Trim();
-        // A service call says so in the plan.
-        Name = IsService ? $"{ServicePrefix}{name}" : name;
+        // A service call says so in the plan, an appointment not confirmed yet as well.
+        Name = IsTentative ? $"{TentativePrefix}{name}" : IsService ? $"{ServicePrefix}{name}" : name;
     }
+
+    /// <summary>"? ": an appointment the customer has not confirmed yet.</summary>
+    public const string TentativePrefix = "? ";
 
     /// <summary>SE: Serviceeinsatz, short enough for a field of the calendar.</summary>
     public const string ServicePrefix = "SE: ";

@@ -334,6 +334,9 @@ namespace Wego.Api.Migrations
                     b.Property<bool>("IsService")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsTentative")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LabelProjectNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");

@@ -14,6 +14,8 @@ export const serviceTimes = (time: ServiceTime) =>
 
 interface Props {
   date: string
+  /** An appointment the customer has not confirmed yet, in place of a service call. */
+  tentative?: boolean
   /** Creates the service call (a site marked as such) and puts it on the day. */
   onCreate: (input: SiteInput, time: ServiceTime) => Promise<Site>
   onClose: () => void
@@ -23,8 +25,11 @@ interface Props {
  * A service call (Serviceeinsatz): work done at one appointment, without the record of a whole site. Only what is
  * needed to get there and to call: the customer, the address, the telephone and what is to do.
  */
-export function ServiceForm({ date, onCreate, onClose }: Props) {
-  const [service, setService] = useState<SiteInput>({ ...emptySite, status: 'Bauphase', plannedStart: date, isService: true })
+export function ServiceForm({ date, tentative = false, onCreate, onClose }: Props) {
+  // Not confirmed yet: an offer without a start; it becomes a site or a service call when it is confirmed.
+  const [service, setService] = useState<SiteInput>(
+    tentative ? { ...emptySite, status: 'Angebot', isTentative: true } : { ...emptySite, status: 'Bauphase', plannedStart: date, isService: true },
+  )
   const [time, setTime] = useState<ServiceTime>('day')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -70,11 +75,21 @@ export function ServiceForm({ date, onCreate, onClose }: Props) {
   }
 
   return (
-    <Sheet onClose={onClose} title={<Text fw={700}>Serviceeinsatz · {formatDateLong(date)}</Text>} size="md">
+    <Sheet
+      onClose={onClose}
+      title={
+        <Text fw={700}>
+          {tentative ? 'Termin (unbestätigt)' : 'Serviceeinsatz'} · {formatDateLong(date)}
+        </Text>
+      }
+      size="md"
+    >
       <form onSubmit={submit}>
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
-            Für Arbeiten an einem Termin, ohne eigene Baustelle. Er steht im Plan als „SE: Kunde“.
+            {tentative
+              ? 'Ein Termin, den der Kunde noch nicht bestätigt hat. Er steht im Plan ohne Farbe als „? Kunde“ und wird beim Bestätigen zur Baustelle oder zum Serviceauftrag.'
+              : 'Für Arbeiten an einem Termin, ohne eigene Baustelle. Er steht im Plan als „SE: Kunde“.'}
           </Text>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <TextInput label="Kunde" maxLength={200} required data-autofocus {...field('client')} />
@@ -116,7 +131,7 @@ export function ServiceForm({ date, onCreate, onClose }: Props) {
               Abbrechen
             </Button>
             <Button type="submit" loading={busy} disabled={!service.client?.trim()}>
-              Service eintragen
+              {tentative ? 'Termin eintragen' : 'Service eintragen'}
             </Button>
           </Group>
         </Stack>

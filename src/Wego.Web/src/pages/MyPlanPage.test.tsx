@@ -97,6 +97,14 @@ describe('MyPlanPage', () => {
     expect(within(dialog).getByText('Meine Tage hier (1)')).toBeInTheDocument()
   })
 
+  it('always opens at today, also when another year was chosen last', async () => {
+    const onYearChange = vi.fn()
+    const { container } = renderWithProviders(<MyPlanPage year={2027} user={user} onYearChange={onYearChange} />)
+    await screen.findByText('Montag, 02.03.2026')
+    expect(container.querySelector('.my-plan .kw')).toHaveTextContent('KW 10')
+    expect(onYearChange).toHaveBeenCalledWith(2026)
+  })
+
   it('pages on into the next year after the last week, and offers no year before 2026', async () => {
     vi.setSystemTime(new Date('2026-12-28T09:00:00'))
     const onYearChange = vi.fn()

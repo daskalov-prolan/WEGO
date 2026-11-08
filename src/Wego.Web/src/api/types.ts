@@ -78,6 +78,8 @@ export interface SiteInput {
   responsiblePlannerId?: number | null
   /** A service call (Serviceeinsatz): work at one appointment, kept out of the lists of sites. */
   isService?: boolean
+  /** An appointment the customer has not confirmed yet: in the plan without colour, "? Kunde". */
+  isTentative?: boolean
 }
 
 /** A planner who can be in charge of a site. */

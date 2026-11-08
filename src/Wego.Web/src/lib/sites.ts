@@ -40,7 +40,8 @@ export function toSiteInput(site: Site): SiteInput {
 /** The name the plan shows, worked out the same way as on the server (a service call says so). */
 export function siteName(site: SiteInput): string {
   const name = (site.nameSource === 'Strasse' ? `${site.street ?? ''} ${site.houseNumber ?? ''}` : (site.client ?? '')).trim()
-  return site.isService && name ? `SE: ${name}` : name
+  if (!name) return name
+  return site.isTentative ? `? ${name}` : site.isService ? `SE: ${name}` : name
 }
 
 /** "Hauptstraße 12, Hinterhaus, 13125 Berlin", or null without any address. */
