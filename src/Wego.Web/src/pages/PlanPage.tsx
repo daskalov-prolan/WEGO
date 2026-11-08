@@ -700,6 +700,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   /**
+   * Entered into several fields at once, weekends and public holidays stay free; unless only such days are
+   * marked, on purpose.
+   */
+  const keepsFree = () => selected.size > 1 && [...selected].some((key) => isWorkday(parseKey(key).date))
+
+  /**
    * The stretch of an entry: the same employee at the same site with the same activity on the working days
    * before and after it, one after the other (weekends and public holidays in between do not break it).
    */
@@ -869,7 +875,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       return
     }
     // Vacation over several days leaves out weekends and public holidays; one day alone is what was meant.
-    const skip = (date: string) => type === 'Urlaub' && selected.size > 1 && !isWorkday(date)
+    const skip = (date: string) => type === 'Urlaub' && keepsFree() && !isWorkday(date)
     const days = [...selected].map(parseKey).filter(({ date }) => !skip(date)).length
     applyToSelection(() => absenceDay(type), absenceMessage(type, days), skip)
   }
@@ -1476,7 +1482,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           phase={phase}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
-            const changes = [...selected].map(parseKey).map(({ employeeId, date }) => {
+            // A site over several days (over a weekend): weekends and public holidays stay free.
+            const free = keepsFree()
+            const changes = [...selected].map(parseKey).filter(({ date }) => !free || isWorkday(date)).map(({ employeeId, date }) => {
               // Everybody gets the chosen activity if they can do it, else the first one they can do.
               const employee = everyone.find((e) => e.id === employeeId)!
               const status = template.siteId === null ? undefined : siteById.get(template.siteId)?.status

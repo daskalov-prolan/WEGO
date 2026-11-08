@@ -25,6 +25,16 @@ describe('pasteChanges', () => {
     expect(changes).toEqual([expect.objectContaining({ date: '2026-11-21', entries: [expect.objectContaining({ type: 'Urlaub' })] })])
   })
 
+  it('keeps the weekend free when a site is pasted over two weeks, but fills a weekend chosen on its own', () => {
+    const site: Clip = { label: '', cut: false, entries: [{ ...vacation, type: 'Baustelle', siteId: 7, siteName: 'S7', activity: 'Fliesen' }] }
+    const week = Array.from({ length: 9 }, (_, i) => ({ employeeId: 3, date: `2026-11-${16 + i}` }))
+    expect(pasteChanges(site, week, () => [], [], new Map(), isWorkday).map((change) => change.date)).toEqual([
+      '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-23', '2026-11-24',
+    ])
+    const weekend = [{ employeeId: 3, date: '2026-11-21' }, { employeeId: 3, date: '2026-11-22' }]
+    expect(pasteChanges(site, weekend, () => [], [], new Map(), isWorkday)).toHaveLength(2)
+  })
+
   it('pastes the entries of several days from the first target day on, keeping their distance', () => {
     const site = (id: number, date: string, siteId: number): Entry => ({ ...vacation, id, date, type: 'Baustelle', siteId, siteName: 'S' + siteId, activity: 'Fliesen' })
     // Monday and Tuesday at site 7, Wednesday at site 8; pasted from Monday 23.11. on for two employees.
