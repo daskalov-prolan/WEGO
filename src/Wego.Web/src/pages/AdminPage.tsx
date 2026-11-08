@@ -30,7 +30,7 @@ import { toEmployeeInput } from '../lib/employees'
 import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
 import { YearPicker } from '../components/YearPicker'
-import { CURRENT_YEAR, formatDate } from '../lib/dates'
+import { formatDate, PLAN_YEARS } from '../lib/dates'
 import { roleLabel, ROLES } from '../lib/roles'
 
 /** Planer G only: employees and their rights, activities, school and public holidays. Sites have their own page. */
@@ -44,10 +44,13 @@ interface AdminPageProps {
 export function AdminPage({ year, employeeId = null, onActivitiesChanged }: AdminPageProps) {
   return (
     <div className="page">
-      <Title order={2} mb="md">
+      <Title order={2} mb={4} className="page-title">
         Verwaltung
       </Title>
-      <Tabs defaultValue="employees" keepMounted={false}>
+      <Text c="dimmed" mb="md">
+        Mitarbeiter, Tätigkeiten, Ferien und Feiertage
+      </Text>
+      <Tabs defaultValue="employees" keepMounted={false} className="brand-tabs">
         <Tabs.List mb="md">
           <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
           <Tabs.Tab value="activities">Tätigkeiten</Tabs.Tab>
@@ -186,7 +189,7 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
             Bei der ersten Anmeldung wählt jeder sein eigenes Passwort.
           </Text>
           <Table.ScrollContainer minWidth={420}>
-            <Table withTableBorder bg="white">
+            <Table withTableBorder bg="white" className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Name</Table.Th>
@@ -223,7 +226,7 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
 
       {/* Calm rows: the state under the name, the role written out, one button and a menu for the rest. */}
       <Table.ScrollContainer minWidth={820}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="sm" className="admin-employees">
+        <Table striped highlightOnHover withTableBorder verticalSpacing="sm" className="brand-table admin-employees">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>
@@ -447,10 +450,10 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
 }
 
 /** The years the holidays can be kept for: from 2026 on, five years ahead of the current one. */
-const HOLIDAY_YEARS = Array.from({ length: Math.max(CURRENT_YEAR + 5, 2031) - 2026 + 1 }, (_, i) => 2026 + i)
+const HOLIDAY_YEARS = PLAN_YEARS
 
 export function SchoolHolidaysSection({ year: planYear }: { year: number }) {
-  const [year, setYear] = useState(Math.max(planYear, 2026))
+  const [year, setYear] = useState(planYear)
   const [holidays, setHolidays] = useState<SchoolHoliday[]>([])
   const [name, setName] = useState('')
   const [range, setRange] = useState<[string | null, string | null]>([null, null])
@@ -498,11 +501,12 @@ export function SchoolHolidaysSection({ year: planYear }: { year: number }) {
 
   return (
     <Stack gap="md">
-      {/* Schulferien and Feiertage come by themselves (the server fetches every new year). */}
-      <Group gap="xs" align="center">
-        <Text fw={600} size="sm">
-          Jahr
-        </Text>
+      {/* Schulferien and Feiertage come by themselves (the server fetches every new year). As in "Mein Bereich":
+          the heading on the left, the year on the right. */}
+      <Group justify="space-between" align="center">
+        <Title order={3} className="section-heading">
+          Ferien & Feiertage {year}
+        </Title>
         <YearPicker year={year} years={HOLIDAY_YEARS} onChange={setYear} />
       </Group>
 
@@ -514,7 +518,7 @@ export function SchoolHolidaysSection({ year: planYear }: { year: number }) {
 
       {/* Fixed columns: the table looks the same in every year, whatever the names. */}
       <Table.ScrollContainer minWidth={560}>
-        <Table striped withTableBorder layout="fixed">
+        <Table striped withTableBorder layout="fixed" className="brand-table">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Bezeichnung</Table.Th>
@@ -584,8 +588,11 @@ export function SchoolHolidaysSection({ year: planYear }: { year: number }) {
       </Text>
 
       <Paper withBorder p="sm" component="form" onSubmit={add}>
-        <Text fw={600} size="sm" mb="xs">
-          Von Hand eintragen (z. B. Brückentag, Betriebsferien: Urlaub für alle Handwerker)
+        <Title order={4} className="section-heading" mb={4}>
+          Von Hand eintragen
+        </Title>
+        <Text size="sm" c="dimmed" mb="xs">
+          z. B. Brückentag, Betriebsferien: Urlaub für alle Handwerker
         </Text>
         <Group align="flex-end" gap="sm">
           <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />

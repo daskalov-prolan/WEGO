@@ -5,7 +5,7 @@ import { api, messageOf } from '../api/client'
 import type { EmployeeVacation, MyVacation, User, VacationBlock } from '../api/types'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { Stat } from '../components/Stat'
-import { CURRENT_YEAR, formatDate, todayIso } from '../lib/dates'
+import { CURRENT_YEAR, formatDate, PLAN_YEARS, todayIso } from '../lib/dates'
 
 /** Days with halves: 24 and 31 December count half a day each. */
 const days = (count: number) => (count === 0.5 ? '½' : count < 0 ? `−${(-count).toLocaleString('de-DE')}` : count.toLocaleString('de-DE'))
@@ -19,8 +19,8 @@ const COUNTED_FROM = 2027
  */
 export function MyAreaPage({ user }: { user: User }) {
   const first = Math.max(COUNTED_FROM, CURRENT_YEAR)
-  // Five years to choose from, and later on always the year to come as well.
-  const years = Array.from({ length: Math.max(COUNTED_FROM + 4, CURRENT_YEAR + 1) - COUNTED_FROM + 1 }, (_, i) => COUNTED_FROM + i)
+  // The years of the calendar, from the first counted one on.
+  const years = PLAN_YEARS.filter((y) => y >= COUNTED_FROM)
   const [year, setYear] = useState(first)
   const [vacation, setVacation] = useState<MyVacation | null>(null)
   const [error, setError] = useState('')
@@ -39,7 +39,7 @@ export function MyAreaPage({ user }: { user: User }) {
     // The same on the desktop as on a phone: one narrow column.
     <div className="page my-area">
       {/* In the colours of WEGO: the red under the title, the turquoise for the vacation. */}
-      <Title order={2} mb={4} className="my-area-title">
+      <Title order={2} mb={4} className="page-title">
         Mein Bereich
       </Title>
       <Text c="dimmed" mb="md">
@@ -47,7 +47,7 @@ export function MyAreaPage({ user }: { user: User }) {
       </Text>
 
       <Group justify="space-between" align="center" mb="sm">
-        <Title order={3} className="my-area-heading">
+        <Title order={3} className="section-heading">
           <ActivityIcon type="Urlaub" size={20} /> Mein Urlaub
         </Title>
         <YearPicker year={year} years={years} onChange={setYear} />
@@ -61,13 +61,13 @@ export function MyAreaPage({ user }: { user: User }) {
 
       {vacation && (
         <>
-          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="lg" className="my-area-stats">
+          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="lg">
             <Stat value={vacation.entitlement} label={`Urlaubstage ${vacation.year}`} />
-            <Stat value={days(vacation.used)} label={`verbraucht bzw. eingeplant (davon ${days(vacation.taken)} schon genommen)`} />
-            <Stat value={days(vacation.remaining)} label="noch verfügbar" negative={vacation.remaining < 0} />
+            <Stat value={days(vacation.used)} label={`verbraucht bzw. eingeplant (davon ${days(vacation.taken)} schon genommen)`} tone="red" />
+            <Stat value={days(vacation.remaining)} label="noch verfügbar" negative={vacation.remaining < 0} tone="filled" />
           </SimpleGrid>
 
-          <Title order={4} mb="xs" className="my-area-heading">
+          <Title order={4} mb="xs" className="section-heading">
             Wann
           </Title>
           {vacation.blocks.length === 0 ? (
@@ -89,7 +89,7 @@ function VacationBlocks({ blocks }: { blocks: VacationBlock[] }) {
   const today = todayIso()
   return (
     // All in view on a phone, too: the state stands under the dates, the days at the right.
-    <Table striped withTableBorder verticalSpacing="xs" className="my-area-table">
+    <Table striped withTableBorder verticalSpacing="xs" className="brand-table my-area-table">
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Zeitraum</Table.Th>
@@ -144,7 +144,7 @@ function TeamVacation({ year }: { year: number }) {
 
   return (
     <>
-      <Title order={3} mt="xl" mb="sm" className="my-area-heading">
+      <Title order={3} mt="xl" mb="sm" className="section-heading">
         <ActivityIcon type="Urlaub" size={20} /> Urlaub der Mitarbeiter {year}
       </Title>
       {error && (
@@ -153,7 +153,7 @@ function TeamVacation({ year }: { year: number }) {
         </Alert>
       )}
       {team && (
-        <Table withTableBorder verticalSpacing="xs" className="my-area-table team-vacation">
+        <Table withTableBorder verticalSpacing="xs" className="brand-table team-vacation">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Mitarbeiter</Table.Th>

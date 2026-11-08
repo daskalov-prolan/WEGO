@@ -6,6 +6,7 @@ import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { SitesMap } from '../components/SitesMap'
 import { StatusBadge, StatusSlider } from '../components/SiteStatus'
+import { finishSite, showDoneHint } from '../lib/siteDone'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
@@ -63,7 +64,7 @@ function compare(a: Site, b: Site, key: SortKey): number {
  * Planner-only: all construction sites with their status, the planner in charge, address and phone of the
  * customer, sorted by planned start by default; then the list opens where the sites begin that start after today.
  */
-export function SitesPage() {
+export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
   const [sites, setSites] = useState<Site[]>([])
   // A new site with its Baubeginn: asked whether the standard flow goes into the plan.
   const [flowSite, setFlowSite] = useState<Site | null>(null)
@@ -137,15 +138,17 @@ export function SitesPage() {
   const years = [...new Set([thisYear + 1, thisYear, ...sites.flatMap((site) => (site.plannedStart ? [Number(site.plannedStart.slice(0, 4))] : []))])]
     .sort((a, b) => b - a)
 
-  // Done or back into the construction phase, right from the list.
+  // Done (with the summary as a PDF) or back into the construction phase, right from the list: Planer G only.
   const setDone = async (site: Site, done: boolean) => {
+    if (!canFinish) {
+      showDoneHint()
+      return
+    }
     try {
-      const saved = await api.changeSiteStatus(site.id, done ? 'Abgeschlossen' : 'Bauphase')
+      const saved = done ? await finishSite(site) : await api.changeSiteStatus(site.id, 'Bauphase')
+      if (!saved) return
       setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))
-      notifications.show({
-        message: done ? `„${saved.name}“ ist erledigt.` : `„${saved.name}“ ist wieder in der Bauphase.`,
-        color: 'green',
-      })
+      if (!done) notifications.show({ message: `„${saved.name}“ ist wieder in der Bauphase.`, color: 'green' })
     } catch (e) {
       setError(messageOf(e))
     }
@@ -171,14 +174,12 @@ export function SitesPage() {
     }))
   }, [rows, grouping, plannerName])
 
-  // Sorted by the planned start: jump to the first site whose planned start lies after today.
+  // Sorted by the planned start: a line above the first site whose planned start lies after today. The list
+  // opens at its beginning, it does not jump there.
   const firstUpcoming =
     sort.key === 'plannedStart'
       ? rows.find((site) => site.plannedStart && site.plannedStart > today)
       : undefined
-  useEffect(() => {
-    if (firstUpcoming) document.getElementById(`site-row-${firstUpcoming.id}`)?.scrollIntoView({ block: 'start' })
-  }, [firstUpcoming, sort])
 
   // The sites shown that have a place on the map.
   const points = useMemo(
@@ -191,8 +192,15 @@ export function SitesPage() {
 
   return (
     <div className="page">
-      <Group justify="space-between" mb="md">
-        <Title order={2}>Baustellen</Title>
+      <Group justify="space-between" align="flex-start" mb="md">
+        <div>
+          <Title order={2} mb={4} className="page-title">
+            Baustellen
+          </Title>
+          <Text c="dimmed">
+            {rows.length} von {sites.length} Baustellen
+          </Text>
+        </div>
         <Button onClick={() => setCreating(true)}>+ Neue Baustelle</Button>
       </Group>
 
@@ -243,9 +251,6 @@ export function SitesPage() {
             { value: 'map', label: 'Karte' },
           ]}
         />
-        <Text size="sm" c="dimmed">
-          {rows.length} von {sites.length} Baustellen
-        </Text>
       </Group>
 
       {error && (
@@ -299,7 +304,7 @@ export function SitesPage() {
         </div>
       ) : (
         <Table.ScrollContainer minWidth={760}>
-          <Table striped highlightOnHover withTableBorder stickyHeader className="sites-table">
+          <Table striped highlightOnHover withTableBorder stickyHeader className="brand-table sites-table">
             <Table.Thead>
               <Table.Tr>
                 {COLUMNS.map((column) => (

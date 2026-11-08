@@ -13,7 +13,7 @@ const menu = () => within(screen.getByRole('navigation')).getAllByRole('link').m
 describe('AppShell', () => {
   it('shows the plan per phase next to each other and the records on the right', () => {
     renderWithProviders(
-      <AppShell user={user('PlanerG', true)} page="angebotsphase" year={2026} onYearChange={() => {}} onLogout={() => {}}>
+      <AppShell user={user('PlanerG', true)} page="angebotsphase" onLogout={() => {}}>
         <p>Inhalt</p>
       </AppShell>,
     )
@@ -26,7 +26,7 @@ describe('AppShell', () => {
 
   it('offers a craftsman no offer phase, but the list of employees', () => {
     renderWithProviders(
-      <AppShell user={user('Handwerker', false)} page="bauphase" year={2026} onYearChange={() => {}} onLogout={() => {}}>
+      <AppShell user={user('Handwerker', false)} page="bauphase" onLogout={() => {}}>
         <p>Inhalt</p>
       </AppShell>,
     )

@@ -1,4 +1,5 @@
 import { Alert, Anchor, Badge, Group, SimpleGrid, Table, Title } from '@mantine/core'
+import { YearPicker } from '../components/YearPicker'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Employee, EmployeeReport, Vacation } from '../api/types'
@@ -6,11 +7,12 @@ import { ActivityBadges } from '../components/EmployeeActivities'
 import { EmployeeMiniPlan } from '../components/EmployeeMiniPlan'
 import { Stat } from '../components/Stat'
 import { allowedActivities } from '../lib/activities'
-import { formatDate, formatHours, formatTimeRange } from '../lib/dates'
+import { formatDate, formatHours, formatTimeRange, PLAN_YEARS } from '../lib/dates'
 import { canPlanRole } from '../lib/roles'
 
 interface Props {
   year: number
+  onYearChange: (year: number) => void
   employeeId: number
 }
 
@@ -18,7 +20,9 @@ interface Props {
  * Planner-only: the page of one employee. Their activities (edited in the administration), their planning,
  * and where they worked during the year, with vacation and sick days.
  */
-export function EmployeeReportPage({ year, employeeId }: Props) {
+export function EmployeeReportPage({ year, onYearChange, employeeId }: Props) {
+  // As in "Mein Bereich": the year beside the heading, not in the head of the app.
+  const years = [...PLAN_YEARS, year]
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [report, setReport] = useState<EmployeeReport | null>(null)
   const [overview, setOverview] = useState<Vacation[]>([])
@@ -100,9 +104,12 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
 
       <EmployeeMiniPlan key={employeeId} employeeId={employeeId} canEdit activityFilter={filter} />
 
-      <Title order={3} mb="sm">
-        Auswertung {year}
-      </Title>
+      <Group justify="space-between" align="center" mb="sm">
+        <Title order={3} className="section-heading">
+          Auswertung {year}
+        </Title>
+        <YearPicker year={year} years={years} onChange={onYearChange} />
+      </Group>
 
       {current && (
         <>
@@ -112,20 +119,22 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
             <Stat
               value={`${current.vacation.used} / ${current.vacation.entitlement}`}
               label="Urlaubstage verbraucht bzw. eingeplant"
+              tone="red"
             />
             <Stat
               value={current.vacation.remaining}
               label="Urlaubstage noch verfügbar"
               negative={current.vacation.remaining < 0}
+              tone="filled"
             />
-            <Stat value={current.vacation.sickDays} label="Krankheitstage" />
+            <Stat value={current.vacation.sickDays} label="Krankheitstage" tone="red" />
           </SimpleGrid>
 
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             Nach Baustelle
           </Title>
           <Table.ScrollContainer minWidth={420} mb="lg">
-            <Table striped highlightOnHover withTableBorder>
+            <Table striped highlightOnHover withTableBorder className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Baustelle</Table.Th>
@@ -152,11 +161,11 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
             </Table>
           </Table.ScrollContainer>
 
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             Alle Einsätze
           </Title>
           <Table.ScrollContainer minWidth={420} mb="lg">
-            <Table striped withTableBorder>
+            <Table striped withTableBorder className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Tag</Table.Th>
@@ -180,11 +189,11 @@ export function EmployeeReportPage({ year, employeeId }: Props) {
 
       {overview.length > 0 && (
         <>
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             Urlaubsübersicht {year}
           </Title>
           <Table.ScrollContainer minWidth={520}>
-            <Table striped highlightOnHover withTableBorder>
+            <Table striped highlightOnHover withTableBorder className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Mitarbeiter</Table.Th>

@@ -4,18 +4,12 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { User } from '../api/types'
 import logo from '../assets/logo.svg'
-import { CURRENT_YEAR } from '../lib/dates'
 import { canPlanRole, roleLabel } from '../lib/roles'
 import { Sheet } from './Sheet'
-import { YearPicker } from './YearPicker'
 
 interface Props {
   user: User
   page: string
-  year: number
-  onYearChange: (year: number) => void
-  /** false: the page chooses its year itself, or needs none. */
-  showYear?: boolean
   onLogout: () => void
   /** Where the logo leads: the start page, shown at today. */
   homePage?: string
@@ -34,10 +28,8 @@ const NAV = [
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
-export function AppShell({ user, page, year, onYearChange, onLogout, showYear = true, homePage, onHome, children }: Props) {
+export function AppShell({ user, page, onLogout, homePage, onHome, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
-  // A year paged to in the plan beyond these is offered as well.
-  const years = [...new Set([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1, year])].sort((a, b) => a - b).map(String)
 
   return (
     <div className="shell">
@@ -48,10 +40,6 @@ export function AppShell({ user, page, year, onYearChange, onLogout, showYear = 
         </a>
         <span className="shell-title">Personaleinsatzplanung</span>
         <Group gap="xs" ml="auto" wrap="nowrap">
-          {/* Pages with a year of their own (Mein Plan, Planung, Mein Bereich) or none (the list of employees) do without. */}
-          {showYear && (
-            <YearPicker year={year} years={years.map(Number)} onChange={onYearChange} size="xs" w={92} className="year-select" />
-          )}
           <Menu position="bottom-end" withinPortal>
             <Menu.Target>
               <UnstyledButton className="user-button" aria-label="Benutzermenü">

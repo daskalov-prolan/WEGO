@@ -44,7 +44,7 @@ function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
     <>
       <Stack gap="xs">
         {shown.map((employee) => (
-          <Paper key={employee.id} withBorder radius="md" p="sm">
+          <Paper key={employee.id} withBorder radius="md" p="sm" className="employee-card">
             <Group justify="space-between" wrap="nowrap" gap="xs">
               <div style={{ minWidth: 0 }}>
                 <Text fw={700}>{employee.name}</Text>
@@ -93,9 +93,12 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
   if (phone)
     return (
       <div className="page">
-        <Title order={2} mb="md">
+        <Title order={2} mb={4} className="page-title">
           Mitarbeiter
         </Title>
+        <Text c="dimmed" mb="md">
+          Zum Anrufen auf „Anrufen“ tippen
+        </Text>
         {error && (
           <Alert color="red" variant="light" mb="md">
             {error}
@@ -107,9 +110,12 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
 
   return (
     <div className="page">
-      <Title order={2} mb="md">
+      <Title order={2} mb={4} className="page-title">
         Mitarbeiter
       </Title>
+      <Text c="dimmed" mb="md">
+        {shown.length} von {employees.length} Mitarbeitern
+      </Text>
       <Group gap="md" mb="md" align="flex-end">
         <TextInput
           placeholder="Name suchen"
@@ -133,9 +139,6 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
             { value: 'all', label: 'Alle Mitarbeiter' },
           ]}
         />
-        <Text size="sm" c="dimmed">
-          {shown.length} von {employees.length}
-        </Text>
       </Group>
       {error && (
         <Alert color="red" variant="light" mb="md">
@@ -143,7 +146,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
         </Alert>
       )}
       <Table.ScrollContainer minWidth={560}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="xs">
+        <Table striped highlightOnHover withTableBorder verticalSpacing="xs" className="brand-table">
           <Table.Thead>
             <Table.Tr>
               <Table.Th w={190}>Rolle</Table.Th>

@@ -113,11 +113,11 @@ export default function App() {
   else if (page === 'mein-bereich') content = <MyAreaPage user={user} />
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
-    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage />
+    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage canFinish={isAdmin} />
   else if (page === 'mitarbeiter')
     content =
       selectedId && isAdmin ? (
-        <EmployeeReportPage key={selectedId} year={year} employeeId={selectedId} />
+        <EmployeeReportPage key={selectedId} year={year} onYearChange={setYear} employeeId={selectedId} />
       ) : (
         <EmployeesPage canEdit={isAdmin} />
       )
@@ -140,10 +140,6 @@ export default function App() {
     <AppShell
       user={user}
       page={current}
-      year={year}
-      onYearChange={setYear}
-      // The year in the header only where a page needs it and has no choice of its own.
-      showYear={page === 'baustellen' || page === 'verwaltung' || (page === 'mitarbeiter' && Boolean(selectedId && isAdmin))}
       onLogout={() => api.logout().finally(() => setUser(null))}
       homePage={user.showInPlan ? 'mein-plan' : startPage}
       onHome={() => {

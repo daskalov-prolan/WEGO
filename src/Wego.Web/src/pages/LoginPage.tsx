@@ -44,7 +44,7 @@ export function LoginPage({ onLogin }: { onLogin: (user: User, password: string)
     <LoginFrame>
       <form onSubmit={submit}>
         <Stack gap="md" p="lg">
-          <Title order={2} c="wego.9">
+          <Title order={2} c="wego.9" className="page-title">
             Personaleinsatzplanung
           </Title>
           <TextInput

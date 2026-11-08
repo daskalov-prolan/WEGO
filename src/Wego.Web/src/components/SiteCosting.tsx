@@ -2,42 +2,10 @@ import { Alert, Anchor, NumberInput, SimpleGrid, Table, Text, Title } from '@man
 import { notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Employee, Entry, SiteHourlyRate, SiteReport } from '../api/types'
+import type { Employee, SiteHourlyRate, SiteReport } from '../api/types'
 import { formatHours } from '../lib/dates'
+import { euro, FULL_DAY_HOURS, rowsOf, type HoursRow as Row } from '../lib/siteHours'
 import { Stat } from './Stat'
-
-/** A day without a time window counts as a full day: 07:30–16:00 with half an hour of break. */
-const FULL_DAY_HOURS = 8
-
-/** The hours of an entry: its time window, or a full day without one. */
-function hoursOf(entry: Pick<Entry, 'startTime' | 'endTime'>): number {
-  if (!entry.startTime || !entry.endTime) return FULL_DAY_HOURS
-  const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
-  return Math.max(0, minutes(entry.endTime) - minutes(entry.startTime)) / 60
-}
-
-interface Row {
-  id: number
-  name: string
-  days: number
-  hours: number
-}
-
-/** Days and hours of each employee on the site, most days first. */
-function rowsOf(entries: Entry[]): Row[] {
-  const rows = new Map<number, Row & { dates: Set<string> }>()
-  for (const entry of entries) {
-    const row = rows.get(entry.employeeId) ?? { id: entry.employeeId, name: entry.employeeName, days: 0, hours: 0, dates: new Set() }
-    row.dates.add(entry.date)
-    row.hours += hoursOf(entry)
-    rows.set(entry.employeeId, row)
-  }
-  return [...rows.values()]
-    .map(({ dates, ...row }) => ({ ...row, days: dates.size }))
-    .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, 'de'))
-}
-
-const euro = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 
 /**
  * The working days on a site over its whole time, in total and per employee; for Planer G the costing
@@ -83,20 +51,20 @@ export function SiteCosting({ report, canCost }: { report: SiteReport; canCost: 
 
   return (
     <>
-      <Title order={4} mb="xs">
+      <Title order={4} mb="xs" className="section-heading">
         Arbeitstage
       </Title>
       <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm" mb="xs">
         <Stat value={days} label="Arbeitstage gesamt" />
-        <Stat value={rows.length} label="Handwerker" />
-        <Stat value={formatHours(hours)} label="Stunden" />
+        <Stat value={rows.length} label="Handwerker" tone="red" />
+        <Stat value={formatHours(hours)} label="Stunden" tone="filled" />
       </SimpleGrid>
       <Text size="sm" c="dimmed" mb="sm">
         Über die ganze Zeit der Baustelle. Ein Tag ohne Zeitfenster zählt {FULL_DAY_HOURS} Stunden (07:30–16:00 mit
         30 Minuten Pause), ein halber Tag die Stunden seines Zeitfensters.
       </Text>
       <Table.ScrollContainer minWidth={380} mb="lg">
-        <Table striped withTableBorder>
+        <Table striped withTableBorder className="brand-table">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Handwerker</Table.Th>
@@ -130,7 +98,7 @@ export function SiteCosting({ report, canCost }: { report: SiteReport; canCost: 
 
       {canCost && (
         <section className="costing" aria-label="Nachkalkulation">
-          <Title order={4} mb="xs">
+          <Title order={4} mb="xs" className="section-heading">
             Nachkalkulation
           </Title>
           {error && (
@@ -139,7 +107,7 @@ export function SiteCosting({ report, canCost }: { report: SiteReport; canCost: 
             </Alert>
           )}
           <Table.ScrollContainer minWidth={520}>
-            <Table withTableBorder>
+            <Table withTableBorder className="brand-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Handwerker</Table.Th>

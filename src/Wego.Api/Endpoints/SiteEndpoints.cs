@@ -110,6 +110,9 @@ public static class SiteEndpoints
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
             if (site is null) return Results.NotFound();
             if (!Enum.IsDefined(request.Status)) return ApiErrors.BadRequest("Unbekannter Status.");
+            // Done, or back from done: the management (Planer G) only.
+            if ((request.Status == SiteStatus.Abgeschlossen || site.Status == SiteStatus.Abgeschlossen) && !user.IsPlanerG())
+                return ApiErrors.BadRequest("Baustellen setzt nur die Geschäftsleitung (Planer G) auf erledigt.");
             if (!SiteStatusFlow.CanChange(site.Status, request.Status))
                 return ApiErrors.BadRequest($"Von „{site.Status}“ kann nicht zu „{request.Status}“ gewechselt werden.");
 

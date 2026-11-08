@@ -16,6 +16,8 @@
     "@mantine/hooks": "^9.7.3",
     "@mantine/notifications": "^9.7.3",
     "dayjs": "^1.11.23",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

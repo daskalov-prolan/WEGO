@@ -69,14 +69,15 @@ describe('SitesPage', () => {
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
   })
 
-  it('sorts by planned start and opens where the upcoming sites begin', async () => {
+  it('sorts by planned start and opens at the beginning of the list', async () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
 
     // Without a planned start at the end.
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
-    // Chung has started already; Arndt is the first that starts after today.
-    await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
+    // Chung has started already; Arndt is the first that starts after today: marked, but not jumped to.
+    expect(document.getElementById('site-row-2')).toHaveClass('first-upcoming')
+    expect(scrolledTo).toEqual([])
   })
 
   it('sorts by name and back by planned start', async () => {
@@ -92,7 +93,7 @@ describe('SitesPage', () => {
     scrolledTo = []
     await user.click(screen.getByRole('button', { name: /^Geplanter Start/ }))
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
-    await waitFor(() => expect(scrolledTo.at(-1)).toBe('site-row-2'))
+    expect(scrolledTo).toEqual([])
   })
 
   it('shows name, planned start, status, the planner in charge, address and phone of the customer', async () => {
@@ -146,7 +147,7 @@ describe('SitesPage', () => {
     expect(screen.getAllByRole('row')).toHaveLength(1)
   })
 
-  it('sets a site in the construction phase done with its switch', async () => {
+  it('sets a site in the construction phase done with its switch (Planer G), the summary saved as a PDF', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.mocked(fetch)
     const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>
@@ -155,7 +156,13 @@ describe('SitesPage', () => {
         ? new Response(JSON.stringify({ ...sites[3], status: 'Abgeschlossen' }), { status: 200 })
         : base(url, init)) as never,
     )
-    renderWithProviders(<SitesPage />)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    // Where the PDF goes: the dialog of the browser, here cancelled (done without a summary).
+    const picker = vi.fn(async () => {
+      throw new DOMException('abgebrochen', 'AbortError')
+    })
+    Object.assign(window, { showSaveFilePicker: picker })
+    renderWithProviders(<SitesPage canFinish />)
     await screen.findAllByText('Chung')
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     await user.click(within(chung).getByText('Erledigt'))
@@ -164,6 +171,18 @@ describe('SitesPage', () => {
     await waitFor(() => expect(names()).toEqual(['Bäßler', 'Arndt', 'Zesch']))
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/sites/4/status')!
     expect(JSON.parse(String(call[1]!.body))).toEqual({ status: 'Abgeschlossen' })
+    expect(picker).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'Baustelle Chung.pdf' }))
+    delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker
+  })
+
+  it('tells Planer A that only the management sets sites done', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+    const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
+    await user.click(within(chung).getByText('Erledigt'))
+    expect(await screen.findByText('Baustellen setzt nur die Geschäftsleitung (Planer G) auf erledigt.')).toBeInTheDocument()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/status'))).toBe(false)
   })
 
   it('groups the sites by the planner in charge or by status', async () => {

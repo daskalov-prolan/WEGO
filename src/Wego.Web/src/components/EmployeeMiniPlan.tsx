@@ -126,7 +126,9 @@ export function EmployeeMiniPlan({ employeeId, canEdit, activityFilter = NO_FILT
   return (
     <Paper withBorder p="md" mb="lg" className="mini-plan employee-plan">
       <Group justify="space-between" mb="xs" gap="xs">
-        <Title order={4}>Planung</Title>
+        <Title order={4} className="section-heading">
+          Planung
+        </Title>
         <StripNav
           strip={strip}
           today={today}

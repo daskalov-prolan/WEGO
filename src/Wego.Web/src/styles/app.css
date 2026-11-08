@@ -80,16 +80,6 @@ a:hover {
   font-size: 1.05rem;
 }
 
-.year-select select {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #fff;
-}
-
-.year-select option {
-  color: var(--text);
-}
-
 .user-button {
   display: flex;
   align-items: center;
@@ -2368,9 +2358,9 @@ body.stretching * {
   color: #000;
 }
 
-/* Mein Bereich in the colours of WEGO: a red stroke under the title, turquoise headings and figures,
-   the days still free on turquoise, the days used in red. */
-.my-area-title::after {
+/* Every page in the colours of WEGO, as "Mein Bereich" first had them: a red stroke under the title, turquoise
+   headings with a stripe in front, tables with a petrol head, key figures in turquoise, red and filled. */
+.page-title::after {
   content: '';
   display: block;
   width: 56px;
@@ -2380,40 +2370,75 @@ body.stretching * {
   background: var(--wego-red);
 }
 
-.my-area-heading {
+.section-heading {
   padding-left: 10px;
   border-left: 4px solid var(--wego-aqua);
   color: var(--wego-teal);
 }
 
-.my-area-stats .stat {
+.stat-aqua {
   border-top: 4px solid var(--wego-aqua);
 }
 
-.my-area-stats .stat:nth-child(1) .mantine-Text-root:first-child {
+.stat-aqua .mantine-Text-root:first-child {
   color: var(--wego-aqua) !important;
 }
 
-.my-area-stats .stat:nth-child(2) {
-  border-top-color: var(--wego-red);
+.stat-red {
+  border-top: 4px solid var(--wego-red);
 }
 
-.my-area-stats .stat:nth-child(2) .mantine-Text-root:first-child {
+.stat-red .mantine-Text-root:first-child {
   color: var(--wego-red) !important;
 }
 
-.my-area-stats .stat:nth-child(3) {
+.stat-filled {
   border-color: var(--wego-teal);
+  border-top-width: 4px;
   background: linear-gradient(135deg, var(--wego-teal), var(--wego-aqua));
 }
 
-.my-area-stats .stat:nth-child(3) .mantine-Text-root {
+.stat-filled .mantine-Text-root {
   color: #fff !important;
 }
 
-.my-area-table thead th {
+/* Below zero (more vacation entered than allowed): the filled one in red. */
+.stat-filled.stat-negative {
+  border-color: var(--wego-red);
+  background: linear-gradient(135deg, #a5121b, var(--wego-red));
+}
+
+.brand-table thead th {
   background: var(--wego-teal);
   color: #fff;
+}
+
+/* The sorting buttons in a head (Baustellen) white as well. */
+.brand-table thead th .sort-button {
+  color: #fff;
+}
+
+/* The sum under a table: in the light turquoise, bold. */
+.brand-table tfoot th {
+  background: var(--mantine-color-wego-light);
+  color: var(--wego-teal-dark);
+}
+
+/* Tabs (Verwaltung): the chosen one turquoise and bold, with a turquoise line under it. */
+.brand-tabs .mantine-Tabs-tab {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.brand-tabs .mantine-Tabs-tab[data-active] {
+  border-bottom-color: var(--wego-aqua);
+  color: var(--wego-teal);
+  font-weight: 700;
+}
+
+/* A person on the phone (Mitarbeiter) as a site there: a stripe at the left. */
+.employee-card {
+  border-left: 4px solid var(--wego-teal) !important;
 }
 
 .my-area-table tbody td:last-child {
@@ -2567,8 +2592,36 @@ html.zoomed .plan-scroll {
 }
 
 /* Chosen site in the day: address and telephone each with their buttons on the same line. */
-.site-contact-line {
-  row-gap: 4px;
+/* The site chosen for a day: what is known at the left, the buttons together at the right. */
+.site-contact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: start;
+}
+
+.site-contact-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.site-contact-actions .mantine-Group-root {
+  justify-content: flex-end;
+}
+
+/* Narrow (a phone): the buttons under the address, from the left. */
+@media (max-width: 480px) {
+  .site-contact {
+    grid-template-columns: 1fr;
+  }
+
+  .site-contact-actions,
+  .site-contact-actions .mantine-Group-root {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
 }
 
 /* Verwaltung, employees: role and figures in one line; employees not active are paler. */
