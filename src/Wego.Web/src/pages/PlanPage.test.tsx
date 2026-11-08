@@ -222,12 +222,13 @@ describe('PlanPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Nach Baustelle' }))
 
     // Rows by Baubeginn; without one (as all here) in the order of the alphabet.
-    // Done sites show as well (Altbau); Werner had work before today, so the hint shows up.
+    // Done sites show as well (Altbau).
     const rows = screen.getAllByRole('rowheader').map((th) => th.textContent)
     expect(rows.filter((name) => name !== 'Altbau')).toEqual(['Familie Meier', 'Familie Schulze', 'Familie Werner'])
     expect(rows).toContain('Altbau')
     expect(screen.queryByRole('switch', { name: 'Nur aktive' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Frühere Einsätze: 1/ })).toBeInTheDocument()
+    // No hint about work before today any more.
+    expect(screen.queryByRole('button', { name: /Frühere Einsätze/ })).not.toBeInTheDocument()
     const meierMonday = screen.getByRole('button', { name: /Familie Meier, Montag, 02.03.2026/ })
     expect(within(meierMonday).getAllByText('Anna').length).toBeGreaterThan(0)
     const meierTuesday = screen.getByRole('button', { name: /Familie Meier, Dienstag, 03.03.2026/ })

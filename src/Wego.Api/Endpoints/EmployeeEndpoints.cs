@@ -9,11 +9,12 @@ namespace Wego.Api.Endpoints;
 public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
+    /// <summary><paramref name="Birthday"/>: day and month only, "MM-dd" (the year stays with Planer G).</summary>
     public record EmployeeOverviewDto(int Id, string Name, string Role, bool IsActive, bool ShowInPlan, string? Phone,
-        bool IsDeleted);
+        bool IsDeleted, string? Birthday);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
-        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted);
+        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted, DateOnly? BirthDate);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
@@ -21,7 +22,10 @@ public static class EmployeeEndpoints
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
         string? UserName, string Role, string? Password, string? MainActivity = null,
-        string[]? AdditionalActivities = null, decimal? HourlyRate = null, string? Phone = null);
+        string[]? AdditionalActivities = null, decimal? HourlyRate = null, string? Phone = null, DateOnly? BirthDate = null);
+
+    /// <summary>The birthday without the year: "MM-dd".</summary>
+    public static string? Birthday(DateOnly? birthDate) => birthDate?.ToString("MM-dd");
 
     public static void MapEmployeeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -35,10 +39,14 @@ public static class EmployeeEndpoints
 
         // The list of employees for everybody: role and telephone, nothing of login or wage.
         app.MapGet("/api/employees/overview", async (WegoDbContext db) =>
+        {
             // The deleted ones at the end.
-            await db.Employees.OrderBy(e => e.DeletedAt != null).ThenBy(e => e.SortOrder).ThenBy(e => e.Name)
-                .Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone, e.DeletedAt != null))
-                .ToListAsync()).RequireAuthorization();
+            var rows = await db.Employees.OrderBy(e => e.DeletedAt != null).ThenBy(e => e.SortOrder).ThenBy(e => e.Name)
+                .Select(e => new { e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone, e.DeletedAt, e.BirthDate })
+                .ToListAsync();
+            return rows.Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone,
+                e.DeletedAt != null, Birthday(e.BirthDate))).ToList();
+        }).RequireAuthorization();
 
         var group = app.MapGroup("/api/employees").RequireAuthorization(Policies.Admin);
 
@@ -195,6 +203,8 @@ public static class EmployeeEndpoints
         var additional = input.AdditionalActivities ?? [];
         if (input.HourlyRate is < 0 or > 1000) return "Bitte einen Stundensatz zwischen 0 und 1000 € angeben.";
         if (input.Phone?.Trim().Length > 50) return "Die Telefonnummer darf höchstens 50 Zeichen lang sein.";
+        if (input.BirthDate is { } born && (born.Year < 1900 || born > DateOnly.FromDateTime(DateTime.Today)))
+            return "Bitte ein gültiges Geburtsdatum angeben.";
         var activities = await db.Activities.OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
         if (input.MainActivity is { } main && !activities.Contains(main) || additional.Any(a => !activities.Contains(a)))
             return "Unbekannte Tätigkeit.";
@@ -224,6 +234,7 @@ public static class EmployeeEndpoints
         employee.ShowInPlan = input.ShowInPlan;
         employee.VacationDaysPerYear = input.VacationDaysPerYear;
         employee.Phone = string.IsNullOrWhiteSpace(input.Phone) ? null : input.Phone.Trim();
+        employee.BirthDate = input.BirthDate;
         employee.HourlyRate = input.HourlyRate is { } rate ? Math.Round(rate, 2) : null;
         employee.UserName = userName;
         employee.Role = input.Role;
@@ -235,5 +246,5 @@ public static class EmployeeEndpoints
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
         e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities,
-        e.HourlyRate, e.Phone, e.DeletedAt is not null);
+        e.HourlyRate, e.Phone, e.DeletedAt is not null, e.BirthDate);
 }

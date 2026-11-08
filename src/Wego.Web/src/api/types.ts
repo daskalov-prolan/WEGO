@@ -138,6 +138,8 @@ export interface PlanEmployee extends NamedItem {
   isPlaner?: boolean
   /** Has a row in the plan: does all activities of the construction phase. Somebody can be both. */
   isCraftsman?: boolean
+  /** The birthday, day and month: "MM-DD"; marked in the plan. */
+  birthday?: string | null
 }
 
 /** Where a site is on the map. */
@@ -275,10 +277,15 @@ export interface Employee {
   phone?: string | null
   /** Deleted by a Planer G: the entries stay, the lists show them at the end. */
   isDeleted?: boolean
+  /** Date of birth "YYYY-MM-DD", entered by a Planer G. */
+  birthDate?: string | null
 }
 
-/** An employee in the list for all planners: no login, no wage. */
-export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone' | 'isDeleted'>
+/** An employee in the list for everybody: no login, no wage; of the date of birth only day and month. */
+export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone' | 'isDeleted'> & {
+  /** "MM-DD" */
+  birthday?: string | null
+}
 
 /** The wage per hour of an employee on one site, where it differs from the usual one. */
 export interface SiteHourlyRate {
@@ -297,6 +304,7 @@ export interface EmployeeInput {
   password: string | null
   hourlyRate: number | null
   phone: string | null
+  birthDate?: string | null
   /** Craftsmen: the activity they get on a new site, in its colour. */
   mainActivity: Activity | null
 }

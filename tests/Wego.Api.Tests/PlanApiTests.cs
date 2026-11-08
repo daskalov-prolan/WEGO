@@ -989,6 +989,36 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Planer_G_enters_a_date_of_birth_and_everybody_sees_the_birthday()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateEmployeeAsync(g, "Geburtstagskind", "geburtstagskind", "Geburtstag-2026!");
+        var input = new
+        {
+            name = "Geburtstagskind", sortOrder = 0, isActive = true, showInPlan = true, vacationDaysPerYear = 30,
+            userName = "geburtstagskind", role = "Handwerker", password = (string?)null, birthDate = "1974-07-05",
+        };
+        Assert.Equal(HttpStatusCode.OK, (await g.PutAsJsonAsync($"/api/employees/{id}", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await g.PutAsJsonAsync($"/api/employees/{id}", input with { birthDate = "2999-01-01" })).StatusCode);
+
+        // Planer G keeps the whole date.
+        var full = (await g.GetFromJsonAsync<JsonElement>("/api/employees")).EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == id);
+        Assert.Equal("1974-07-05", full.GetProperty("birthDate").GetString());
+
+        // Everybody else: day and month, in the list and in the plan.
+        var h = await LoginAsync("geburtstagskind", "Geburtstag-2026!");
+        var listed = (await h.GetFromJsonAsync<JsonElement>("/api/employees/overview")).EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == id);
+        Assert.Equal("07-05", listed.GetProperty("birthday").GetString());
+        Assert.False(listed.TryGetProperty("birthDate", out _));
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2027");
+        Assert.Equal("07-05", plan.GetProperty("employees").EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == id).GetProperty("birthday").GetString());
+    }
+
+    [Fact]
     public async Task A_company_closure_can_be_changed_and_its_vacation_moves_along()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

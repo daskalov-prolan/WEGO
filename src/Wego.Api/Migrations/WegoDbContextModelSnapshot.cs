@@ -158,6 +158,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)");
 
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 

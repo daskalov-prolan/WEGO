@@ -2708,3 +2708,44 @@ html.zoomed .plan-scroll {
   margin-right: 1px;
   vertical-align: -0.25em;
 }
+
+/* The calendar week above every Monday: in red like the weeks in the head of the plan. */
+.timeline .day-row th.week-start {
+  position: sticky;
+}
+
+.timeline .day-row th[data-kw]::before {
+  content: attr(data-kw);
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--wego-red);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Room above the day for the week of the Monday. */
+.timeline .day-row th {
+  padding-top: 14px;
+}
+
+/* A birthday: a cake in the upper right corner of the field of the employee. */
+.timeline .cell {
+  position: relative;
+}
+
+.timeline .birthday-mark {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  z-index: 2;
+  font-size: 0.85rem;
+  line-height: 1;
+  pointer-events: none;
+}

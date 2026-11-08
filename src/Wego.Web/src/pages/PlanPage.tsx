@@ -429,21 +429,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     )
   }, [plan, phase, phaseEmployees, siteById, year, isPhone])
 
-  // Open sites with work before today: shown as a hint, since the plan always opens at today.
-  const earlierWork = useMemo(() => {
-    let earliest: string | null = null
-    const sites = new Set<number>()
-    for (const row of siteRows) {
-      if (!isOpen(row.site.status)) continue
-      for (const date of row.byDate.keys()) {
-        if (date >= today) continue
-        sites.add(row.site.id)
-        if (!earliest || date < earliest) earliest = date
-      }
-    }
-    return earliest ? { earliest, sites: sites.size } : null
-  }, [siteRows, today])
-
   // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
   const recentSites = useMemo(() => {
     const from = addDays(weekOf(anchor)[0].iso, -7)
@@ -1266,23 +1251,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             </Group>
           ) : (
             perspectiveSwitch
-          )}
-          {perspective === 'sites' && earlierWork && (
-            <Tooltip
-              label={`${earlierWork.sites} offene Baustellen haben Einsätze vor heute, der früheste am ${formatDate(earlierWork.earliest)}. Klicken springt dorthin.`}
-              multiline
-              w={260}
-            >
-              <Button
-                size="sm"
-                variant="light"
-                color="orange"
-                className="earlier-work"
-                onClick={() => scrollToDate(earlierWork.earliest, true)}
-              >
-                ◀ Frühere Einsätze: {earlierWork.sites}
-              </Button>
-            </Tooltip>
           )}
           {/* Zoom, paging and the shown weeks at the right, before the switches. On a phone only ‹ Heute ›. */}
           {isPhone ? (

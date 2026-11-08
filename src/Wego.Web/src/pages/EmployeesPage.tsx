@@ -51,6 +51,11 @@ function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
                 <Text size="sm" c="dimmed">
                   {employee.phone ?? 'keine Nummer'}
                 </Text>
+                {birthdayText(employee) && (
+                  <Text size="sm" c="dimmed">
+                    Geburtstag: {birthdayText(employee)}
+                  </Text>
+                )}
               </div>
               {employee.phone && (
                 <Button component="a" href={telLink(employee.phone)} color="wegoRed.6" aria-label={`${employee.name} anrufen`}>
@@ -65,6 +70,14 @@ function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
   )
 }
 
+/** "05.07.1974" for Planer G (the whole date), "05.07." for everybody else. */
+function birthdayText(employee: EmployeeOverview & Pick<Employee, 'birthDate'>) {
+  const date = employee.birthDate
+  if (date) return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`
+  const day = employee.birthday
+  return day ? `${day.slice(3, 5)}.${day.slice(0, 2)}.` : ''
+}
+
 const euroPerHour = (rate: number) =>
   `${rate.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/Std.`
 
@@ -74,7 +87,7 @@ const euroPerHour = (rate: number) =>
  */
 export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
   // Planer G get the full records, with the wage per hour.
-  const [employees, setEmployees] = useState<(EmployeeOverview & Pick<Employee, 'hourlyRate'>)[]>([])
+  const [employees, setEmployees] = useState<(EmployeeOverview & Pick<Employee, 'hourlyRate' | 'birthDate'>)[]>([])
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [show, setShow] = useState<Show>('active')
@@ -152,6 +165,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
               <Table.Th w={190}>Rolle</Table.Th>
               <Table.Th>Name</Table.Th>
               <Table.Th>Telefon</Table.Th>
+              <Table.Th>Geburtstag</Table.Th>
               {canEdit && (
                 <Table.Th w={130} ta="right">
                   Stundensatz
@@ -211,6 +225,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
                     </Anchor>
                   )}
                 </Table.Td>
+                <Table.Td className="nowrap">{birthdayText(employee)}</Table.Td>
                 {canEdit && (
                   <Table.Td ta="right">{employee.hourlyRate == null ? '–' : euroPerHour(employee.hourlyRate)}</Table.Td>
                 )}
