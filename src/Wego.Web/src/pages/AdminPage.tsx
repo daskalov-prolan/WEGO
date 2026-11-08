@@ -140,6 +140,24 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
     }
   }
 
+  // A deleted employee for good: gone everywhere, with their entries in the calendar.
+  const removeForGood = async (employee: Employee) => {
+    if (
+      !window.confirm(
+        `${employee.name} endgültig löschen? ${employee.name} erscheint danach nirgends mehr, auch nicht in den Listen. Alle Einträge und Notizen von ${employee.name} im Kalender werden mit gelöscht. Das lässt sich nicht rückgängig machen.`,
+      )
+    )
+      return
+    setError('')
+    try {
+      await api.deleteEmployeePermanently(employee.id)
+      notifications.show({ message: `${employee.name} endgültig gelöscht.`, color: 'green' })
+      load()
+    } catch (e) {
+      setError(messageOf(e))
+    }
+  }
+
   const change = (patch: Partial<EmployeeInput>) =>
     setEditing((current) => current && { ...current, input: { ...current.input, ...patch } })
 
@@ -292,7 +310,14 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                 </Table.Td>
                 <Table.Td ta="right">{employee.sortOrder}</Table.Td>
                 <Table.Td>
-                  {/* A deleted employee is no longer changed. */}
+                  {/* A deleted employee is no longer changed; only deleted for good. */}
+                  {employee.isDeleted && (
+                    <Group gap={6} justify="flex-end" wrap="nowrap">
+                      <Button size="compact-sm" color="red" variant="outline" onClick={() => void removeForGood(employee)}>
+                        Endgültig löschen …
+                      </Button>
+                    </Group>
+                  )}
                   {!employee.isDeleted && (
                     <Group gap={6} justify="flex-end" wrap="nowrap">
                       <Button

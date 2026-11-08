@@ -115,6 +115,30 @@ public static class EmployeeEndpoints
             return Results.NoContent();
         });
 
+        // A deleted employee for good: gone from every list and from the plan, with their entries, notes, vacation of
+        // company closures and rates of sites. Only the change log keeps that it happened.
+        group.MapDelete("/{id:int}/permanently", async (int id, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var employee = await db.Employees.FindAsync(id);
+            if (employee is null) return Results.NotFound();
+            if (employee.DeletedAt is null)
+                return ApiErrors.BadRequest("Nur ein gelöschter Mitarbeiter kann endgültig gelöscht werden.");
+
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var before = ToDto(employee);
+            db.PlanEntries.RemoveRange(await db.PlanEntries.Where(e => e.EmployeeId == id).ToListAsync());
+            db.CalendarNotes.RemoveRange(await db.CalendarNotes.Where(n => n.EmployeeId == id).ToListAsync());
+            db.ClosureVacations.RemoveRange(await db.ClosureVacations.Where(v => v.EmployeeId == id).ToListAsync());
+            db.SiteHourlyRates.RemoveRange(await db.SiteHourlyRates.Where(r => r.EmployeeId == id).ToListAsync());
+            foreach (var site in await db.Sites.Where(s => s.ResponsiblePlannerId == id).ToListAsync())
+                site.ResponsiblePlannerId = null;
+            db.Employees.Remove(employee);
+            ChangeLog.Add(db, user, ChangeArea.Mitarbeiter, "Endgültig gelöscht", id, before, null);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return Results.NoContent();
+        });
+
         // Creates the login of an employee (user name from the name) or resets a forgotten password.
         // The employee has to choose their own password at the first sign-in.
         group.MapPost("/{id:int}/access", async (int id, ClaimsPrincipal user, WegoDbContext db,
