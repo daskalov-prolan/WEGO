@@ -963,6 +963,32 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_deleted_employee_deleted_for_good_appears_nowhere_any_more()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateEmployeeAsync(g, "Ganz weg", null, null);
+        var site = await CreateSiteAsync(g, "Baustelle von Ganz weg");
+        await g.PutAsJsonAsync($"/api/plan/{id}/2029-04-03", new object[] { new { type = "Baustelle", siteId = site } });
+        await g.PostAsJsonAsync("/api/plan/notes", new { employeeId = id, date = "2029-04-04", title = "Notiz", text = "" });
+
+        // First deleted, then for good; not at once.
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.DeleteAsync($"/api/employees/{id}/permanently")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/employees/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/employees/{id}/permanently")).StatusCode);
+
+        // In no list, not in the plan, without entries and notes; the site stays.
+        bool Has(JsonElement list) => list.EnumerateArray().Any(e => e.GetProperty("id").GetInt32() == id);
+        Assert.False(Has(await g.GetFromJsonAsync<JsonElement>("/api/employees")));
+        Assert.False(Has(await g.GetFromJsonAsync<JsonElement>("/api/employees/overview")));
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2029");
+        Assert.False(Has(plan.GetProperty("employees")));
+        Assert.DoesNotContain(plan.GetProperty("entries").EnumerateArray(), e => e.GetProperty("employeeId").GetInt32() == id);
+        Assert.DoesNotContain(plan.GetProperty("notes").EnumerateArray(), n => n.GetProperty("employeeId").GetInt32() == id);
+        Assert.Equal(HttpStatusCode.OK, (await g.GetAsync($"/api/sites/{site}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await g.DeleteAsync($"/api/employees/{id}/permanently")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_company_closure_can_be_changed_and_its_vacation_moves_along()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
