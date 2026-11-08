@@ -232,3 +232,8 @@ export function defaultActivity(employee: Skilled, status?: SiteStatus): Activit
   // The main activity of a craftsman (see Verwaltung) where it fits, else the first of the phase.
   return employee.mainActivity && allowed.includes(employee.mainActivity) ? employee.mainActivity : (allowed[0] ?? null)
 }
+
+/** The name of a service call starts with "SE: " (see the server): in the plan its sign takes that place. Null: no service call. */
+export function serviceName(name: string): string | null {
+  return name.startsWith('SE: ') ? name.slice(4) : null
+}

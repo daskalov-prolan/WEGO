@@ -98,6 +98,24 @@ describe('PlanPage', () => {
     expect(document.getElementById('col-2026-03-02')).toHaveTextContent('Mo 02.03')
   })
 
+  it('finds a site by its name and jumps to its days, marking its entries', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+
+    await user.type(screen.getByPlaceholderText('Suchen: Kunde, Baustelle, Adresse'), 'werner')
+    // Its only day lies before today: the last one is offered.
+    expect(await screen.findByText(/1 Tag 2026, zuletzt Fr 20.02.2026/)).toBeInTheDocument()
+    await user.click(screen.getByText(/1 Tag 2026, zuletzt/))
+
+    expect(screen.getByRole('status', { name: 'Suchergebnis' })).toHaveTextContent('Familie Werner')
+    await waitFor(() => expect(document.querySelector('[data-entry-id="6"]')).toHaveClass('found'))
+    expect(document.querySelector('[data-entry-id="1"]')).not.toHaveClass('found')
+
+    await user.click(screen.getByRole('button', { name: 'Suche beenden' }))
+    expect(document.querySelector('[data-entry-id="6"]')).not.toHaveClass('found')
+  })
+
   it('moves by week and by month', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
