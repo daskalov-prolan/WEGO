@@ -105,6 +105,16 @@ describe('MyPlanPage', () => {
     expect(onYearChange).toHaveBeenCalledWith(2026)
   })
 
+  it('shows today on an empty Sunday as well, so the list begins there and not on the Monday before', async () => {
+    vi.setSystemTime(new Date('2026-03-15T09:00:00'))
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+    const sunday = (await screen.findByText('Sonntag, 15.03.2026')).closest('article')!
+    expect(within(sunday).getByText('Heute')).toBeInTheDocument()
+    expect(within(sunday).getByText('nicht eingeplant')).toBeInTheDocument()
+    // Other empty weekend days stay out.
+    expect(screen.queryByText('Samstag, 14.03.2026')).not.toBeInTheDocument()
+  })
+
   it('pages on into the next year after the last week, and offers no year before 2026', async () => {
     vi.setSystemTime(new Date('2026-12-28T09:00:00'))
     const onYearChange = vi.fn()
