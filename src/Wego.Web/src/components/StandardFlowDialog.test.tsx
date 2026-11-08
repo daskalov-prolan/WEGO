@@ -92,4 +92,29 @@ describe('StandardFlowDialog', () => {
     expect(step.after).toHaveLength(days.length)
     expect(step.before.find((day: { date: string }) => day.date === '2026-03-04').entries).toHaveLength(1)
   })
+
+  it('puts the half day into the afternoon when the morning is taken, and leaves out only a full day', async () => {
+    const user = userEvent.setup()
+    const morning = { ...entry(3, 1, '2026-03-06', 21, 'Sanitaer'), startTime: '07:30:00', endTime: '11:30:00' }
+    fetchMock.mockImplementation(async (url: string) =>
+      new Response(url === '/api/plan/batch' ? '[]' : JSON.stringify({ ...plan, entries: [...plan.entries, morning] }), { status: 200 }),
+    )
+    const onClose = vi.fn()
+    renderWithProviders(<StandardFlowDialog site={site} onClose={onClose} />)
+
+    expect(await screen.findByRole('alert', { name: /Überschneidungen/ })).toBeInTheDocument()
+    expect(screen.getByText(/Stefan Buder · Sanitär · ½ Tag nachmittags/)).toBeInTheDocument()
+    // The overlap is pointed out above the flow as well.
+    const overlaps = screen.getByRole('alert', { name: /Überschneidungen/ })
+    expect(overlaps).toHaveTextContent('Fr 06.03.: Stefan Buder vormittags schon auf Familie Meier: kommt nachmittags dazu')
+    await user.click(screen.getByRole('button', { name: 'Standardablauf eintragen' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+
+    const days = JSON.parse(String(fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')![1].body)) as { employeeId: number; date: string; entries: DayEntryInput[] }[]
+    // The morning on the other site stays; the flow comes in the afternoon.
+    expect(days.find((day) => day.employeeId === 1 && day.date === '2026-03-06')!.entries).toEqual([
+      expect.objectContaining({ siteId: 21, startTime: '07:30:00' }),
+      expect.objectContaining({ siteId: 20, activity: 'Sanitaer', startTime: '12:00:00', endTime: '16:00:00' }),
+    ])
+  })
 })

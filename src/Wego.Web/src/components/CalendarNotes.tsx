@@ -29,6 +29,8 @@ export function CellNotes({
             <span
               className="cell-note"
               aria-label={`Notiz: ${note.title}`}
+              // Right on the note its card shows it, not the tooltip of the field as well.
+              title=""
               data-clickable={onOpen ? true : undefined}
               onClick={
                 onOpen

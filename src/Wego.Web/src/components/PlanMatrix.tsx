@@ -309,11 +309,19 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
   )
 }
 
-function cellTitle(entries: Entry[], label: (entry: Entry) => string) {
-  if (entries.length === 0) return undefined
-  const notes = entries.map((entry) => entry.note).filter(Boolean).join(' / ')
-  const important = entries.some((entry) => entry.noteImportant)
-  return entries.map(label).join(' / ') + (notes ? `\n${important ? 'WICHTIG: ' : 'Notiz: '}${notes}` : '')
+/**
+ * What pointing anywhere at a field shows: its entries with their notes, and the notes of the field (calendar
+ * notes) in full, title and text, also when the mouse is not right on the short note.
+ */
+function cellTitle(entries: Entry[], label: (entry: Entry) => string, calendarNotes: CalendarNote[] = []) {
+  const lines: string[] = []
+  if (entries.length > 0) {
+    const notes = entries.map((entry) => entry.note).filter(Boolean).join(' / ')
+    const important = entries.some((entry) => entry.noteImportant)
+    lines.push(entries.map(label).join(' / ') + (notes ? `\n${important ? 'WICHTIG: ' : 'Notiz: '}${notes}` : ''))
+  }
+  for (const note of calendarNotes) lines.push(`Notiz: ${note.title}${note.text ? `\n${note.text}` : ''}`)
+  return lines.length > 0 ? lines.join('\n') : undefined
 }
 
 /** Short form of a cell: the first entry, a counter for the others, and the note sign. */
@@ -424,7 +432,7 @@ export function TimelineMatrix(props: MatrixProps) {
                     aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
                     aria-pressed={isSelected || undefined}
                     data-cell={cellKey(employee.id, day.iso)}
-                    title={cellTitle(entries, entryTitle)}
+                    title={cellTitle(entries, entryTitle, notes)}
                     {...handlers(employeeIndex, dayIndex)}
                   >
                     <span className="cell-full">
