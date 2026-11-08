@@ -110,21 +110,33 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
         // Already there with this activity (e.g. Abriss dragged in when the site was made): not twice.
         const already = others.some((entry) => entry.siteId === site.id && entry.activity === step.activity)
         const busyOn = others.filter((entry) => entry.type === 'Baustelle' && entry.siteId !== site.id)
+        // Half a day may not overlap a time window of the day: the morning taken, it goes into the afternoon;
+        // both taken, only this line is left out (the rest of the flow is entered all the same).
+        const taken = (half: (typeof HALF_DAYS)[number]) =>
+          others.filter((entry) => entry.startTime && entry.endTime && entry.startTime < `${half.end}:00` && entry.endTime > `${half.start}:00`)
+        const half = !step.morning ? null : taken(HALF_DAYS[0]).length === 0 ? 0 : taken(HALF_DAYS[1]).length === 0 ? 1 : -1
+        const names = (list: Entry[]) => list.map((entry) => entry.siteName ?? entry.type).join(', ')
         return {
           person,
           id,
           activity: step.activity,
-          morning: step.morning ?? false,
+          half,
+          // Time windows of the day in the way: pointed out above the flow.
+          overlap: id !== null && !already && absent === undefined && (half === 1 || half === -1),
           warning: id === null
             ? 'nicht zugeordnet: wird ausgelassen'
             : already
               ? 'schon eingetragen'
               : absent
               ? `${absent.type}: wird ausgelassen`
-              : busyOn.length > 0
-                ? `schon auf ${busyOn.map((entry) => entry.siteName).join(', ')}: kommt dazu`
-                : null,
-          skip: id === null || absent !== undefined || already,
+              : half === -1
+                ? `ganzer Tag schon in Zeitfenstern belegt (${names(taken(HALF_DAYS[0]))}): wird ausgelassen`
+                : half === 1
+                  ? `vormittags schon auf ${names(taken(HALF_DAYS[0]))}: kommt nachmittags dazu`
+                  : busyOn.length > 0
+                    ? `schon auf ${busyOn.map((entry) => entry.siteName).join(', ')}: kommt dazu`
+                    : null,
+          skip: id === null || absent !== undefined || already || half === -1,
         }
       }),
     )
@@ -151,8 +163,8 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
             type: 'Baustelle',
             siteId: site.id,
             activity: line.activity,
-            startTime: line.morning ? `${HALF_DAYS[0].start}:00` : null,
-            endTime: line.morning ? `${HALF_DAYS[0].end}:00` : null,
+            startTime: line.half === null || line.half < 0 ? null : `${HALF_DAYS[line.half].start}:00`,
+            endTime: line.half === null || line.half < 0 ? null : `${HALF_DAYS[line.half].end}:00`,
             note: null,
             noteImportant: false,
           })
@@ -175,6 +187,9 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
   // "Fr 06.03.": the weekday and the day without the year.
   const short = (iso: string) => formatDate(iso).slice(0, 9)
   const nameOf = (id: number | null) => employees.find((employee) => employee.id === id)?.name
+  const overlaps = steps.flatMap((step) =>
+    step.lines.filter((line) => line.overlap).map((line) => `${short(step.date)}: ${nameOf(line.id) ?? line.person} ${line.warning}`),
+  )
 
   return (
     <Sheet onClose={onClose} title={<Text fw={700}>Baubeginn {formatDate(start)}: {site.name}</Text>} size="lg">
@@ -195,6 +210,17 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
         {error && (
           <Alert color="red" variant="light">
             {error}
+          </Alert>
+        )}
+        {overlaps.length > 0 && (
+          <Alert color="orange" variant="light" title="Überschneidungen" role="alert" aria-label="Überschneidungen">
+            <Stack gap={2}>
+              {overlaps.map((text) => (
+                <Text key={text} size="sm">
+                  {text}
+                </Text>
+              ))}
+            </Stack>
           </Alert>
         )}
         {plans && (
@@ -236,7 +262,7 @@ export function StandardFlowDialog({ site, onClose, onEntered }: Props) {
                       {step.lines.map((line) => (
                         <Text key={line.person} size="sm" c={line.skip ? 'dimmed' : undefined} td={line.skip ? 'line-through' : undefined}>
                           {nameOf(line.id) ?? line.person} · {activityLabel(line.activity)}
-                          {line.morning ? ' · ½ Tag vormittags' : ''}
+                          {line.half === 0 ? ' · ½ Tag vormittags' : line.half === 1 ? ' · ½ Tag nachmittags' : ''}
                           {line.warning && (
                             <Text span size="xs" c="orange.8" td="none">
                               {' '}

@@ -4,6 +4,7 @@ import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, NamedItem, PlanEmployee, Site, SiteInput } from '../api/types'
 import { ACTIVITIES, activitiesOfStatus, activityLabel, allowedActivities } from '../lib/activities'
 import { HALF_DAYS } from '../lib/dates'
+import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
 import { TimeSelect } from './TimeSelect'
@@ -21,6 +22,8 @@ interface Props {
   onClose: () => void
   /** add: keep what is already planned on those days and add the site as a further entry. */
   onApply: (entry: DayEntryInput, add: boolean, activity: ActivityChoice) => Promise<void>
+  /** The plan the cells are in: a new site created in the Bauphase begins as Bauphase. */
+  phase?: 'Angebot' | 'Bauphase'
 }
 
 /** Puts one construction site on all selected cells at once. */
@@ -128,6 +131,7 @@ export function AssignSite(props: Props) {
               if (activity !== 'main' && nextStatus && !activitiesOfStatus(nextStatus).includes(activity)) setActivity('main')
             }}
             onCreate={onCreateSite}
+            newSite={props.phase === 'Bauphase' ? { ...emptySite, status: 'Bauphase' } : undefined}
             required
           />
           <Group grow gap="xs">

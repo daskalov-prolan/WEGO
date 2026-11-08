@@ -907,6 +907,9 @@ describe('PlanPage', () => {
       const note = within(cell(/Anna, Dienstag, 03.03.2026/)).getByText('Arzttermin')
       await user.hover(note)
       expect(await screen.findByText('Ab 14 Uhr nicht da', {}, { timeout: 2000 })).toBeInTheDocument()
+      // Anywhere on the field the whole note shows as well, not only right on it.
+      expect(cell(/Anna, Dienstag, 03.03.2026/)).toHaveAttribute('title', expect.stringContaining('Notiz: Arzttermin\nAb 14 Uhr nicht da'))
+      expect(note).toHaveAttribute('title', '')
 
       // A right click on a field of an employee offers a note there, independent of the site.
       const items = await menu(/Bernd, Mittwoch, 04.03.2026/)

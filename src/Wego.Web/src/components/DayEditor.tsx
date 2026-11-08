@@ -298,7 +298,12 @@ export function DayEditor(props: Props) {
                     onCreate={createSite}
                     onGoToSite={onGoToSite}
                     // A new site for the start of the construction (Abriss / Baubeginn) begins on this day.
-                    newSite={row.activity === 'Abriss' ? { ...emptySite, plannedStart: date } : undefined}
+                    // Created in the plan of the Bauphase, it begins as Bauphase.
+                    newSite={{
+                      ...emptySite,
+                      ...(props.phase === 'Bauphase' ? { status: 'Bauphase' as const } : {}),
+                      ...(row.activity === 'Abriss' ? { plannedStart: date } : {}),
+                    }}
                     // An offer visit can be planned before its site is known: then the activity is enough.
                     required={row.activity === null}
                   />

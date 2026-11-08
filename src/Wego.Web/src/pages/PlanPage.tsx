@@ -1473,6 +1473,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           sites={plan.sites}
           onCreateSite={createSite}
           recentSites={recentSites}
+          phase={phase}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
             const changes = [...selected].map(parseKey).map(({ employeeId, date }) => {
