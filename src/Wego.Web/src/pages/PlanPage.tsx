@@ -14,7 +14,7 @@ import {
 import { useWindowEvent } from '@mantine/hooks'
 import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
@@ -105,6 +105,37 @@ function loadFound(): { siteId: number; day: string } | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The days in view above the plan ("KW 45–46 · 02.11.–15.11.2026", or the month): it follows the scrolling by
+ * itself, without the plan being drawn anew.
+ */
+function PlanTitle({
+  subscribe,
+  getVisible,
+  view,
+  year,
+}: {
+  subscribe: (listener: () => void) => () => void
+  getVisible: () => { from: string; to: string }
+  view: View
+  year: number
+}) {
+  const visible = useSyncExternalStore(subscribe, getVisible)
+  const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
+  if (view !== 'week') {
+    const middle = addDays(visible.from, Math.floor((Date.parse(visible.to) - Date.parse(visible.from)) / 172800000))
+    return <>{`${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`}</>
+  }
+  // The calendar week in red, as everywhere.
+  return (
+    <>
+      <span className="kw">KW {[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')}</span> ·{' '}
+      {short(visible.from)}–{short(visible.to)}
+      {year}
+    </>
+  )
 }
 
 /** Rows of the plan: one per employee, or one per construction site. */
@@ -204,14 +235,45 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const [returnDate] = useState(loadReturnDate)
   const start =
     returnDate && returnDate >= first && returnDate <= last ? returnDate : today >= first && today <= last ? today : first
-  const [visible, setVisible] = useState({ from: start < first ? first : start, to: addDays(start, 13) })
-  const anchor = visible.from
+  // The days in view change with every move: kept outside the state, so that scrolling draws nothing anew. Only
+  // the title follows them (see PlanTitle); the plan is drawn anew when the days filled in have to move along.
+  const opening = start < first ? first : start
+  const visibleRef = useRef({ from: opening, to: addDays(opening, 13) })
+  const visibleListeners = useRef(new Set<() => void>())
+  // The days filled in (see MatrixProps.live): eight weeks on each side of those in view.
+  const around = (shown: { from: string; to: string }) => ({ from: addDays(shown.from, -56), to: addDays(shown.to, 56) })
+  const [live, setLive] = useState(() => around({ from: opening, to: addDays(opening, 13) }))
+  const liveRef = useRef(live)
+  /**
+   * New days in view. Near the edge of the days filled in, these move along: at once for a jump (the plan is
+   * drawn before it goes there), else in the background.
+   */
+  const setVisible = (next: { from: string; to: string }, jump = false) => {
+    const current = visibleRef.current
+    if (current.from !== next.from || current.to !== next.to) {
+      visibleRef.current = next
+      for (const listener of visibleListeners.current) listener()
+    }
+    const filled = liveRef.current
+    if (next.from >= addDays(filled.from, 21) && next.to <= addDays(filled.to, -21)) return
+    liveRef.current = around(next)
+    if (jump) setLive(liveRef.current)
+    else startTransition(() => setLive(liveRef.current))
+  }
+  const subscribeVisible = useCallback((listener: () => void) => {
+    const listeners = visibleListeners.current
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }, [])
+  const getVisible = useCallback(() => visibleRef.current, [])
   const scroller = useRef<HTMLDivElement>(null)
   const notificationCount = useRef(0)
   // A scroll that has to wait until the table is drawn (first load, other zoom, weekends shown or folded).
-  const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: anchor, smooth: false })
+  const pendingScroll = useRef<{ iso: string; smooth: boolean } | null>({ iso: opening, smooth: false })
   // The first day next to the names, as last scrolled to or by: kept there when the table changes its size.
-  const pinned = useRef(anchor)
+  const pinned = useRef(opening)
   const [foldWeekends, setFoldWeekends] = useState(loadFoldWeekends)
   // Bigger or smaller, like the zoom of the browser, for the plan only; kept for the next visit.
   const [scale, setScale] = useState(loadScale)
@@ -429,9 +491,10 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     )
   }, [plan, phase, phaseEmployees, siteById, year, isPhone])
 
-  // The sites of the shown week and the weeks around it, most used first: one tap instead of typing.
-  const recentSites = useMemo(() => {
-    const from = addDays(weekOf(anchor)[0].iso, -7)
+  // The sites of the shown week and the weeks around it, most used first: one tap instead of typing. Worked out
+  // when sites are assigned, for the days in view then.
+  const recentSites = () => {
+    const from = addDays(weekOf(visibleRef.current.from)[0].iso, -7)
     const to = addDays(from, 20)
     const counts = new Map<number, number>()
     for (const entry of plan?.entries ?? []) {
@@ -443,7 +506,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       .slice(0, 8)
       .map(([id]) => siteById.get(id))
       .filter((site): site is Site => site !== undefined && isOpen(site.status))
-  }, [plan, anchor, siteById])
+  }
 
   // On a phone always a week, with narrow weekends: there is no room for the switches.
   const view: View = isPhone ? 'week' : chosenView
@@ -458,20 +521,33 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     return column.getBoundingClientRect().left - element.getBoundingClientRect().left - element.clientLeft + element.scrollLeft
   }
 
+  // Where the day columns are, measured once after each drawing (and when the table changes its size): measuring
+  // all 365 of them at every frame of a move made wiping on a phone stutter.
+  const columns = useRef<{ iso: string; start: number; width: number }[] | null>(null)
+  useLayoutEffect(() => {
+    columns.current = null
+  })
+
   /** The days between the employee names and the right edge, read from the drawn columns. */
   const readVisible = () => {
     const element = scroller.current
     if (!element) return null
+    if (!columns.current) {
+      const measured = []
+      for (const column of element.querySelectorAll<HTMLElement>('th.dayhead')) {
+        if (column.offsetWidth === 0) return null
+        measured.push({ iso: column.id.slice(4), start: leftOf(column), width: column.offsetWidth })
+      }
+      columns.current = measured
+    }
     const left = element.scrollLeft + nameWidth()
     const right = element.scrollLeft + element.clientWidth
     let from: string | null = null
     let to: string | null = null
-    for (const column of element.querySelectorAll<HTMLElement>('th.dayhead')) {
-      if (column.offsetWidth === 0) return null
-      const iso = column.id.slice(4)
-      const start = leftOf(column)
-      if (!from && start + column.offsetWidth > left + 1) from = iso
+    for (const { iso, start, width } of columns.current) {
+      if (!from && start + width > left + 1) from = iso
       if (start < right) to = iso
+      else break
     }
     return from && to ? { from, to } : null
   }
@@ -490,26 +566,31 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   /** Scrolls so that the given day is the first one next to the employee names. */
   const scrollToDate = (iso: string, smooth = false) => {
     const from = clamp(iso)
-    setVisible({ from, to: clamp(addDays(from, view === 'week' ? 13 : 30)) })
+    const filled = liveRef.current
+    // Beyond the days filled in (e.g. Heute after paging far): they are drawn first, then the plan goes straight
+    // there, without gliding over empty days.
+    const far = from < filled.from || addDays(from, 30) > filled.to
+    setVisible({ from, to: clamp(addDays(from, view === 'week' ? 13 : 30)) }, far)
+    if (far) {
+      pendingScroll.current = { iso: from, smooth: false }
+      return
+    }
     if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
   }
 
-  // Scrolling (wiping on a phone) draws nothing anew: the days in view are taken over once it comes to rest.
-  const settle = useRef<number | undefined>(undefined)
+  // Scrolling (wiping on a phone) draws nothing anew: the days in view are read at most once a frame.
+  const frame = useRef(0)
   const onScroll = () => {
-    const next = readVisible()
-    if (next) pinned.current = next.from
-    window.clearTimeout(settle.current)
-    settle.current = window.setTimeout(() => {
-      const now = readVisible()
-      if (!now) return
-      startTransition(() => setVisible((current) => (current.from === now.from && current.to === now.to ? current : now)))
-    }, 150)
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      const next = readVisible()
+      if (!next) return
+      pinned.current = next.from
+      setVisible(next)
+    })
   }
-  useEffect(() => () => window.clearTimeout(settle.current), [])
-
-  // The days filled in: six weeks on each side of those in view.
-  const live = useMemo(() => ({ from: addDays(visible.from, -42), to: addDays(visible.to, 42) }), [visible])
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
 
   // Runs after every drawing of the table: carries out a scroll that had to wait for it.
   useLayoutEffect(() => {
@@ -523,6 +604,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     const element = scroller.current
     if (!element || typeof ResizeObserver === 'undefined') return
     const keep = () => {
+      columns.current = null
       const column = document.getElementById(`col-${pinned.current}`)
       const corner = element.querySelector<HTMLElement>('th.corner')
       if (!column || pendingScroll.current) return
@@ -544,7 +626,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   const changePerspective = (next: Perspective) => {
-    pendingScroll.current = { iso: anchor, smooth: false }
+    pendingScroll.current = { iso: visibleRef.current.from, smooth: false }
     setSelected(new Set())
     setMarked(null)
     setPerspective(next)
@@ -556,12 +638,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   const changeZoom = (next: View) => {
-    pendingScroll.current = { iso: anchor, smooth: false }
+    pendingScroll.current = { iso: visibleRef.current.from, smooth: false }
     setChosenView(next)
   }
 
   const toggleWeekends = (fold: boolean) => {
-    pendingScroll.current = { iso: anchor, smooth: false }
+    pendingScroll.current = { iso: visibleRef.current.from, smooth: false }
     setFoldWeekends(fold)
     try {
       localStorage.setItem(WEEKENDS_KEY, String(!fold))
@@ -585,8 +667,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
    * year follows with January; before January the previous year with December.
    */
   const step = (direction: 1 | -1) => {
+    const anchor = visibleRef.current.from
     const target = view === 'week' ? addDays(weekOf(anchor)[0].iso, 7 * direction) : addMonths(anchor, direction)
-    if (onYearChange && direction === 1 && (target > last || visible.to >= last)) {
+    if (onYearChange && direction === 1 && (target > last || visibleRef.current.to >= last)) {
       openInYear(target > last ? target : `${year + 1}-01-01`)
       return
     }
@@ -746,19 +829,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     }
   }
 
-  const short = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`
-  const middle = addDays(visible.from, Math.floor((Date.parse(visible.to) - Date.parse(visible.from)) / 172800000))
-  // The calendar week in red, as everywhere.
-  const title =
-    view === 'week' ? (
-      <>
-        <span className="kw">KW {[...new Set([isoWeek(visible.from), isoWeek(visible.to)])].join('–')}</span> ·{' '}
-        {short(visible.from)}–{short(visible.to)}
-        {year}
-      </>
-    ) : (
-      `${MONTHS[Number(middle.slice(5, 7)) - 1]} ${year}`
-    )
+  const title = <PlanTitle subscribe={subscribeVisible} getVisible={getVisible} view={view} year={year} />
 
   /** Puts these employees on a site on that day, each with their own activity there, next to what they have. */
   const addToSite = async (site: Site, employeeIds: number[], date: string) => {
@@ -1170,7 +1241,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       // Planners go straight to the page of the site; employees (who have no such page) see its record here.
       if (canEdit) {
         try {
-          sessionStorage.setItem(RETURN_KEY, anchor)
+          sessionStorage.setItem(RETURN_KEY, visibleRef.current.from)
         } catch {
           // Without storage the plan starts at today when coming back.
         }
@@ -1562,7 +1633,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           sites={plan.sites}
           onCreateSite={createSite}
-          recentSites={recentSites}
+          recentSites={recentSites()}
           phase={phase}
           onClose={() => setAssigning(false)}
           onApply={async (template, add, choice) => {
