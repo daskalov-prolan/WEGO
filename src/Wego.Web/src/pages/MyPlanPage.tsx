@@ -223,8 +223,20 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
         }
       }
     }
-    document.addEventListener('scroll', onScroll, true)
-    return () => document.removeEventListener('scroll', onScroll, true)
+    // At most once a frame: a phone fires scroll events much more often than it draws.
+    let frame = 0
+    const onScrollFrame = () => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        onScroll()
+      })
+    }
+    document.addEventListener('scroll', onScrollFrame, true)
+    return () => {
+      document.removeEventListener('scroll', onScrollFrame, true)
+      cancelAnimationFrame(frame)
+    }
   }, [loaded])
   const followRef = useRef(follow)
   useEffect(() => {

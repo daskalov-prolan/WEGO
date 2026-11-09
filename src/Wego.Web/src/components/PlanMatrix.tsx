@@ -53,6 +53,11 @@ export interface MatrixProps {
   marked?: { ids: Set<number>; first: number; last: number }
   /** The entries of the site searched for: highlighted. */
   found?: Set<number>
+  /**
+   * The days filled in: those around the ones in view. The others stay empty (the year is wide and a phone would
+   * draw thousands of fields at every move); they fill as soon as they come near.
+   */
+  live?: { from: string; to: string }
   /** Planners, mouse: a click on an entry marks it (null: a click elsewhere in a cell). A double click opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged. */
@@ -396,6 +401,8 @@ export function TimelineMatrix(props: MatrixProps) {
               <EmployeeName employee={employee} link={linkNames} label={names.get(employee.id)} />
             </th>
             {days.map((day, dayIndex) => {
+              if (props.live && (day.iso < props.live.from || day.iso > props.live.to))
+                return <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} />
               const entries = entriesOf(employee.id, day.iso)
               const notes = props.notesOf?.(employee.id, day.iso) ?? []
               const first = entries[0]
@@ -535,6 +542,8 @@ interface SiteTimelineProps {
   marked?: { ids: Set<number>; first: number; last: number }
   /** The entries of the site searched for: highlighted. */
   found?: Set<number>
+  /** The days filled in (see MatrixProps.live). */
+  live?: { from: string; to: string }
   /** Planners: a click on an employee in a cell marks the entry; a click elsewhere in the cell opens the day. */
   onMark?: (entry: Entry | null) => void
   /** Planners: an end of the marked stretch is dragged, to the following days or back. */
@@ -570,6 +579,8 @@ export function SiteTimeline(props: SiteTimelineProps) {
             </span>
           </th>
           {days.map((day) => {
+            if (props.live && (day.iso < props.live.from || day.iso > props.live.to))
+              return <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} />
             const entries = byDate.get(day.iso) ?? []
             return (
               <td

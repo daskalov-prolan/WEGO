@@ -1,10 +1,10 @@
 import { Alert, Button, Group, SegmentedControl, Select, Table, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
-import { SitesMap } from '../components/SitesMap'
+import { LazySitesMap } from '../components/SiteMapLink'
 import { StatusBadge, StatusSlider, TentativeBadge } from '../components/SiteStatus'
 import { finishSite, showDoneHint } from '../lib/siteDone'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
@@ -265,7 +265,9 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
 
       {view === 'map' ? (
         <>
-          <SitesMap points={points} />
+          <Suspense fallback={<Text c="dimmed">Die Karte wird geladen …</Text>}>
+            <LazySitesMap points={points} />
+          </Suspense>
           <Text size="sm" c="dimmed" mt="xs">
             {pending > 0
               ? `Adressen werden auf der Karte gesucht … (noch ${pending})`
