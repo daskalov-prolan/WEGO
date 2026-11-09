@@ -369,6 +369,17 @@ function Compact({
 }
 
 /**
+ * The days filled in, as positions in `days`: the others are one empty field before and one after (the columns
+ * keep their widths), so a phone draws a few weeks and not the whole year.
+ */
+function liveSpan(days: Day[], live: { from: string; to: string } | undefined) {
+  if (!live) return { start: 0, end: days.length }
+  const start = days.findIndex((day) => day.iso >= live.from)
+  const after = days.findIndex((day) => day.iso > live.to)
+  return { start: start < 0 ? days.length : start, end: after < 0 ? days.length : after }
+}
+
+/**
  * The plan by employee: one row per employee, the days from left to right. The employee column stays
  * in place while the days scroll sideways. The zoom decides how wide a day is and how much of an entry
  * fits: the whole entry (week), the site name (month) or just the colour of the activity (year).
@@ -378,6 +389,7 @@ export function TimelineMatrix(props: MatrixProps) {
   const draggable = dropOn !== undefined
   const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
   const names = shortNames(employees)
+  const { start: liveStart, end: liveEnd } = liveSpan(days, props.live)
   const openSite = (siteId: number, event: MouseEvent) => {
     if (siteClickBelongsToCell()) return
     event.stopPropagation()
@@ -400,9 +412,9 @@ export function TimelineMatrix(props: MatrixProps) {
             <th className="employee" scope="row" title={employee.name}>
               <EmployeeName employee={employee} link={linkNames} label={names.get(employee.id)} />
             </th>
-            {days.map((day, dayIndex) => {
-              if (props.live && (day.iso < props.live.from || day.iso > props.live.to))
-                return <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} />
+            {liveStart > 0 && <td colSpan={liveStart} className="live-gap" />}
+            {days.slice(liveStart, liveEnd).map((day, index) => {
+              const dayIndex = liveStart + index
               const entries = entriesOf(employee.id, day.iso)
               const notes = props.notesOf?.(employee.id, day.iso) ?? []
               const first = entries[0]
@@ -505,6 +517,7 @@ export function TimelineMatrix(props: MatrixProps) {
                 </td>
               )
             })}
+            {liveEnd < days.length && <td colSpan={days.length - liveEnd} className="live-gap" />}
           </tr>
         )
       })}
@@ -556,6 +569,7 @@ interface SiteTimelineProps {
  */
 export function SiteTimeline(props: SiteTimelineProps) {
   const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
+  const siteLive = liveSpan(days, props.live)
   const draggable = dropOn !== undefined
   // The people in the fields by their first names, as in the plan by employee.
   const people = new Map<number, NamedItem>()
@@ -578,9 +592,8 @@ export function SiteTimeline(props: SiteTimelineProps) {
               {site.name}
             </span>
           </th>
-          {days.map((day) => {
-            if (props.live && (day.iso < props.live.from || day.iso > props.live.to))
-              return <td key={day.iso} className={dayClass(day, holidayByDate.get(day.iso), today)} />
+          {siteLive.start > 0 && <td colSpan={siteLive.start} className="live-gap" />}
+          {days.slice(siteLive.start, siteLive.end).map((day) => {
             const entries = byDate.get(day.iso) ?? []
             return (
               <td
@@ -641,6 +654,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
               </td>
             )
           })}
+          {siteLive.end < days.length && <td colSpan={days.length - siteLive.end} className="live-gap" />}
         </tr>
       ))}
     </TimelineFrame>
