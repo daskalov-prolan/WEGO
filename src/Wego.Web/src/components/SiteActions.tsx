@@ -2,7 +2,7 @@ import { Button, Group, Text } from '@mantine/core'
 import type { MouseEvent } from 'react'
 import type { Site } from '../api/types'
 import { formatAddress } from '../lib/sites'
-import { SiteMapLink } from './SitesMap'
+import { SiteMapLink } from './SiteMapLink'
 
 /** The number to dial: only digits and the plus. */
 export const callHref = (phone: string) => `tel:${phone.replace(/[^+0-9]/g, '')}`

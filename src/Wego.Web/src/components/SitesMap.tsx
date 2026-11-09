@@ -1,8 +1,6 @@
-import { Button, Modal, Text } from '@mantine/core'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef, useState } from 'react'
-import { api, messageOf } from '../api/client'
+import { useEffect, useRef } from 'react'
 import type { Site, SiteMapLocation } from '../api/types'
 import { SITE_STATUSES } from '../lib/activities'
 import { formatAddress } from '../lib/sites'
@@ -70,44 +68,4 @@ export function SitesMap({ points, height = 520, linkToPage = true }: { points: 
   }, [points, linkToPage])
 
   return <div ref={element} className="sites-map" style={{ height }} role="region" aria-label="Karte der Baustellen" />
-}
-
-/** "Auf Karte anzeigen": the site alone on the map, in a window on top. */
-export function SiteMapLink({ site, size = 'compact-xs' }: { site: Site; size?: string }) {
-  const [open, setOpen] = useState(false)
-  const [location, setLocation] = useState<SiteMapLocation | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    api.siteLocation(site.id).then(setLocation, (e) => setError(messageOf(e)))
-  }, [open, site.id])
-
-  if (!site.street) return null
-  return (
-    <>
-      <Button
-        size={size}
-        color="wegoRed.6"
-        style={{ alignSelf: 'flex-start' }}
-        onClick={() => {
-          setError('')
-          setOpen(true)
-        }}
-      >
-        Auf Karte anzeigen
-      </Button>
-      {open && (
-        <Modal opened onClose={() => setOpen(false)} title={site.name} size="xl" centered>
-          {error ? (
-            <Text c="red">{error}</Text>
-          ) : location ? (
-            <SitesMap points={[{ site, location }]} height={420} linkToPage={false} />
-          ) : (
-            <Text c="dimmed">Die Adresse wird auf der Karte gesucht …</Text>
-          )}
-        </Modal>
-      )}
-    </>
-  )
 }

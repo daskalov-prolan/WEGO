@@ -14,7 +14,7 @@ import {
 import { useWindowEvent } from '@mantine/hooks'
 import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
@@ -494,13 +494,22 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     if (!scrollNow(from, smooth)) pendingScroll.current = { iso: from, smooth }
   }
 
+  // Scrolling (wiping on a phone) draws nothing anew: the days in view are taken over once it comes to rest.
+  const settle = useRef<number | undefined>(undefined)
   const onScroll = () => {
     const next = readVisible()
     if (next) pinned.current = next.from
-    if (next && (next.from !== visible.from || next.to !== visible.to)) {
-      setVisible(next)
-    }
+    window.clearTimeout(settle.current)
+    settle.current = window.setTimeout(() => {
+      const now = readVisible()
+      if (!now) return
+      startTransition(() => setVisible((current) => (current.from === now.from && current.to === now.to ? current : now)))
+    }, 150)
   }
+  useEffect(() => () => window.clearTimeout(settle.current), [])
+
+  // The days filled in: six weeks on each side of those in view.
+  const live = useMemo(() => ({ from: addDays(visible.from, -42), to: addDays(visible.to, 42) }), [visible])
 
   // Runs after every drawing of the table: carries out a scroll that had to wait for it.
   useLayoutEffect(() => {
@@ -1470,6 +1479,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
             found={foundIds}
+            live={live}
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('e')}
             corner={corner}
@@ -1494,6 +1504,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             onCellMenu={canEdit ? (site, date, { x, y, entryId }) => setCellMenu({ site, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}
             found={foundIds}
+            live={live}
             onMark={canEdit ? (entry) => setMarked(entry?.id ?? null) : undefined}
             onStretchStart={onStretchStart('s')}
           />

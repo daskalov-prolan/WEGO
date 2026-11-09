@@ -2765,7 +2765,7 @@ html.zoomed .plan-scroll {
   flex: none;
   width: 13px;
   height: 13px;
-  margin: 0 3px 0 -3px;
+  margin: 0 4px 0 1px;
   border-radius: 50%;
   background: #5f7378;
   color: #fff;

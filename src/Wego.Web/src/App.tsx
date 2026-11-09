@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { api, UNAUTHORIZED_EVENT } from './api/client'
 import { setActivities } from './lib/activities'
 import { canPlanRole } from './lib/roles'
 import type { User } from './api/types'
 import { AppShell } from './components/AppShell'
-import { AdminPage } from './pages/AdminPage'
-import { EmployeesPage } from './pages/EmployeesPage'
-import { EmployeeReportPage } from './pages/EmployeeReportPage'
 import { LoginPage, NewPasswordPage } from './pages/LoginPage'
-import { MyAreaPage } from './pages/MyAreaPage'
 import { MyPlanPage } from './pages/MyPlanPage'
 import { PlanPage } from './pages/PlanPage'
-import { SitePage } from './pages/SitePage'
-import { SitesPage } from './pages/SitesPage'
 import { CURRENT_YEAR } from './lib/dates'
 import { useIsPhone } from './lib/useIsPhone'
 import { goHome } from './lib/home'
+
+// The plans open at once; the other pages are loaded when they are opened, so a phone starts with less.
+const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })))
+const EmployeesPage = lazy(() => import('./pages/EmployeesPage').then((module) => ({ default: module.EmployeesPage })))
+const EmployeeReportPage = lazy(() => import('./pages/EmployeeReportPage').then((module) => ({ default: module.EmployeeReportPage })))
+const MyAreaPage = lazy(() => import('./pages/MyAreaPage').then((module) => ({ default: module.MyAreaPage })))
+const SitePage = lazy(() => import('./pages/SitePage').then((module) => ({ default: module.SitePage })))
+const SitesPage = lazy(() => import('./pages/SitesPage').then((module) => ({ default: module.SitesPage })))
 
 function useHashRoute(): string[] {
   const [hash, setHash] = useState(window.location.hash)
@@ -147,7 +149,7 @@ export default function App() {
         goHome()
       }}
     >
-      {content}
+      <Suspense fallback={null}>{content}</Suspense>
     </AppShell>
   )
 }
