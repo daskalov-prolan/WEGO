@@ -255,7 +255,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       for (const listener of visibleListeners.current) listener()
     }
     const filled = liveRef.current
-    if (next.from >= addDays(filled.from, 21) && next.to <= addDays(filled.to, -21)) return
+    // A week on: a week more is filled (a few fields at a time, not weeks at once).
+    if (next.from >= addDays(filled.from, 49) && next.to <= addDays(filled.to, -49)) return
     liveRef.current = around(next)
     if (jump) setLive(liveRef.current)
     else startTransition(() => setLive(liveRef.current))
@@ -533,12 +534,27 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     const element = scroller.current
     if (!element) return null
     if (!columns.current) {
-      const measured = []
-      for (const column of element.querySelectorAll<HTMLElement>('th.dayhead')) {
-        if (column.offsetWidth === 0) return null
-        measured.push({ iso: column.id.slice(4), start: leftOf(column), width: column.offsetWidth })
+      // Only the days filled in have their heads: the others are worked out from the widths of a working day and
+      // a weekend day (all days of a kind are as wide), counted from the first head drawn.
+      const heads = [...element.querySelectorAll<HTMLElement>('th.dayhead')]
+      const weekday = heads.find((head) => !head.classList.contains('weekend'))
+      const weekend = heads.find((head) => head.classList.contains('weekend'))
+      if (!weekday || weekday.offsetWidth === 0) return null
+      const widthOf = (head: HTMLElement | undefined) => head?.getBoundingClientRect().width ?? 0
+      const widths = { day: widthOf(weekday), end: weekend ? widthOf(weekend) : widthOf(weekday) }
+      const offsets: number[] = []
+      let sum = 0
+      for (const day of yearDays) {
+        offsets.push(sum)
+        sum += day.isWeekend ? widths.end : widths.day
       }
-      columns.current = measured
+      const firstIndex = yearDays.findIndex((day) => `col-${day.iso}` === heads[0].id)
+      const base = leftOf(heads[0]) - offsets[firstIndex]
+      columns.current = yearDays.map((day, index) => ({
+        iso: day.iso,
+        start: base + offsets[index],
+        width: day.isWeekend ? widths.end : widths.day,
+      }))
     }
     const left = element.scrollLeft + nameWidth()
     const right = element.scrollLeft + element.clientWidth
