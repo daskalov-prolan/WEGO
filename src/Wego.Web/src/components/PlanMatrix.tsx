@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
@@ -244,6 +244,81 @@ function dayClass(day: Day, holiday: SchoolHoliday | undefined, today: string) {
     .join(' ')
 }
 
+/** The columns of the days, with their widths (drawn anew only for other days). */
+const DayColumns = memo(function DayColumns({ days }: { days: Day[] }) {
+  return (
+    <colgroup>
+      <col className="col-employee" />
+      {days.map((day) => (
+        <col key={day.iso} className={day.isWeekend ? 'col-day col-weekend' : 'col-day'} />
+      ))}
+    </colgroup>
+  )
+})
+
+/** The months above the days. */
+const MonthCells = memo(function MonthCells({ days }: { days: Day[] }) {
+  const months: { month: number; count: number }[] = []
+  for (const day of days) {
+    if (months.at(-1)?.month === day.month) months[months.length - 1].count++
+    else months.push({ month: day.month, count: 1 })
+  }
+  return (
+    <>
+      {months.map(({ month, count }) => (
+        <th key={month} colSpan={count} className="month">
+          <span>
+            {MONTHS[month]} {days[0].iso.slice(0, 4)}
+          </span>
+        </th>
+      ))}
+    </>
+  )
+})
+
+/** The heads of the days: weekday, date, holiday and the calendar week on Mondays. */
+const DayHeads = memo(function DayHeads({
+  days,
+  holidayByDate,
+  today,
+  zoom,
+  start,
+  end,
+}: {
+  days: Day[]
+  holidayByDate: Map<string, SchoolHoliday>
+  today: string
+  zoom: 'week' | 'month'
+  /** The days filled in (see liveSpan): the others are one empty head before and one after. */
+  start: number
+  end: number
+}) {
+  return (
+    <>
+      {start > 0 && <th colSpan={start} className="live-gap" />}
+      {days.slice(start, end).map((day) => {
+        const holiday = holidayByDate.get(day.iso)
+        return (
+          <th
+            key={day.iso}
+            id={`col-${day.iso}`}
+            // Every Monday names its calendar week (drawn by the style sheet).
+            data-kw={day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)}` : undefined}
+            className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}`}
+            title={holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso)}
+          >
+            <span className="wd">{day.weekday}</span>
+            <span className="num">
+              {zoom === 'week' ? ` ${pad(day.dayOfMonth)}.${pad(day.month + 1)}` : day.dayOfMonth}
+            </span>
+          </th>
+        )
+      })}
+      {end < days.length && <th colSpan={days.length - end} className="live-gap" />}
+    </>
+  )
+})
+
 interface FrameProps {
   days: Day[]
   holidayByDate: Map<string, SchoolHoliday>
@@ -254,6 +329,8 @@ interface FrameProps {
   corner: ReactNode
   /** Rows of employees (first names only): a narrower column on the left. */
   byEmployee?: boolean
+  /** The days filled in (see liveSpan). */
+  live: { start: number; end: number }
   children: ReactNode
 }
 
@@ -261,57 +338,24 @@ interface FrameProps {
  * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
  * and folded weekends work the same in both.
  */
-function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, byEmployee = false, children }: FrameProps) {
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, byEmployee = false, live, children }: FrameProps) {
   const weekends = days.filter((day) => day.isWeekend).length
-  const months: { month: number; count: number }[] = []
-  for (const day of days) {
-    if (months.at(-1)?.month === day.month) months[months.length - 1].count++
-    else months.push({ month: day.month, count: 1 })
-  }
 
   return (
     <table
       className={`timeline zoom-${zoom}${foldWeekends ? ' fold-weekends' : ''}${byEmployee ? ' by-employee' : ''}`}
       style={{ '--weekdays': days.length - weekends, '--weekends': weekends } as CSSProperties}
     >
-      <colgroup>
-        <col className="col-employee" />
-        {days.map((day) => (
-          <col key={day.iso} className={day.isWeekend ? 'col-day col-weekend' : 'col-day'} />
-        ))}
-      </colgroup>
+      <DayColumns days={days} />
       <thead>
         <tr className="month-row">
           <th className="corner" rowSpan={2}>
             {corner}
           </th>
-          {months.map(({ month, count }) => (
-            <th key={month} colSpan={count} className="month">
-              <span>
-                {MONTHS[month]} {days[0].iso.slice(0, 4)}
-              </span>
-            </th>
-          ))}
+          <MonthCells days={days} />
         </tr>
         <tr className="day-row">
-          {days.map((day) => {
-            const holiday = holidayByDate.get(day.iso)
-            return (
-              <th
-                key={day.iso}
-                id={`col-${day.iso}`}
-                // Every Monday names its calendar week (drawn by the style sheet).
-                data-kw={day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)}` : undefined}
-                className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}`}
-                title={holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso)}
-              >
-                <span className="wd">{day.weekday}</span>
-                <span className="num">
-                  {zoom === 'week' ? ` ${pad(day.dayOfMonth)}.${pad(day.month + 1)}` : day.dayOfMonth}
-                </span>
-              </th>
-            )
-          })}
+          <DayHeads days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} start={live.start} end={live.end} />
         </tr>
       </thead>
       <tbody>{children}</tbody>
@@ -379,6 +423,178 @@ function liveSpan(days: Day[], live: { from: string; to: string } | undefined) {
   return { start: start < 0 ? days.length : start, end: after < 0 ? days.length : after }
 }
 
+// No entries, no notes: one array for all such fields, so that they count as unchanged (see EmployeeCell).
+const NO_ENTRIES: Entry[] = []
+const NO_NOTES: CalendarNote[] = []
+
+type Handler = (event: unknown) => void
+
+/**
+ * Drop handlers that ask for the current ones when something is dragged over or dropped: a field that is not
+ * drawn anew still drops with what is current then.
+ */
+function lateDrop(get: () => DropHandlers | undefined): DropHandlers {
+  const call = (name: string) => (event: unknown) => (get()?.[name] as Handler | undefined)?.(event)
+  return { onDragEnter: call('onDragEnter'), onDragOver: call('onDragOver'), onDragLeave: call('onDragLeave'), onDrop: call('onDrop') }
+}
+
+/** What the fields of the plan by employee call when something happens: always the current ones. */
+interface EmployeeCellContext {
+  props: MatrixProps
+  handlers: ReturnType<typeof useCellSelection>['handlers']
+  openSite: (siteId: number, event: MouseEvent) => void
+}
+
+interface EmployeeCellProps {
+  context: RefObject<EmployeeCellContext | null>
+  employee: PlanEmployee
+  employeeIndex: number
+  day: Day
+  dayIndex: number
+  entries: Entry[]
+  notes: CalendarNote[]
+  holiday: SchoolHoliday | undefined
+  today: string
+  selected: boolean
+  /** Per entry "1" when it is dimmed, "0" when not; the same for reserved. */
+  dimmed: string
+  reserved: string
+  /** Only for a field with a marked or found entry: other fields stay as they are when these change. */
+  marked: MatrixProps['marked']
+  found: Set<number> | undefined
+  draggable: boolean
+  marks: boolean
+  opensFree: boolean
+  stretches: boolean
+  noteMenu: boolean
+  opensNotes: boolean
+}
+
+/**
+ * One field of the plan by employee: an employee on a day. It is drawn anew only when what it shows changes, so
+ * that paging and wiping (and every change elsewhere in the plan) do not draw all the fields again.
+ */
+const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
+  const { context, employee, employeeIndex, day, dayIndex, entries, notes } = cell
+  const now = () => context.current!
+  const props = () => now().props
+  const first = entries[0]
+  // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
+  const free = onlyHalfDay(entries)
+  const afternoon = free && (first.startTime ?? '') >= '12:00'
+  const freeChip = (
+    <span
+      className="chip chip-baustelle chip-half-free"
+      style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
+      title={cell.opensFree ? 'verfügbar: klicken, um hier eine Baustelle einzutragen' : 'verfügbar: dieser Teil des Tages ist frei'}
+      {...(entries.length === 1 ? lateDrop(() => props().dropOnFree?.(first)) : {})}
+      onClick={
+        cell.opensFree
+          ? (event) => {
+              // The free half opens, not the marking of the cell.
+              event.stopPropagation()
+              props().onOpenFree?.(employee, day.iso, afternoon ? HALF_DAYS[0] : HALF_DAYS[1])
+            }
+          : undefined
+      }
+    >
+      <span className="chip-line">
+        <span className="chip-name">verfügbar</span>
+      </span>
+    </span>
+  )
+  // The selection of the plan, asked for when the event comes.
+  const on = (name: string) => (event: unknown) =>
+    (now().handlers(employeeIndex, dayIndex) as unknown as Record<string, Handler>)[name](event)
+  // The birthday of the employee, every year on its day.
+  const birthday = !!employee.birthday && employee.birthday === day.iso.slice(5)
+  const openSite = (siteId: number, event: MouseEvent) => now().openSite(siteId, event)
+  const marked = cell.marked
+  return (
+    <td
+      className={dayClass(day, cell.holiday, cell.today)}
+      data-stretch-row={`e${employee.id}`}
+      data-stretch-date={day.iso}
+      {...(cell.draggable ? lateDrop(() => props().dropOn?.(employee, day.iso)) : {})}
+    >
+      <button
+        type="button"
+        className={cell.selected ? 'cell selected' : 'cell'}
+        aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
+        aria-pressed={cell.selected || undefined}
+        data-cell={cellKey(employee.id, day.iso)}
+        title={[birthday ? `Geburtstag von ${employee.name}` : null, cellTitle(entries, entryTitle, notes)].filter(Boolean).join('\n') || undefined}
+        onPointerDown={on('onPointerDown')}
+        onPointerEnter={on('onPointerEnter')}
+        onPointerMove={on('onPointerMove')}
+        onPointerUp={on('onPointerUp')}
+        onPointerCancel={on('onPointerCancel')}
+        onDragStart={on('onDragStart')}
+        onContextMenu={on('onContextMenu')}
+        onClick={on('onClick')}
+        onDoubleClick={on('onDoubleClick')}
+      >
+        {birthday && (
+          <span className="birthday-mark" role="img" aria-label={`Geburtstag von ${employee.name}`}>
+            <BirthdayIcon />
+          </span>
+        )}
+        <span className="cell-full">
+          {/* Work in the afternoon only: the free morning comes first. */}
+          {free && afternoon && freeChip}
+          {entries.map((entry, index) => (
+            <Chip
+              key={entry.id}
+              entry={entry}
+              dimmed={cell.dimmed[index] === '1'}
+              reserved={cell.reserved[index] === '1'}
+              // Marking takes the click; the site opens from the right-click menu then.
+              onSiteClick={cell.marks ? undefined : openSite}
+              draggable={cell.draggable}
+              drop={cell.draggable ? lateDrop(() => props().dropOnEntry?.(entry)) : undefined}
+              marked={marked?.ids.has(entry.id)}
+              found={cell.found?.has(entry.id)}
+              stretch={
+                cell.stretches && marked && (marked.first === entry.id || marked.last === entry.id)
+                  ? {
+                      left: marked.first === entry.id,
+                      right: marked.last === entry.id,
+                      // Its last entry also takes the stretch down to the employees below.
+                      down: marked.last === entry.id,
+                      onStart: (side, event) => props().onStretchStart?.(entry, side, event),
+                    }
+                  : undefined
+              }
+            />
+          ))}
+          {free && !afternoon && freeChip}
+        </span>
+        {first && (
+          <Compact
+            entries={entries}
+            text={serviceName(entryName(first)) ?? entryName(first)}
+            dimmed={!cell.dimmed.includes('0')}
+            reserved={cell.reserved[0] === '1'}
+            onTextClick={cell.marks ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
+            draggable={cell.draggable}
+          />
+        )}
+        {notes.length > 0 && (
+          <CellNotes
+            notes={notes}
+            onOpen={cell.opensNotes ? (note) => props().onOpenNote?.(note) : undefined}
+            onMenu={cell.noteMenu ? (note, event) => props().onNoteMenu?.(note, { x: event.clientX, y: event.clientY }) : undefined}
+          />
+        )}
+      </button>
+    </td>
+  )
+})
+
+/** A mask of one character per entry: "1" where the test holds. */
+const mask = (entries: Entry[], test: ((entry: Entry) => boolean) | undefined) =>
+  test && entries.length > 0 ? entries.map((entry) => (test(entry) ? '1' : '0')).join('') : ''
+
 /**
  * The plan by employee: one row per employee, the days from left to right. The employee column stays
  * in place while the days scroll sideways. The zoom decides how wide a day is and how much of an entry
@@ -388,13 +604,20 @@ export function TimelineMatrix(props: MatrixProps) {
   const { days, employees, entriesOf, holidayByDate, today, isDimmed, linkNames, selected, zoom, foldWeekends, dropOn } = props
   const draggable = dropOn !== undefined
   const { handlers, siteClickBelongsToCell } = useCellSelection(props, days)
-  const names = shortNames(employees)
+  const names = useMemo(() => shortNames(employees), [employees])
   const { start: liveStart, end: liveEnd } = liveSpan(days, props.live)
   const openSite = (siteId: number, event: MouseEvent) => {
     if (siteClickBelongsToCell()) return
     event.stopPropagation()
     props.onOpenSite(siteId)
   }
+  // The current props for the fields, which are not all drawn anew (see EmployeeCell).
+  const context = useRef<EmployeeCellContext | null>(null)
+  useLayoutEffect(() => {
+    context.current = { props, handlers, openSite }
+  })
+  const marked = props.marked
+  const found = props.found
 
   return (
     <TimelineFrame
@@ -405,122 +628,47 @@ export function TimelineMatrix(props: MatrixProps) {
       foldWeekends={foldWeekends}
       corner={props.corner ?? 'Mitarbeiter'}
       byEmployee
+      live={{ start: liveStart, end: liveEnd }}
     >
-      {employees.map((employee, employeeIndex) => {
-        return (
-          <tr key={employee.id}>
-            <th className="employee" scope="row" title={employee.name}>
-              <EmployeeName employee={employee} link={linkNames} label={names.get(employee.id)} />
-            </th>
-            {liveStart > 0 && <td colSpan={liveStart} className="live-gap" />}
-            {days.slice(liveStart, liveEnd).map((day, index) => {
-              const dayIndex = liveStart + index
-              const entries = entriesOf(employee.id, day.iso)
-              const notes = props.notesOf?.(employee.id, day.iso) ?? []
-              const first = entries[0]
-              // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
-              const free = onlyHalfDay(entries)
-              const afternoon = free && (first.startTime ?? '') >= '12:00'
-              const freeChip = (
-                <span
-                  className="chip chip-baustelle chip-half-free"
-                  style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
-                  title={props.onOpenFree ? 'verfügbar: klicken, um hier eine Baustelle einzutragen' : 'verfügbar: dieser Teil des Tages ist frei'}
-                  {...(entries.length === 1 ? props.dropOnFree?.(first) : {})}
-                  onClick={
-                    props.onOpenFree &&
-                    ((event) => {
-                      // The free half opens, not the marking of the cell.
-                      event.stopPropagation()
-                      props.onOpenFree!(employee, day.iso, afternoon ? HALF_DAYS[0] : HALF_DAYS[1])
-                    })
-                  }
-                >
-                  <span className="chip-line">
-                    <span className="chip-name">verfügbar</span>
-                  </span>
-                </span>
-              )
-              const isSelected = selected.has(cellKey(employee.id, day.iso))
-              // The birthday of the employee, every year on its day.
-              const birthday = !!employee.birthday && employee.birthday === day.iso.slice(5)
-              return (
-                <td
-                  key={day.iso}
-                  className={dayClass(day, holidayByDate.get(day.iso), today)}
-                  data-stretch-row={`e${employee.id}`}
-                  data-stretch-date={day.iso}
-                  {...dropOn?.(employee, day.iso)}
-                >
-                  <button
-                    type="button"
-                    className={isSelected ? 'cell selected' : 'cell'}
-                    aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
-                    aria-pressed={isSelected || undefined}
-                    data-cell={cellKey(employee.id, day.iso)}
-                    title={[birthday ? `Geburtstag von ${employee.name}` : null, cellTitle(entries, entryTitle, notes)].filter(Boolean).join('\n') || undefined}
-                    {...handlers(employeeIndex, dayIndex)}
-                  >
-                    {birthday && (
-                      <span className="birthday-mark" role="img" aria-label={`Geburtstag von ${employee.name}`}>
-                        <BirthdayIcon />
-                      </span>
-                    )}
-                    <span className="cell-full">
-                      {/* Work in the afternoon only: the free morning comes first. */}
-                      {free && afternoon && freeChip}
-                      {entries.map((entry) => (
-                        <Chip
-                          key={entry.id}
-                          entry={entry}
-                          dimmed={isDimmed(entry)}
-                          reserved={props.isReserved?.(entry)}
-                          // Marking takes the click; the site opens from the right-click menu then.
-                          onSiteClick={props.onMark ? undefined : openSite}
-                          draggable={draggable}
-                          drop={props.dropOnEntry?.(entry)}
-                          marked={props.marked?.ids.has(entry.id)}
-                          found={props.found?.has(entry.id)}
-                          stretch={
-                            props.onStretchStart && props.marked && (props.marked.first === entry.id || props.marked.last === entry.id)
-                              ? {
-                                  left: props.marked.first === entry.id,
-                                  right: props.marked.last === entry.id,
-                                  // Its last entry also takes the stretch down to the employees below.
-                                  down: props.marked.last === entry.id,
-                                  onStart: (side, event) => props.onStretchStart!(entry, side, event),
-                                }
-                              : undefined
-                          }
-                        />
-                      ))}
-                      {free && !afternoon && freeChip}
-                    </span>
-                    {first && (
-                      <Compact
-                        entries={entries}
-                        text={serviceName(entryName(first)) ?? entryName(first)}
-                        dimmed={entries.every(isDimmed)}
-                        reserved={props.isReserved?.(first)}
-                        onTextClick={props.onMark ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}
-                        draggable={draggable}
-                      />
-                    )}
-                    {notes.length > 0 && (
-                      <CellNotes
-                        notes={notes}
-                        onOpen={props.onOpenNote}
-                        onMenu={props.onNoteMenu && ((note, event) => props.onNoteMenu!(note, { x: event.clientX, y: event.clientY }))}
-                      />
-                    )}
-                  </button>
-                </td>
-              )
-            })}
-            {liveEnd < days.length && <td colSpan={days.length - liveEnd} className="live-gap" />}
-          </tr>
-        )
-      })}
+      {employees.map((employee, employeeIndex) => (
+        <tr key={employee.id}>
+          <th className="employee" scope="row" title={employee.name}>
+            <EmployeeName employee={employee} link={linkNames} label={names.get(employee.id)} />
+          </th>
+          {liveStart > 0 && <td colSpan={liveStart} className="live-gap" />}
+          {days.slice(liveStart, liveEnd).map((day, index) => {
+            const listed = entriesOf(employee.id, day.iso)
+            const entries = listed.length > 0 ? listed : NO_ENTRIES
+            const noted = props.notesOf?.(employee.id, day.iso) ?? NO_NOTES
+            return (
+              <EmployeeCell
+                key={day.iso}
+                context={context}
+                employee={employee}
+                employeeIndex={employeeIndex}
+                day={day}
+                dayIndex={liveStart + index}
+                entries={entries}
+                notes={noted.length > 0 ? noted : NO_NOTES}
+                holiday={holidayByDate.get(day.iso)}
+                today={today}
+                selected={selected.has(cellKey(employee.id, day.iso))}
+                dimmed={mask(entries, isDimmed)}
+                reserved={mask(entries, props.isReserved)}
+                marked={marked && entries.some((entry) => marked.ids.has(entry.id)) ? marked : undefined}
+                found={found && entries.some((entry) => found.has(entry.id)) ? found : undefined}
+                draggable={draggable}
+                marks={!!props.onMark}
+                opensFree={!!props.onOpenFree}
+                stretches={!!props.onStretchStart}
+                noteMenu={!!props.onNoteMenu}
+                opensNotes={!!props.onOpenNote}
+              />
+            )
+          })}
+          {liveEnd < days.length && <td colSpan={days.length - liveEnd} className="live-gap" />}
+        </tr>
+      ))}
     </TimelineFrame>
   )
 }
@@ -563,19 +711,110 @@ interface SiteTimelineProps {
   onStretchStart?: (entry: Entry, side: 'left' | 'right' | 'down', event: PointerEvent) => void
 }
 
+interface SiteCellProps {
+  context: RefObject<SiteTimelineProps | null>
+  site: Site
+  day: Day
+  entries: Entry[]
+  /** The first names of the employees in the field, one per entry. */
+  labels: string
+  holiday: SchoolHoliday | undefined
+  today: string
+  reserved: string
+  marked: SiteTimelineProps['marked']
+  found: Set<number> | undefined
+  draggable: boolean
+  stretches: boolean
+}
+
+const LABELS = '\u0001'
+
+/** One field of the plan by site: a site on a day. Drawn anew only when what it shows changes. */
+const SiteCell = memo(function SiteCell(cell: SiteCellProps) {
+  const { context, site, day, entries } = cell
+  const props = () => context.current!
+  const labels = cell.labels.split(LABELS)
+  const marked = cell.marked
+  return (
+    <td
+      className={dayClass(day, cell.holiday, cell.today)}
+      data-stretch-row={`s${site.id}`}
+      data-stretch-date={day.iso}
+      {...(cell.draggable ? lateDrop(() => props().dropOn?.(site, day.iso)) : {})}
+    >
+      <button
+        type="button"
+        className="cell"
+        aria-label={`${site.name}, ${formatDateLong(day.iso)}`}
+        title={cellTitle(entries, (entry) => entryTitle({ ...entry, siteName: entry.employeeName }))}
+        onClick={(event) => {
+          const current = props()
+          if (current.onMark) {
+            const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+            const entry = chip && entries.find((candidate) => candidate.id === Number(chip.dataset.entryId))
+            current.onMark(entry ?? null)
+            if (entry) return
+          }
+          current.onOpenCell(site, day.iso)
+        }}
+        onContextMenu={(event) => {
+          const current = props()
+          if (!current.onCellMenu) return
+          event.preventDefault()
+          const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
+          current.onCellMenu(site, day.iso, { x: event.clientX, y: event.clientY, entryId: chip ? Number(chip.dataset.entryId) : undefined })
+        }}
+      >
+        <span className="cell-full">
+          {entries.map((entry, index) => (
+            <Chip
+              key={entry.id}
+              entry={entry}
+              label={labels[index]}
+              reserved={cell.reserved[index] === '1'}
+              draggable={cell.draggable}
+              drop={cell.draggable ? lateDrop(() => props().dropOnEntry?.(entry)) : undefined}
+              marked={marked?.ids.has(entry.id)}
+              found={cell.found?.has(entry.id)}
+              stretch={
+                cell.stretches && marked && (marked.first === entry.id || marked.last === entry.id)
+                  ? {
+                      left: marked.first === entry.id,
+                      right: marked.last === entry.id,
+                      onStart: (side, event) => props().onStretchStart?.(entry, side, event),
+                    }
+                  : undefined
+              }
+            />
+          ))}
+        </span>
+        {entries.length > 0 && (
+          <Compact entries={entries} text={labels[0]} dimmed={false} draggable={cell.draggable} reserved={cell.reserved[0] === '1'} />
+        )}
+      </button>
+    </td>
+  )
+})
+
 /**
  * The plan by construction site: one row per site, the days from left to right, and in the cells the
  * employees working there, in the colour of their activity.
  */
 export function SiteTimeline(props: SiteTimelineProps) {
-  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenCell, onOpenSite, dropOn, marked } = props
+  const { days, rows, holidayByDate, today, zoom, foldWeekends, onOpenSite, dropOn, marked, found } = props
   const siteLive = liveSpan(days, props.live)
   const draggable = dropOn !== undefined
   // The people in the fields by their first names, as in the plan by employee.
-  const people = new Map<number, NamedItem>()
-  for (const row of rows) for (const list of row.byDate.values()) for (const entry of list) people.set(entry.employeeId, { id: entry.employeeId, name: entry.employeeName })
-  const names = shortNames([...people.values()])
+  const names = useMemo(() => {
+    const people = new Map<number, NamedItem>()
+    for (const row of rows) for (const list of row.byDate.values()) for (const entry of list) people.set(entry.employeeId, { id: entry.employeeId, name: entry.employeeName })
+    return shortNames([...people.values()])
+  }, [rows])
   const nameOf = (entry: Entry) => names.get(entry.employeeId) ?? entry.employeeName
+  const context = useRef<SiteTimelineProps | null>(null)
+  useLayoutEffect(() => {
+    context.current = props
+  })
   return (
     <TimelineFrame
       days={days}
@@ -584,6 +823,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
       zoom={zoom}
       foldWeekends={foldWeekends}
       corner={props.corner ?? 'Baustelle'}
+      live={siteLive}
     >
       {rows.map(({ site, byDate }) => (
         <tr key={site.id}>
@@ -594,64 +834,23 @@ export function SiteTimeline(props: SiteTimelineProps) {
           </th>
           {siteLive.start > 0 && <td colSpan={siteLive.start} className="live-gap" />}
           {days.slice(siteLive.start, siteLive.end).map((day) => {
-            const entries = byDate.get(day.iso) ?? []
+            const entries = byDate.get(day.iso) ?? NO_ENTRIES
             return (
-              <td
+              <SiteCell
                 key={day.iso}
-                className={dayClass(day, holidayByDate.get(day.iso), today)}
-                data-stretch-row={`s${site.id}`}
-                data-stretch-date={day.iso}
-                {...dropOn?.(site, day.iso)}
-              >
-                <button
-                  type="button"
-                  className="cell"
-                  aria-label={`${site.name}, ${formatDateLong(day.iso)}`}
-                  title={cellTitle(entries, (entry) => entryTitle({ ...entry, siteName: entry.employeeName }))}
-                  onClick={(event) => {
-                    if (props.onMark) {
-                      const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
-                      const entry = chip && entries.find((candidate) => candidate.id === Number(chip.dataset.entryId))
-                      props.onMark(entry ?? null)
-                      if (entry) return
-                    }
-                    onOpenCell(site, day.iso)
-                  }}
-                  onContextMenu={(event) => {
-                    if (!props.onCellMenu) return
-                    event.preventDefault()
-                    const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-entry-id]')
-                    props.onCellMenu(site, day.iso, { x: event.clientX, y: event.clientY, entryId: chip ? Number(chip.dataset.entryId) : undefined })
-                  }}
-                >
-                  <span className="cell-full">
-                    {entries.map((entry) => (
-                      <Chip
-                        key={entry.id}
-                        entry={entry}
-                        label={nameOf(entry)}
-                        reserved={props.isReserved?.(entry)}
-                        draggable={draggable}
-                        drop={props.dropOnEntry?.(entry)}
-                        marked={marked?.ids.has(entry.id)}
-                        found={props.found?.has(entry.id)}
-                        stretch={
-                          props.onStretchStart && marked && (marked.first === entry.id || marked.last === entry.id)
-                            ? {
-                                left: marked.first === entry.id,
-                                right: marked.last === entry.id,
-                                onStart: (side, event) => props.onStretchStart!(entry, side, event),
-                              }
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </span>
-                  {entries.length > 0 && (
-                    <Compact entries={entries} text={nameOf(entries[0])} dimmed={false} draggable={draggable} reserved={props.isReserved?.(entries[0])} />
-                  )}
-                </button>
-              </td>
+                context={context}
+                site={site}
+                day={day}
+                entries={entries}
+                labels={entries.map(nameOf).join(LABELS)}
+                holiday={holidayByDate.get(day.iso)}
+                today={today}
+                reserved={mask(entries, props.isReserved)}
+                marked={marked && entries.some((entry) => marked.ids.has(entry.id)) ? marked : undefined}
+                found={found && entries.some((entry) => found.has(entry.id)) ? found : undefined}
+                draggable={draggable}
+                stretches={!!props.onStretchStart}
+              />
             )
           })}
           {siteLive.end < days.length && <td colSpan={days.length - siteLive.end} className="live-gap" />}
