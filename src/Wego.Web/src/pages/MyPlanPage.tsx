@@ -4,12 +4,12 @@ import { SiteName } from '../components/Chip'
 import { BirthdayIcon } from '../components/BirthdayIcon'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Entry, Plan, User } from '../api/types'
+import type { CalendarNote, Entry, Plan, User } from '../api/types'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
-import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
-import { activityLabel, entryStyle } from '../lib/activities'
+import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, HALF_DAYS, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
+import { activityLabel, entryStyle, isFree, onlyHalfDay } from '../lib/activities'
 import { holidaysByDate, useSwipe } from '../lib/ui'
 import { HOME_EVENT } from '../lib/home'
 import { useWindowEvent } from '@mantine/hooks'
@@ -85,8 +85,44 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       sites: unique(all.flatMap(([, p]) => p.sites)),
       employees: unique(all.flatMap(([, p]) => p.employees)),
       planners: unique(all.flatMap(([, p]) => p.planners ?? [])),
+      notes: unique(all.flatMap(([, p]) => p.notes ?? [])),
     }
   }, [loaded, plans, year])
+
+  /**
+   * Work on a site for half a day only: the other half shows as "verfügbar", as in the plan (where it is not
+   * stored as an entry of its own).
+   */
+  const withFreeHalf = (entries: Entry[]): Entry[] => {
+    if (!onlyHalfDay(entries)) return entries
+    const morning = entries.every((entry) => (entry.endTime ?? '') <= '12:00')
+    const afternoon = entries.every((entry) => (entry.startTime ?? '') >= '12:00')
+    // Work around midday leaves no half free.
+    if (!morning && !afternoon) return entries
+    const half = morning ? HALF_DAYS[1] : HALF_DAYS[0]
+    const free: Entry = {
+      ...entries[0],
+      id: -entries[0].id,
+      siteId: null,
+      siteName: null,
+      activity: null,
+      startTime: `${half.start}:00`,
+      endTime: `${half.end}:00`,
+      note: null,
+      noteImportant: false,
+    }
+    return morning ? [...entries, free] : [free, ...entries]
+  }
+
+  // The own calendar notes by day, as in the fields of the plan.
+  const notesByDate = useMemo(() => {
+    const map = new Map<string, CalendarNote[]>()
+    for (const note of plan?.notes ?? []) {
+      if (note.employeeId !== user.id) continue
+      map.set(note.date, [...(map.get(note.date) ?? []), note])
+    }
+    return map
+  }, [plan, user.id])
 
   const ownByDate = useMemo(() => {
     const map = new Map<string, Entry[]>()
@@ -118,12 +154,14 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       })
 
   const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
-  // The birthdays of the colleagues ("MM-DD" to the names); the own one is no news.
+  // The birthdays of everybody, planners as well ("MM-DD" to the names); the own one as "Mein Geburtstag".
   const birthdays = useMemo(() => {
-    const byDay = new Map<string, string[]>()
-    for (const employee of plan?.employees ?? []) {
-      if (employee.id === user.id || !employee.birthday) continue
-      byDay.set(employee.birthday, [...(byDay.get(employee.birthday) ?? []), employee.name])
+    const byDay = new Map<string, { mine: boolean; names: string[] }>()
+    for (const { employeeId, name, birthday } of plan?.birthdays ?? []) {
+      const day = byDay.get(birthday) ?? { mine: false, names: [] }
+      if (employeeId === user.id) day.mine = true
+      else day.names.push(name)
+      byDay.set(birthday, day)
     }
     return byDay
   }, [plan, user.id])
@@ -311,10 +349,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           const holiday = holidayByDate.get(day.iso)
           // A public holiday is free: vacation entered on it (e.g. by a company closure) is no vacation.
           const publicHoliday = holiday?.kind === 'Feiertag' && holiday.startDate === holiday.endDate
-          const entries = (ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))
+          const entries = withFreeHalf((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub')))
           const born = birthdays.get(day.iso.slice(5))
+          const notes = notesByDate.get(day.iso) ?? []
           // Empty weekends only take up space; today always shows, it is where the list begins.
-          if (day.isWeekend && entries.length === 0 && day.iso !== today && !born) return null
+          if (day.isWeekend && entries.length === 0 && notes.length === 0 && day.iso !== today && !born) return null
 
           return (
             <Paper
@@ -348,13 +387,26 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                 )}
               </Group>
 
-              {born && (
+              {born?.mine && (
+                <Text size="sm" fw={700} className="my-birthday">
+                  <BirthdayIcon /> Mein Geburtstag
+                </Text>
+              )}
+              {born && born.names.length > 0 && (
                 <Text size="sm" fw={600} className="my-birthday">
-                  <BirthdayIcon /> Geburtstag: {born.join(', ')}
+                  <BirthdayIcon /> Geburtstag: {born.names.join(', ')}
                 </Text>
               )}
 
-              {entries.length === 0 && (
+              {/* The notes of the day, written out in full (no pointing on a phone). */}
+              {notes.map((note) => (
+                <div className="my-note" key={note.id}>
+                  <span className="my-note-title">{note.title}</span>
+                  {note.text && <span className="my-note-text">{note.text}</span>}
+                </div>
+              ))}
+
+              {entries.length === 0 && notes.length === 0 && (
                 <Text size="sm" c={publicHoliday ? 'green.8' : 'dimmed'} fw={publicHoliday ? 700 : undefined}>
                   {publicHoliday ? 'Gesetzlicher Feiertag' : 'nicht eingeplant'}
                 </Text>
@@ -368,6 +420,15 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                         <span className="where">
                           <ActivityIcon type={entry.type} size={15} /> {entry.type}
                         </span>
+                      </div>
+                    )
+                  }
+                  // Free (the other half of the day): "verfügbar", in green, without site or colleagues.
+                  if (isFree(entry)) {
+                    return (
+                      <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
+                        <span className="when">{formatDayTime(entry)}</span>
+                        <span className="where">verfügbar</span>
                       </div>
                     )
                   }

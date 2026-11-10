@@ -1014,6 +1014,9 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(JsonValueKind.Null, listed.GetProperty("birthday").ValueKind);
         Assert.Equal(JsonValueKind.Null, listed.GetProperty("birthDate").ValueKind);
         var theirs = await h.GetFromJsonAsync<JsonElement>("/api/plan?year=2027");
+        // The birthdays of everybody active (planners as well) come with the plan.
+        Assert.Contains(theirs.GetProperty("birthdays").EnumerateArray(),
+            b => b.GetProperty("employeeId").GetInt32() == id && b.GetProperty("birthday").GetString() == "07-05");
         Assert.Equal("07-05", theirs.GetProperty("employees").EnumerateArray()
             .Single(e => e.GetProperty("id").GetInt32() == id).GetProperty("birthday").GetString());
         // Planners (A as G) see the year in the list as well.

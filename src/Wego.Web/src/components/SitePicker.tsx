@@ -4,7 +4,7 @@ import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress } from '../lib/sites'
 import { SiteForm } from './SiteForm'
-import { callHref, SiteWayButtons, useCanCall } from './SiteActions'
+import { SiteWayButtons } from './SiteActions'
 
 interface Props {
   sites: Site[]
@@ -23,7 +23,6 @@ interface Props {
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
 export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required }: Props) {
   const [creating, setCreating] = useState(false)
-  const canCall = useCanCall()
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
   const chosenAddress = chosen && formatAddress(chosen)
@@ -102,11 +101,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           <div className="site-contact-actions">
             <SiteWayButtons site={chosen} size="compact-xs" />
             <Group gap="xs" justify="flex-end">
-              {canCall && chosen.clientPhone && (
-                <Button component="a" href={callHref(chosen.clientPhone)} size="compact-xs" aria-label={`Anrufen: ${chosen.clientPhone}`}>
-                  Anrufen
-                </Button>
-              )}
+              {/* No button that calls here: the planners plan at the desk, the number stands at the left. */}
               {/* Straight to the page of the site, to add or correct its details. */}
               {onGoToSite && (
                 <Button size="compact-xs" onClick={() => onGoToSite(chosen.id)}>

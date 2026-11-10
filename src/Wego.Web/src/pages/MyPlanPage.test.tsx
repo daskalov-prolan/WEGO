@@ -60,6 +60,26 @@ afterEach(() => {
 })
 
 describe('MyPlanPage', () => {
+  it('shows the own notes of a day and the free half of a day as "verfügbar"', async () => {
+    const withNotes: Plan = {
+      ...plan,
+      entries: [...plan.entries, entry(20, 1, 'Anna', '2026-03-04', 10, 'Familie Schulze', '07:30:00', '11:30:00')],
+      notes: [
+        { id: 1, employeeId: 1, date: '2026-03-04', title: 'Schlüssel holen', text: 'Beim Hausmeister' },
+        { id: 2, employeeId: 2, date: '2026-03-04', title: 'Nicht für Anna', text: null },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withNotes), { status: 200 })))
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+
+    const wednesday = (await screen.findByText('Mittwoch, 04.03.2026')).closest('article')!
+    expect(within(wednesday).getByText('Schlüssel holen')).toBeInTheDocument()
+    expect(within(wednesday).getByText('Beim Hausmeister')).toBeInTheDocument()
+    expect(within(wednesday).queryByText('Nicht für Anna')).not.toBeInTheDocument()
+    // Half a day on the site: the afternoon is free.
+    expect(within(wednesday).getByText('verfügbar')).toBeInTheDocument()
+  })
+
   it('shows the own week: where, when and with whom', async () => {
     renderWithProviders(<MyPlanPage year={2026} user={user} />)
 

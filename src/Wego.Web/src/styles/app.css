@@ -2711,8 +2711,8 @@ html.zoomed .plan-scroll {
 /* The wrench of a service call before its name in the plan. */
 .service-icon {
   flex: none;
-  /* Close to the left edge of the entry: more room for the name. */
-  margin-left: -5px;
+  /* Right at the left edge of the entry, not over it (it was cut off there). */
+  margin-left: 0;
   margin-right: 1px;
   vertical-align: -0.25em;
 }
@@ -2801,4 +2801,26 @@ html.zoomed .plan-scroll {
   gap: 6px;
   margin-bottom: 6px;
   color: var(--wego-navy);
+}
+
+/* Mein Plan: a calendar note of the day, as a slip of paper like in the plan. */
+.my-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1px dashed #b9c6c9;
+  border-radius: 6px;
+  background: #fffdf5;
+  color: #3d5054;
+  font-size: 0.875rem;
+}
+
+.my-note-title {
+  font-weight: 700;
+}
+
+.my-note-text {
+  white-space: pre-line;
 }

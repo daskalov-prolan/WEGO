@@ -303,7 +303,13 @@ const DayHeads = memo(function DayHeads({
       {days.slice(start, end).map((day) => {
         const holiday = holidayByDate.get(day.iso)
         const born = birthdays?.get(day.iso.slice(5))
-        const birthdayLine = born ? `Geburtstag: ${born.join(', ')}` : null
+        // "Mein Geburtstag" stands as it is; the others are named.
+        const others = born?.filter((who) => who !== 'Mein Geburtstag') ?? []
+        const birthdayLine = born
+          ? [born.length > others.length ? 'Mein Geburtstag' : null, others.length ? `Geburtstag: ${others.join(', ')}` : null]
+              .filter(Boolean)
+              .join(' · ')
+          : null
         return (
           <th
             key={day.iso}
