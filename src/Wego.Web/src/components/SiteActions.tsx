@@ -34,8 +34,8 @@ export function SiteWayButtons({ site, size = 'sm' }: { site: Site; size?: strin
   )
 }
 
-/** Phones and tablets (no mouse) can dial: a computer at the desk has no use for a button that calls. */
-export const useCanCall = () => useMediaQuery('(hover: none)')
+/** A phone can dial: a computer at the desk (a laptop with a touch screen too) has no use for a button that calls. */
+export const useCanCall = () => useMediaQuery('(max-width: 720px) and (pointer: coarse)')
 
 /** The telephone number of the customer written out, on a phone with a button beside it that dials it. */
 export function CallButton({ phone, size = 'sm' }: { phone: string; size?: string }) {

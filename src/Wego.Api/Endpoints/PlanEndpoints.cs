@@ -28,7 +28,11 @@ public static class PlanEndpoints
     /// </summary>
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites,
-        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase, IReadOnlyList<CalendarNoteEndpoints.CalendarNoteDto> Notes);
+        IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase, IReadOnlyList<CalendarNoteEndpoints.CalendarNoteDto> Notes,
+        IReadOnlyList<BirthdayDto>? Birthdays = null);
+
+    /// <summary>The birthday of an employee, "MM-dd": of everybody active, planners as well, seen by everybody.</summary>
+    public record BirthdayDto(int EmployeeId, string Name, string Birthday);
 
     /// <summary>A site entry names its construction site by <paramref name="SiteId"/>.</summary>
     public record DayEntryInput(EntryType Type, int? SiteId, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -99,7 +103,13 @@ public static class PlanEndpoints
                 .Select(CalendarNoteEndpoints.ToDto)
                 .ToList();
 
-            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers, notes);
+            var birthdays = all
+                .Where(e => e.IsActive && e.DeletedAt == null && e.BirthDate != null)
+                .Select(e => new BirthdayDto(e.Id, e.Name, EmployeeEndpoints.Birthday(e.BirthDate)!))
+                .ToList();
+
+            return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers, notes,
+                birthdays);
         });
 
         // Replaces all entries of one employee on one day, so a split day is always saved as a whole.

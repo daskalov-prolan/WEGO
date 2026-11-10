@@ -213,6 +213,8 @@ export interface Plan {
   schoolHolidays: SchoolHoliday[]
   sites: Site[]
   notes?: CalendarNote[]
+  /** The birthdays of everybody active, planners as well ("MM-DD"). */
+  birthdays?: { employeeId: number; name: string; birthday: string }[]
 }
 
 export interface DayEntryInput {

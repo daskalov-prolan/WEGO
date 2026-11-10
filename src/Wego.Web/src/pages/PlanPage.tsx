@@ -221,7 +221,7 @@ function YearSelect({ year, onChange, small = false }: { year: number; onChange?
  * construction sites (with the employees in the cells). Woche, Monat and Jahr are zoom levels.
  * Planners select cells to fill many days at once.
  */
-export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAbsence = false, onYearChange }: Props) {
+export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAbsence = false, user, onYearChange }: Props) {
   const first = `${year}-01-01`
   const last = `${year}-12-31`
   const today = todayIso()
@@ -444,14 +444,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     revealOnLoad.current = null
   })
   const yearDays = useMemo(() => daysOfYear(year), [year])
-  // Who has a birthday on which day ("MM-DD"): a present in the head of the day.
+  // Who has a birthday on which day ("MM-DD"), planners as well: a present in the head of the day. The own one
+  // is "Mein Geburtstag".
   const birthdays = useMemo(() => {
     const byDay = new Map<string, string[]>()
-    for (const employee of plan?.employees ?? []) {
-      if (employee.birthday) byDay.set(employee.birthday, [...(byDay.get(employee.birthday) ?? []), employee.name])
+    for (const { employeeId, name, birthday } of plan?.birthdays ?? []) {
+      const who = employeeId === user?.id ? 'Mein Geburtstag' : name
+      byDay.set(birthday, [...(byDay.get(birthday) ?? []), who])
     }
     return byDay
-  }, [plan?.employees])
+  }, [plan?.birthdays, user?.id])
 
   // The plan by site: every site of the phase with entries of the shown employees, planned in this year, or
   // open with activities still to plan; in the order the work starts there.
