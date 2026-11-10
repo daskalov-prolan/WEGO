@@ -349,11 +349,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             .Select(t => t.GetProperty("activity").GetString()!).ToArray();
 
         var offer = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
-        Assert.Equal(["Besichtigung", "Objektauswahl", "Angebotsuebergabe"], Activities(offer));
+        Assert.Equal(["Anfrage", "Besichtigung", "Objektauswahl", "Angebotsuebergabe"], Activities(offer));
 
         var building = await (await planer.PostAsJsonAsync($"/api/sites/{id}/status", new { status = "Bauphase" }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(9, Activities(building).Length);
+        Assert.Equal(10, Activities(building).Length);
 
         var changed = await (await planer.PutAsJsonAsync($"/api/sites/{id}/tasks/RenoDeco",
             new { estimatedDays = 1, notNeeded = true })).Content.ReadFromJsonAsync<JsonElement>();
@@ -649,6 +649,19 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.OK,
             (await a.PutAsJsonAsync(day, new object[] { new { type = "Urlaub" }, new { type = "Baustelle", siteId } })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await g.PutAsJsonAsync(day, Array.Empty<object>())).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_offer_phase_begins_with_the_enquiry()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var offer = (await g.GetFromJsonAsync<JsonElement>("/api/activities")).EnumerateArray()
+            .Where(a => a.GetProperty("phase").GetString() == "Angebot")
+            .OrderBy(a => a.GetProperty("sortOrder").GetInt32())
+            .Select(a => a.GetProperty("key").GetString())
+            .ToList();
+        Assert.Equal("Anfrage", offer[0]);
+        Assert.Equal("Besichtigung", offer[1]);
     }
 
     [Fact]

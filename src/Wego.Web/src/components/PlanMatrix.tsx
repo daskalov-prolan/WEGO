@@ -49,6 +49,8 @@ export interface MatrixProps {
   dropOnFree?: (entry: Entry) => DropHandlers
   /** Planners: a click on the free half ("verfügbar") plans a site in that half of the day. */
   onOpenFree?: (employee: PlanEmployee, date: string, half: { start: string; end: string }) => void
+  /** false: no "verfügbar" for the free half of a day (the offer phase: planners are not booked by halves). */
+  showsFree?: boolean
   /** Planners: a click on an entry kept free ("verfügbar") opens the day to put a site in its place. */
   onFillFree?: (employee: PlanEmployee, date: string) => void
   /** Planners: the marked entries (a stretch of days) and the entries at its ends. */
@@ -487,6 +489,7 @@ interface EmployeeCellProps {
   draggable: boolean
   marks: boolean
   opensFree: boolean
+  showsFree: boolean
   stretches: boolean
   noteMenu: boolean
   opensNotes: boolean
@@ -502,7 +505,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const props = () => now().props
   const first = entries[0]
   // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
-  const free = onlyHalfDay(entries)
+  const free = cell.showsFree && onlyHalfDay(entries)
   const afternoon = free && (first.startTime ?? '') >= '12:00'
   const freeChip = (
     <span
@@ -653,7 +656,9 @@ export function TimelineMatrix(props: MatrixProps) {
           </th>
           {liveStart > 0 && <td colSpan={liveStart} className="live-gap" />}
           {days.slice(liveStart, liveEnd).map((day, index) => {
-            const listed = entriesOf(employee.id, day.iso)
+            const all = entriesOf(employee.id, day.iso)
+            // Without "verfügbar" (the offer phase): a half kept free is left out of the field as well.
+            const listed = props.showsFree === false && all.some(isFree) ? all.filter((entry) => !isFree(entry)) : all
             const entries = listed.length > 0 ? listed : NO_ENTRIES
             const noted = props.notesOf?.(employee.id, day.iso) ?? NO_NOTES
             return (
@@ -676,6 +681,7 @@ export function TimelineMatrix(props: MatrixProps) {
                 draggable={draggable}
                 marks={!!props.onMark}
                 opensFree={!!props.onOpenFree}
+                showsFree={props.showsFree !== false}
                 stretches={!!props.onStretchStart}
                 noteMenu={!!props.onNoteMenu}
                 opensNotes={!!props.onOpenNote}

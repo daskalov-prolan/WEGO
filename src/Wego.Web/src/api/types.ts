@@ -313,4 +313,6 @@ export interface EmployeeInput {
   birthDate?: string | null
   /** Craftsmen: the activity they get on a new site, in its colour. */
   mainActivity: Activity | null
+  /** Craftsmen: activities of the offer phase they do as well, e.g. visits ("Besichtigung"). */
+  additionalActivities?: Activity[]
 }

@@ -106,7 +106,7 @@ describe('SitesPage', () => {
       'Zuständig',
       'Adresse',
       'Telefon Kunde',
-      'Setze auf erledigt',
+      'Status setzen',
     ])
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     expect(await within(chung).findByText('Planer G')).toBeInTheDocument()

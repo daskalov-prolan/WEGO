@@ -31,7 +31,7 @@ import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
 import { YearPicker } from '../components/YearPicker'
 import { formatDate, PLAN_YEARS } from '../lib/dates'
-import { roleLabel, ROLES } from '../lib/roles'
+import { canPlanRole, roleLabel, ROLES } from '../lib/roles'
 
 /** Planer G only: employees and their rights, activities, school and public holidays. Sites have their own page. */
 interface AdminPageProps {
@@ -460,6 +460,17 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                   data={activitiesOfStatus('Bauphase').map((activity) => ({ value: activity, label: activityLabel(activity) ?? activity }))}
                   value={editing.input.mainActivity}
                   onChange={(value) => change({ mainActivity: (value as Activity | null) ?? null })}
+                />
+              )}
+              {/* A craftsman who does visits as well: he is in the offer phase too, for them only. */}
+              {editing.input.showInPlan && !canPlanRole(editing.input.role) && (
+                <Checkbox
+                  label="Macht auch Besichtigungen (erscheint dafür auch in der Angebotsphase)"
+                  checked={editing.input.additionalActivities?.includes('Besichtigung') ?? false}
+                  onChange={(e) => {
+                    const others = (editing.input.additionalActivities ?? []).filter((activity) => activity !== 'Besichtigung')
+                    change({ additionalActivities: e.currentTarget.checked ? [...others, 'Besichtigung'] : others })
+                  }}
                 />
               )}
               <Checkbox

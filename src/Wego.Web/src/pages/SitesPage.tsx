@@ -156,10 +156,35 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
       setError(messageOf(e))
     }
   }
-  // Only a site in the construction phase can be done, and only a done one goes back.
+  // An offer goes into the construction phase from the list as well (not an appointment still to be confirmed).
+  const startBuilding = async (site: Site) => {
+    if (!window.confirm(`„${site.name}“: Bauphase beginnen?`)) return
+    try {
+      const saved = await api.changeSiteStatus(site.id, 'Bauphase')
+      setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))
+      notifications.show({ message: `„${saved.name}“ ist jetzt in der Bauphase.`, color: 'green' })
+    } catch (e) {
+      setError(messageOf(e))
+    }
+  }
+  // Only a site in the construction phase can be done, and only a done one goes back; an offer begins building.
   const doneSwitch = (site: Site) =>
-    (site.status === 'Bauphase' || site.status === 'Abgeschlossen') && (
-      <StatusSlider site={site} size="xs" caps onChange={(status) => setDone(site, status === 'Abgeschlossen').catch(() => {})} />
+    site.status === 'Angebot' && !site.isTentative ? (
+      <Button
+        size="compact-xs"
+        color="wegoRed"
+        variant="light"
+        onClick={(event) => {
+          event.stopPropagation()
+          void startBuilding(site)
+        }}
+      >
+        Bauphase beginnen
+      </Button>
+    ) : (
+      (site.status === 'Bauphase' || site.status === 'Abgeschlossen') && (
+        <StatusSlider site={site} size="xs" caps onChange={(status) => setDone(site, status === 'Abgeschlossen').catch(() => {})} />
+      )
     )
 
   // The rows in groups, in the order of the sort within each group.
@@ -325,7 +350,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
                 <Table.Th>Zuständig</Table.Th>
                 <Table.Th>Adresse</Table.Th>
                 <Table.Th>Telefon Kunde</Table.Th>
-                <Table.Th>Setze auf erledigt</Table.Th>
+                <Table.Th>Status setzen</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
