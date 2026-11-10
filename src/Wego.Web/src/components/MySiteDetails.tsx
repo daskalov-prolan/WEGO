@@ -45,7 +45,7 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
   return (
     <Modal opened onClose={onClose} fullScreen={small} size="lg" title={
         <Text fw={800} size="lg" className="my-site-title">
-          <SiteName name={site.name} />
+          <SiteName name={site.name} activity={entry.activity} />
         </Text>
       }>
       <Stack gap="md">
