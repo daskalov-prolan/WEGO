@@ -2735,8 +2735,9 @@ html.zoomed .plan-scroll {
   padding-top: 14px;
 }
 
-/* A birthday: a cake in the upper right corner of the field of the employee. */
-.timeline .cell {
+/* A birthday: a present in the upper right corner of the field of the employee. Only that field is positioned:
+   positioning all fields of the plan made wiping on a phone stutter. */
+.timeline .cell.birthday {
   position: relative;
 }
 

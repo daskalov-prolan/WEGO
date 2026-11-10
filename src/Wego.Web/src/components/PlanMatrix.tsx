@@ -519,7 +519,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
     >
       <button
         type="button"
-        className={cell.selected ? 'cell selected' : 'cell'}
+        className={`cell${cell.selected ? ' selected' : ''}${birthday ? ' birthday' : ''}`}
         aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
         aria-pressed={cell.selected || undefined}
         data-cell={cellKey(employee.id, day.iso)}
