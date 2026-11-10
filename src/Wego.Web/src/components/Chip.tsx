@@ -1,5 +1,5 @@
 import type { MouseEvent, PointerEvent } from 'react'
-import type { Entry } from '../api/types'
+import type { Activity, Entry } from '../api/types'
 import { activityLabel, serviceName, tentativeName, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
 import { ServiceIcon } from './ServiceIcon'
 import { dragSource } from '../lib/dragPlan'
@@ -42,8 +42,11 @@ export function NoteMark({ important }: { important: boolean }) {
 }
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
-/** The name of a site; a service call with the sign of a wrench in place of "SE:". */
-export function SiteName({ name }: { name: string }) {
+/**
+ * The name of a site; a service call with the sign of its tool in place of "SE:": a grout float for tiling, else a
+ * wrench.
+ */
+export function SiteName({ name, activity }: { name: string; activity?: Activity | null }) {
   const tentative = tentativeName(name)
   if (tentative !== null)
     return (
@@ -58,7 +61,7 @@ export function SiteName({ name }: { name: string }) {
   if (service === null) return <>{name}</>
   return (
     <>
-      <ServiceIcon />
+      <ServiceIcon tool={activity === 'Fliesen' ? 'float' : 'wrench'} />
       {service}
     </>
   )
@@ -92,10 +95,10 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
             entry.type
           ) : onSiteClick && siteId !== null ? (
             <span className="site-link" role="link" onClick={(event) => onSiteClick(siteId, event)}>
-              <SiteName name={entry.siteName ?? ''} />
+              <SiteName name={entry.siteName ?? ''} activity={entry.activity} />
             </span>
           ) : (
-            <SiteName name={entryName(entry)} />
+            <SiteName name={entryName(entry)} activity={entry.activity} />
           )}
         </span>
         {entry.note && <NoteMark important={entry.noteImportant} />}

@@ -451,7 +451,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                       )}
                       <span className="when">{formatDayTime(entry)}</span>
                       <span className="where">
-                        <SiteName name={entry.siteName ?? ''} />
+                        <SiteName name={entry.siteName ?? ''} activity={entry.activity} />
                       </span>
                       {/* A service call: what is to do there, in place of the activity. */}
                       {site?.isService ? (
