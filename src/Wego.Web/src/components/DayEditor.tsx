@@ -102,19 +102,41 @@ export function otherHalfFree(rows: Pick<Row, 'type' | 'siteId' | 'activity' | '
   return null
 }
 
+const isWork = (row: Row) => row.type === 'Baustelle' && row.siteId !== null && !row.free
+const wholeDay = (row: Row) => !row.start || !row.end || (row.start <= HALF_DAYS[0].start && row.end >= HALF_DAYS[1].end)
+const overlaps = (a: { start: string; end: string }, b: { start: string; end: string }) => a.start < b.end && b.start < a.end
+
 /**
- * A second entry of the day (a site, service call or appointment): it goes into the afternoon, and the one
- * entry there was (the whole day, or without times) into the morning. Times chosen by hand stay.
+ * The half of the day still open for one more entry: the whole day when nothing is there; the afternoon after work
+ * in the morning (or the whole day, which then becomes the morning); the morning before work in the afternoon. None
+ * when work is in both halves already.
+ */
+export function openHalf(current: Row[]): 'day' | 'morning' | 'afternoon' | null {
+  const work = current.filter(isWork)
+  if (work.length === 0) return 'day'
+  if (work.length === 1 && wholeDay(work[0])) return 'afternoon'
+  if (work.every((row) => row.end && row.end <= '12:00')) return 'afternoon'
+  if (work.every((row) => row.start && row.start >= '12:00')) return 'morning'
+  return null
+}
+
+/**
+ * One more entry of the day (a site, service call or appointment) goes into the half still open: the afternoon
+ * after the morning, the morning before the afternoon; one entry of the whole day becomes the morning. Times of the
+ * new one that fit beside what is there stay; a row kept free ("verfügbar") in its place goes.
  */
 function withSecond(current: Row[], added: Row): Row[] {
-  const work = current.filter((row) => row.type === 'Baustelle' && row.siteId !== null && !row.free)
-  if (work.length !== 1) return [...current, added]
-  const [first] = work
-  const wholeDay = !first.start || !first.end || (first.start <= HALF_DAYS[0].start && first.end >= HALF_DAYS[1].end)
-  // The morning chosen for the new one: both stay as they are.
-  if (added.start && added.start < '12:00') return [...current, added]
-  const second = added.start ? added : { ...added, ...HALF_DAYS[1] }
-  return [...current.map((row) => (row === first && wholeDay ? { ...row, ...HALF_DAYS[0] } : row)), second]
+  const work = current.filter(isWork)
+  const half = openHalf(current)
+  if (work.length === 0 || half === null || half === 'day') return [...current, added]
+  const slot = half === 'morning' ? HALF_DAYS[0] : HALF_DAYS[1]
+  // The one entry of the whole day makes room: it becomes the morning.
+  const moved = current.map((row) => (isWork(row) && wholeDay(row) ? { ...row, ...HALF_DAYS[0] } : row))
+  const fits = !!added.start && !!added.end && moved.filter(isWork).every((row) => !overlaps(added, row))
+  const placed = fits ? added : { ...added, ...slot }
+  const rows = moved.filter((row) => !(row.free && row.start && row.end && overlaps(row, placed)))
+  // In the order of the day: the morning first.
+  return [...rows, placed].sort((a, b) => (a.start || '99').localeCompare(b.start || '99'))
 }
 
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
@@ -180,18 +202,18 @@ export function DayEditor(props: Props) {
   // A service call (or an appointment not confirmed yet, without an activity): created on the spot and put on the
   // day in place of rows still without a site; saved then.
   const [addingService, setAddingService] = useState<'service' | 'tentative' | null>(null)
-  const createService = async (input: SiteInput, time: ServiceTime) => {
+  const createService = async (input: SiteInput, time: ServiceTime, activity: Activity | null) => {
     const site = await createSite(input)
     setRows((current) =>
       withSecond(
         current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
-        { ...emptyRow('Baustelle', site.id, input.isTentative ? null : defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
+        { ...emptyRow('Baustelle', site.id, input.isTentative ? null : (activity ?? defaultActivity(employee, 'Bauphase'))), ...serviceTimes(time) },
       ),
     )
     return site
   }
-  // Already one site on the day: what comes next is the afternoon.
-  const hasWork = rows.some((row) => row.type === 'Baustelle' && row.siteId !== null && !row.free)
+  // The half of the day still open: where a new service call or appointment goes at first.
+  const open = openHalf(rows)
   const [confirming, setConfirming] = useState(false)
   const confirm = async (site: Site, asService: boolean) => {
     setConfirming(true)
@@ -472,7 +494,9 @@ export function DayEditor(props: Props) {
             <ServiceForm
               date={date}
               tentative={addingService === 'tentative'}
-              initialTime={hasWork ? 'afternoon' : 'day'}
+              initialTime={open === null ? 'day' : open}
+              activities={allowedActivities(employee, 'Bauphase')}
+              initialActivity={defaultActivity(employee, 'Bauphase')}
               onCreate={createService}
               onClose={() => setAddingService(null)}
             />
