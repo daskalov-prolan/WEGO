@@ -13,6 +13,8 @@ import { Chip, NoteMark } from './Chip'
 type DropHandlers = Record<string, unknown>
 
 export interface MatrixProps {
+  /** Who has a birthday: "MM-DD" to the names; a present in the head of the day. */
+  birthdays?: Map<string, string[]>
   /** The notes in the field of an employee and a day. */
   notesOf?: (employeeId: number, date: string) => CalendarNote[]
   /** Planners: a right click on a note (change or delete it). */
@@ -284,6 +286,7 @@ const DayHeads = memo(function DayHeads({
   zoom,
   start,
   end,
+  birthdays,
 }: {
   days: Day[]
   holidayByDate: Map<string, SchoolHoliday>
@@ -292,21 +295,32 @@ const DayHeads = memo(function DayHeads({
   /** The days filled in (see liveSpan): the others are one empty head before and one after. */
   start: number
   end: number
+  birthdays?: Map<string, string[]>
 }) {
   return (
     <>
       {start > 0 && <th colSpan={start} className="live-gap" />}
       {days.slice(start, end).map((day) => {
         const holiday = holidayByDate.get(day.iso)
+        const born = birthdays?.get(day.iso.slice(5))
+        const birthdayLine = born ? `Geburtstag: ${born.join(', ')}` : null
         return (
           <th
             key={day.iso}
             id={`col-${day.iso}`}
             // Every Monday names its calendar week (drawn by the style sheet).
             data-kw={day.weekday === 'Mo' ? `KW ${isoWeek(day.iso)}` : undefined}
-            className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}`}
-            title={holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso)}
+            className={`dayhead ${dayClass(day, holiday, today)}${day.weekday === 'Mo' ? ' week-start' : ''}${born ? ' has-birthday' : ''}`}
+            title={[holiday ? `${formatDateLong(day.iso)} – ${holiday.name}` : formatDateLong(day.iso), birthdayLine]
+              .filter(Boolean)
+              .join('\n')}
           >
+            {/* A birthday: the present in the head of the day, not in the fields of the sites. */}
+            {birthdayLine && (
+              <span className="birthday-mark" role="img" aria-label={birthdayLine}>
+                <BirthdayIcon />
+              </span>
+            )}
             <span className="wd">{day.weekday}</span>
             <span className="num">
               {zoom === 'week' ? ` ${pad(day.dayOfMonth)}.${pad(day.month + 1)}` : day.dayOfMonth}
@@ -331,6 +345,8 @@ interface FrameProps {
   byEmployee?: boolean
   /** The days filled in (see liveSpan). */
   live: { start: number; end: number }
+  /** Who has a birthday: "MM-DD" to the names. */
+  birthdays?: Map<string, string[]>
   children: ReactNode
 }
 
@@ -338,7 +354,7 @@ interface FrameProps {
  * Table, month and day header of a timeline. Both views of the plan share it, so that scrolling, zoom
  * and folded weekends work the same in both.
  */
-function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, byEmployee = false, live, children }: FrameProps) {
+function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner, byEmployee = false, live, birthdays, children }: FrameProps) {
   const weekends = days.filter((day) => day.isWeekend).length
 
   return (
@@ -355,7 +371,7 @@ function TimelineFrame({ days, holidayByDate, today, zoom, foldWeekends, corner,
           <MonthCells days={days} />
         </tr>
         <tr className="day-row">
-          <DayHeads days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} start={live.start} end={live.end} />
+          <DayHeads days={days} holidayByDate={holidayByDate} today={today} zoom={zoom} start={live.start} end={live.end} birthdays={birthdays} />
         </tr>
       </thead>
       <tbody>{children}</tbody>
@@ -506,8 +522,6 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   // The selection of the plan, asked for when the event comes.
   const on = (name: string) => (event: unknown) =>
     (now().handlers(employeeIndex, dayIndex) as unknown as Record<string, Handler>)[name](event)
-  // The birthday of the employee, every year on its day.
-  const birthday = !!employee.birthday && employee.birthday === day.iso.slice(5)
   const openSite = (siteId: number, event: MouseEvent) => now().openSite(siteId, event)
   const marked = cell.marked
   return (
@@ -519,11 +533,11 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
     >
       <button
         type="button"
-        className={`cell${cell.selected ? ' selected' : ''}${birthday ? ' birthday' : ''}`}
+        className={cell.selected ? 'cell selected' : 'cell'}
         aria-label={`${employee.name}, ${formatDateLong(day.iso)}`}
         aria-pressed={cell.selected || undefined}
         data-cell={cellKey(employee.id, day.iso)}
-        title={[birthday ? `Geburtstag von ${employee.name}` : null, cellTitle(entries, entryTitle, notes)].filter(Boolean).join('\n') || undefined}
+        title={cellTitle(entries, entryTitle, notes)}
         onPointerDown={on('onPointerDown')}
         onPointerEnter={on('onPointerEnter')}
         onPointerMove={on('onPointerMove')}
@@ -534,11 +548,6 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
         onClick={on('onClick')}
         onDoubleClick={on('onDoubleClick')}
       >
-        {birthday && (
-          <span className="birthday-mark" role="img" aria-label={`Geburtstag von ${employee.name}`}>
-            <BirthdayIcon />
-          </span>
-        )}
         <span className="cell-full">
           {/* Work in the afternoon only: the free morning comes first. */}
           {free && afternoon && freeChip}
@@ -629,6 +638,7 @@ export function TimelineMatrix(props: MatrixProps) {
       corner={props.corner ?? 'Mitarbeiter'}
       byEmployee
       live={{ start: liveStart, end: liveEnd }}
+      birthdays={props.birthdays}
     >
       {employees.map((employee, employeeIndex) => (
         <tr key={employee.id}>
@@ -680,6 +690,8 @@ export interface SiteRow {
 }
 
 interface SiteTimelineProps {
+  /** Who has a birthday (see MatrixProps.birthdays). */
+  birthdays?: Map<string, string[]>
   /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
   corner?: ReactNode
   /** A reserved day of an offer site: framed in black on white. */
@@ -824,6 +836,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
       foldWeekends={foldWeekends}
       corner={props.corner ?? 'Baustelle'}
       live={siteLive}
+      birthdays={props.birthdays}
     >
       {rows.map(({ site, byDate }) => (
         <tr key={site.id}>

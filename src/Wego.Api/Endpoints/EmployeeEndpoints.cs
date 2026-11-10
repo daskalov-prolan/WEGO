@@ -9,9 +9,12 @@ namespace Wego.Api.Endpoints;
 public static class EmployeeEndpoints
 {
     public record EmployeeListItem(int Id, string Name);
-    /// <summary><paramref name="Birthday"/>: day and month only, "MM-dd" (the year stays with Planer G).</summary>
+    /// <summary>
+    /// <paramref name="Birthday"/> ("MM-dd") and <paramref name="BirthDate"/> (the whole date): for planners only;
+    /// craftsmen see the birthdays of their colleagues in their plan.
+    /// </summary>
     public record EmployeeOverviewDto(int Id, string Name, string Role, bool IsActive, bool ShowInPlan, string? Phone,
-        bool IsDeleted, string? Birthday);
+        bool IsDeleted, string? Birthday, DateOnly? BirthDate = null);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
         IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted, DateOnly? BirthDate);
@@ -38,14 +41,15 @@ public static class EmployeeEndpoints
                 .ToListAsync()).RequireAuthorization(Policies.Admin);
 
         // The list of employees for everybody: role and telephone, nothing of login or wage.
-        app.MapGet("/api/employees/overview", async (WegoDbContext db) =>
+        app.MapGet("/api/employees/overview", async (WegoDbContext db, ClaimsPrincipal user) =>
         {
+            var planner = user.CanPlan();
             // The deleted ones at the end.
             var rows = await db.Employees.OrderBy(e => e.DeletedAt != null).ThenBy(e => e.SortOrder).ThenBy(e => e.Name)
                 .Select(e => new { e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone, e.DeletedAt, e.BirthDate })
                 .ToListAsync();
             return rows.Select(e => new EmployeeOverviewDto(e.Id, e.Name, e.Role, e.IsActive, e.ShowInPlan, e.Phone,
-                e.DeletedAt != null, Birthday(e.BirthDate))).ToList();
+                e.DeletedAt != null, planner ? Birthday(e.BirthDate) : null, planner ? e.BirthDate : null)).ToList();
         }).RequireAuthorization();
 
         var group = app.MapGroup("/api/employees").RequireAuthorization(Policies.Admin);

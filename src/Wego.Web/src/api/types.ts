@@ -287,6 +287,8 @@ export interface Employee {
 export type EmployeeOverview = Pick<Employee, 'id' | 'name' | 'role' | 'isActive' | 'showInPlan' | 'phone' | 'isDeleted'> & {
   /** "MM-DD" */
   birthday?: string | null
+  /** The whole date of birth, for planners only. */
+  birthDate?: string | null
 }
 
 /** The wage per hour of an employee on one site, where it differs from the usual one. */

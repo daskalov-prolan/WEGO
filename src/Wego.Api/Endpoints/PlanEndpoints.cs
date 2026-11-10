@@ -159,6 +159,8 @@ public static class PlanEndpoints
             return ApiErrors.BadRequest("Eine der Baustellen gibt es nicht (mehr).");
 
         await using var transaction = await db.Database.BeginTransactionAsync();
+        // Appointments not confirmed yet that lose an entry: one left without any entry goes from the sites too.
+        var tentativeIds = new HashSet<int>();
 
         foreach (var day in days)
         {
@@ -168,6 +170,8 @@ public static class PlanEndpoints
                 .OrderBy(e => e.Id)
                 .ToListAsync();
             db.PlanEntries.RemoveRange(existing);
+            foreach (var removed in existing)
+                if (removed.Site is { IsTentative: true } tentative) tentativeIds.Add(tentative.Id);
             var before = existing.Select(e => new LoggedEntry(e.Type, e.SiteId, e.Site?.Name, e.Activity,
                 e.StartTime, e.EndTime, e.Note, e.NoteImportant)).ToList();
             var after = new List<LoggedEntry>();
@@ -206,6 +210,17 @@ public static class PlanEndpoints
         }
 
         await db.SaveChangesAsync();
+
+        if (tentativeIds.Count > 0)
+        {
+            var unused = await db.Sites.Include(s => s.Tasks)
+                .Where(s => tentativeIds.Contains(s.Id) && s.IsTentative && !db.PlanEntries.Any(e => e.SiteId == s.Id))
+                .ToListAsync();
+            foreach (var site in unused)
+                ChangeLog.Add(db, user, ChangeArea.Baustelle, "Gelöscht", site.Id, SiteEndpoints.ToDto(site), null);
+            db.Sites.RemoveRange(unused);
+            await db.SaveChangesAsync();
+        }
         await transaction.CommitAsync();
 
         var employeeIds = days.Select(d => d.EmployeeId).Distinct().ToList();

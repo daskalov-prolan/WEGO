@@ -1,6 +1,7 @@
 import { Badge, Group, Modal, Stack, Text } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import type { Entry, Plan, Site } from '../api/types'
+import { SiteName } from './Chip'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { formatDate, formatDateLong, formatDayTime } from '../lib/dates'
 import { formatAddress } from '../lib/sites'
@@ -42,7 +43,11 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
 
   return (
-    <Modal opened onClose={onClose} fullScreen={small} size="lg" title={<Text fw={800} size="lg">{site.name}</Text>}>
+    <Modal opened onClose={onClose} fullScreen={small} size="lg" title={
+        <Text fw={800} size="lg" className="my-site-title">
+          <SiteName name={site.name} />
+        </Text>
+      }>
       <Stack gap="md">
         <div className="my-entry" style={entryStyle(entry)}>
           <span className="when">

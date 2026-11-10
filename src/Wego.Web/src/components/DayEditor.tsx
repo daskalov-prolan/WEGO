@@ -102,6 +102,21 @@ export function otherHalfFree(rows: Pick<Row, 'type' | 'siteId' | 'activity' | '
   return null
 }
 
+/**
+ * A second entry of the day (a site, service call or appointment): it goes into the afternoon, and the one
+ * entry there was (the whole day, or without times) into the morning. Times chosen by hand stay.
+ */
+function withSecond(current: Row[], added: Row): Row[] {
+  const work = current.filter((row) => row.type === 'Baustelle' && row.siteId !== null && !row.free)
+  if (work.length !== 1) return [...current, added]
+  const [first] = work
+  const wholeDay = !first.start || !first.end || (first.start <= HALF_DAYS[0].start && first.end >= HALF_DAYS[1].end)
+  // The morning chosen for the new one: both stay as they are.
+  if (added.start && added.start < '12:00') return [...current, added]
+  const second = added.start ? added : { ...added, ...HALF_DAYS[1] }
+  return [...current.map((row) => (row === first && wholeDay ? { ...row, ...HALF_DAYS[0] } : row)), second]
+}
+
 /** Edits all entries of one employee on one day. Several rows with time windows make a split day. */
 export function DayEditor(props: Props) {
   const { employee, date, entries, sites, onCreateSite, onGoToSite, canAbsence = false, onClose, onSave, onCopy } = props
@@ -167,12 +182,16 @@ export function DayEditor(props: Props) {
   const [addingService, setAddingService] = useState<'service' | 'tentative' | null>(null)
   const createService = async (input: SiteInput, time: ServiceTime) => {
     const site = await createSite(input)
-    setRows((current) => [
-      ...current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
-      { ...emptyRow('Baustelle', site.id, input.isTentative ? null : defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
-    ])
+    setRows((current) =>
+      withSecond(
+        current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
+        { ...emptyRow('Baustelle', site.id, input.isTentative ? null : defaultActivity(employee, 'Bauphase')), ...serviceTimes(time) },
+      ),
+    )
     return site
   }
+  // Already one site on the day: what comes next is the afternoon.
+  const hasWork = rows.some((row) => row.type === 'Baustelle' && row.siteId !== null && !row.free)
   const [confirming, setConfirming] = useState(false)
   const confirm = async (site: Site, asService: boolean) => {
     setConfirming(true)
@@ -264,7 +283,7 @@ export function DayEditor(props: Props) {
               Was soll eingetragen werden?
             </Text>
             <Group gap="xs">
-              <Button size="sm" onClick={() => setRows([...rows, emptyRow('Baustelle', null, main)])}>
+              <Button size="sm" onClick={() => setRows((current) => withSecond(current, emptyRow('Baustelle', null, main)))}>
                 + Baustelle
               </Button>
               <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
@@ -453,6 +472,7 @@ export function DayEditor(props: Props) {
             <ServiceForm
               date={date}
               tentative={addingService === 'tentative'}
+              initialTime={hasWork ? 'afternoon' : 'day'}
               onCreate={createService}
               onClose={() => setAddingService(null)}
             />

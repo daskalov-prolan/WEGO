@@ -1007,12 +1007,19 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             .Single(e => e.GetProperty("id").GetInt32() == id);
         Assert.Equal("1974-07-05", full.GetProperty("birthDate").GetString());
 
-        // Everybody else: day and month, in the list and in the plan.
+        // Craftsmen: no birthdays in the list of employees, day and month in the plan.
         var h = await LoginAsync("geburtstagskind", "Geburtstag-2026!");
         var listed = (await h.GetFromJsonAsync<JsonElement>("/api/employees/overview")).EnumerateArray()
             .Single(e => e.GetProperty("id").GetInt32() == id);
-        Assert.Equal("07-05", listed.GetProperty("birthday").GetString());
-        Assert.False(listed.TryGetProperty("birthDate", out _));
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("birthday").ValueKind);
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("birthDate").ValueKind);
+        var theirs = await h.GetFromJsonAsync<JsonElement>("/api/plan?year=2027");
+        Assert.Equal("07-05", theirs.GetProperty("employees").EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == id).GetProperty("birthday").GetString());
+        // Planners (A as G) see the year in the list as well.
+        var planned = (await g.GetFromJsonAsync<JsonElement>("/api/employees/overview")).EnumerateArray()
+            .Single(e => e.GetProperty("id").GetInt32() == id);
+        Assert.Equal("1974-07-05", planned.GetProperty("birthDate").GetString());
         var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2027");
         Assert.Equal("07-05", plan.GetProperty("employees").EnumerateArray()
             .Single(e => e.GetProperty("id").GetInt32() == id).GetProperty("birthday").GetString());
@@ -1058,6 +1065,13 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             .Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Sommer", site.GetProperty("name").GetString());
         Assert.False(site.GetProperty("isService").GetBoolean());
+
+        // Deleted from the plan before it was confirmed: gone from the sites as well.
+        var herbst = (await Tentative("Herbst")).GetProperty("id").GetInt32();
+        await g.PutAsJsonAsync($"/api/plan/{craftsman}/2029-05-08", Array.Empty<object>());
+        Assert.Equal(HttpStatusCode.NotFound, (await g.GetAsync($"/api/sites/{herbst}")).StatusCode);
+        // A confirmed one stays when its day is emptied.
+        Assert.Equal(HttpStatusCode.OK, (await g.GetAsync($"/api/sites/{sommer}")).StatusCode);
     }
 
     [Fact]

@@ -4,7 +4,7 @@ import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
 import { emptySite, formatAddress } from '../lib/sites'
 import { SiteForm } from './SiteForm'
-import { callHref, SiteWayButtons } from './SiteActions'
+import { callHref, SiteWayButtons, useCanCall } from './SiteActions'
 
 interface Props {
   sites: Site[]
@@ -21,17 +21,20 @@ interface Props {
 }
 
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
-export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label = 'Baustelle', required }: Props) {
+export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required }: Props) {
   const [creating, setCreating] = useState(false)
+  const canCall = useCanCall()
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
   const chosenAddress = chosen && formatAddress(chosen)
+  // What the chosen one is: the field and the button to its page are named after it.
+  const kind = chosen?.isTentative ? 'Termin' : chosen?.isService ? 'Serviceauftrag' : 'Baustelle'
 
   return (
     <>
       <Group gap={6} align="flex-end" wrap="nowrap">
         <Select
-          label={label}
+          label={label ?? kind}
           placeholder="Baustelle suchen"
           searchable
           clearable
@@ -44,7 +47,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           // one chosen before stays visible.
           data={sites
             .filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
-            .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' ? `${site.name} (Angebot)` : site.name }))}
+            .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' && !site.isTentative ? `${site.name} (Angebot)` : site.name }))}
           filter={({ options, search }) => {
             const needle = search.trim().toLowerCase()
             const matches = options.filter((option) => {
@@ -99,15 +102,15 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           <div className="site-contact-actions">
             <SiteWayButtons site={chosen} size="compact-xs" />
             <Group gap="xs" justify="flex-end">
-              {chosen.clientPhone && (
+              {canCall && chosen.clientPhone && (
                 <Button component="a" href={callHref(chosen.clientPhone)} size="compact-xs" aria-label={`Anrufen: ${chosen.clientPhone}`}>
                   Anrufen
                 </Button>
               )}
               {/* Straight to the page of the site, to add or correct its details. */}
               {onGoToSite && (
-                <Button size="compact-xs" color="wegoRed" onClick={() => onGoToSite(chosen.id)}>
-                  Zur Baustelle
+                <Button size="compact-xs" onClick={() => onGoToSite(chosen.id)}>
+                  {kind === 'Baustelle' ? 'Zur Baustelle' : kind === 'Termin' ? 'Zum Termin' : 'Zum Serviceauftrag'}
                 </Button>
               )}
             </Group>
