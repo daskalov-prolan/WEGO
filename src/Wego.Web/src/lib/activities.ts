@@ -69,8 +69,8 @@ export let ACTIVITIES: ActivityInfo[] = (
   [
     ['Anfrage', 'Anfrage', 'Angebot', '#b8a47a'],
     ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
-    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#c77f6b'],
-    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#e8590c'],
+    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
+    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#c77f6b'],
     ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
     ['Trockenbau', 'Trockenbau', 'Bauphase', '#d6c7bc'],
     ['Sanitaer', 'Sanitär', 'Bauphase', '#2a9cad'],
