@@ -1621,6 +1621,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             dropOnEntry={canEdit ? dropOnEntry : undefined}
             dropOnFree={canEdit ? dropOnFree : undefined}
             onOpenFree={canEdit ? (employee, date, half) => setOpen({ employee, date, addHalf: half }) : undefined}
+            showsFree={phase === 'Bauphase'}
             onFillFree={canEdit ? (employee, date) => setOpen({ employee, date, fillFree: true }) : undefined}
             onCellMenu={canEdit ? (employee, date, { x, y, entryId }) => setCellMenu({ employee, date, x, y, entryId }) : undefined}
             marked={markedStretch && { ids: markedStretch.ids, first: markedStretch.first.id, last: markedStretch.last.id }}

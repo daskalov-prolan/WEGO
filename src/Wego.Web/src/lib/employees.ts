@@ -15,6 +15,7 @@ export function toEmployeeInput(employee: Employee): EmployeeInput {
     phone: employee.phone ?? null,
     birthDate: employee.birthDate ?? null,
     mainActivity: employee.mainActivity,
+    additionalActivities: employee.additionalActivities ?? [],
   }
 }
 

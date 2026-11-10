@@ -48,9 +48,9 @@ export function textOn(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#14232a' : '#ffffff'
 }
 
-/** Writing on the full colour of an activity: black (the planners' choice), only Fliesenarbeiten white. */
+/** Writing on the full colour of an activity: black (the planners' choice), only Fliesenarbeiten and Objektauswahl white. */
 export function textOfActivity(activity: string | null | undefined): string {
-  return activity === 'Fliesen' ? '#ffffff' : '#000000'
+  return activity === 'Fliesen' || activity === 'Objektauswahl' ? '#ffffff' : '#000000'
 }
 
 /** The three colours of an activity from its one colour: tuned by hand for the known ones, mixed for others. */
@@ -67,8 +67,9 @@ const toInfo = (def: ActivityDef): ActivityInfo => ({ value: def.key, label: def
  */
 export let ACTIVITIES: ActivityInfo[] = (
   [
+    ['Anfrage', 'Anfrage', 'Angebot', '#b8a47a'],
     ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
-    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
+    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#c77f6b'],
     ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#e8590c'],
     ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
     ['Trockenbau', 'Trockenbau', 'Bauphase', '#d6c7bc'],
@@ -204,15 +205,18 @@ export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>)
 }
 
 /** A craftsman unless said otherwise; a planner when said so. */
-type Skilled = { isPlaner?: boolean; isCraftsman?: boolean; mainActivity?: Activity | null }
+type Skilled = { isPlaner?: boolean; isCraftsman?: boolean; mainActivity?: Activity | null; additionalActivities?: Activity[] }
 
 /**
  * The activities the plan offers for an employee: a craftsman (a row in the plan) does all activities of the
- * construction phase, a planner all of the offer phase; somebody can be both.
+ * construction phase, a planner all of the offer phase; somebody can be both. A craftsman can do some of the offer
+ * phase as well (e.g. visits, see Verwaltung): with them he is in the offer phase too.
  */
 export function allowedActivities(employee: Skilled, status?: SiteStatus): Activity[] {
+  const offer = activitiesOfStatus('Angebot')
+  const planner = !!employee.isPlaner
   const all = [
-    ...(employee.isPlaner ? activitiesOfStatus('Angebot') : []),
+    ...(planner ? offer : offer.filter((activity) => employee.additionalActivities?.includes(activity))),
     ...(employee.isCraftsman !== false ? activitiesOfStatus('Bauphase') : []),
   ]
   if (!status) return all

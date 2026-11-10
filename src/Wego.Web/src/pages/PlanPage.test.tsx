@@ -774,6 +774,7 @@ describe('PlanPage', () => {
     // The activities of the phase right above the plan, without arrows between them.
     const legend = screen.getByRole('group', { name: 'Tätigkeiten der Angebotsphase' })
     expect([...legend.querySelectorAll('.flow-step')].map((step) => step.textContent)).toEqual([
+      'Anfrage',
       'Besichtigung',
       'Objektauswahl',
       'Angebotsübergabe',

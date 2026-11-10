@@ -252,7 +252,8 @@ export function DayEditor(props: Props) {
     })
 
   const save = async (confirmed = false) => {
-    const other = otherHalfFree(rows)
+    // The offer phase books no halves: nothing is set "verfügbar" there.
+    const other = props.phase === 'Angebot' ? null : otherHalfFree(rows)
     if (other && !confirmed) {
       setFreeHalf(other)
       return

@@ -33,7 +33,7 @@ export function StatusBadge({ status }: { status: SiteStatus }) {
 
 /**
  * Bauphase or Erledigt as one slider of two fields of the same size: on the page of a site and in the list
- * of sites ("Setze auf erledigt") alike.
+ * of sites ("Status setzen") alike.
  */
 export function StatusSlider({
   site,
