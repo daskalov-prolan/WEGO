@@ -145,8 +145,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
         (other) =>
           other.employeeId !== user.id &&
           other.date === entry.date &&
-          other.siteId !== null &&
-          other.siteId === entry.siteId,
+          other.type === 'Baustelle' &&
+          (entry.siteId !== null
+            ? other.siteId === entry.siteId
+            : // Planned before the site is known (e.g. a visit): together with those on the same work that day.
+              other.siteId === null && entry.activity !== null && other.activity === entry.activity),
       )
       .map((other) => {
         const time = timeOf(other)

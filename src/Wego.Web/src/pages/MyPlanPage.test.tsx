@@ -60,6 +60,21 @@ afterEach(() => {
 })
 
 describe('MyPlanPage', () => {
+  it('names who comes along to a visit without a site yet', async () => {
+    const visit = (id: number, employeeId: number, employeeName: string): Entry => ({
+      ...entry(id, employeeId, employeeName, '2026-03-05', 0, '', null, null),
+      siteId: null,
+      siteName: null,
+      activity: 'Besichtigung',
+    })
+    const withVisit: Plan = { ...plan, entries: [...plan.entries, visit(30, 1, 'Anna'), visit(31, 2, 'Bernd')] }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withVisit), { status: 200 })))
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+
+    const thursday = (await screen.findByText('Donnerstag, 05.03.2026')).closest('article')!
+    expect(within(thursday).getByText('mit Bernd')).toBeInTheDocument()
+  })
+
   it('shows the own notes of a day and the free half of a day as "verfügbar"', async () => {
     const withNotes: Plan = {
       ...plan,
