@@ -453,7 +453,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                       <span className="where">
                         <SiteName name={entry.siteName ?? ''} />
                       </span>
-                      {entry.activity && (
+                      {/* A service call: what is to do there, in place of the activity. */}
+                      {site?.isService ? (
+                        site.description && <span className="what">{site.description}</span>
+                      ) : entry.activity && (
                         <span className="what">
                           <ActivityIcon activity={entry.activity} size={13} /> {activityLabel(entry.activity)}
                         </span>

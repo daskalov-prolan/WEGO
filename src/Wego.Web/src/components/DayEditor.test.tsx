@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { DayEntryInput, Entry, Site } from '../api/types'
 import { renderWithProviders } from '../test-utils'
-import { DayEditor, otherHalfFree } from './DayEditor'
+import { DayEditor, openHalf, otherHalfFree } from './DayEditor'
 
 const site: Site = {
   id: 7, name: 'AK 54B', client: 'AK 54B', street: null, houseNumber: null, addressAddition: null, postalCode: null,
@@ -34,7 +34,43 @@ describe('otherHalfFree', () => {
   })
 })
 
+describe('openHalf', () => {
+  const full = (siteId: number | null, start: string, end: string, free = false) => ({ ...row(siteId, start, end, free), note: '', important: false })
+  it('finds the half of the day still open for one more entry', () => {
+    expect(openHalf([])).toBe('day')
+    expect(openHalf([full(7, '', '')])).toBe('afternoon')
+    expect(openHalf([full(7, '07:30', '11:30')])).toBe('afternoon')
+    expect(openHalf([full(7, '12:00', '16:00')])).toBe('morning')
+    // A half kept free does not count as taken.
+    expect(openHalf([full(null, '07:30', '11:30', true), full(7, '12:00', '16:00')])).toBe('morning')
+    expect(openHalf([full(7, '07:30', '11:30'), full(8, '12:00', '16:00')])).toBeNull()
+  })
+})
+
 describe('DayEditor', () => {
+  it('puts a new site before the afternoon taken already: into the morning', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})
+    const other: Site = { ...site, id: 8, name: 'Buhl', client: 'Buhl' }
+    renderWithProviders(
+      <DayEditor
+        employee={{ id: 3, name: 'Koko', mainActivity: 'Fliesen', additionalActivities: [] }}
+        date="2026-11-06"
+        entries={[{ ...morning, startTime: '12:00:00', endTime: '16:00:00' }]}
+        sites={[site, other]}
+        onCreateSite={async () => site}
+        onClose={() => {}}
+        onSave={onSave}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Baustelle' }))
+    // The new row comes first, in the morning; the afternoon stays.
+    const starts = screen.getAllByLabelText('von').filter((element) => element instanceof HTMLInputElement).map((input) => (input as HTMLInputElement).value)
+    expect(starts).toEqual(['07:30', '12:00'])
+    expect(screen.queryByText(/überschneiden/)).not.toBeInTheDocument()
+  })
+
   it('says that the other half becomes "verfügbar" and saves it so', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})
