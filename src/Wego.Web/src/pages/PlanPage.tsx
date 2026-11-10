@@ -14,7 +14,7 @@ import {
 import { useWindowEvent } from '@mantine/hooks'
 import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
@@ -444,6 +444,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     revealOnLoad.current = null
   })
   const yearDays = useMemo(() => daysOfYear(year), [year])
+  // Who has a birthday on which day ("MM-DD"): a present in the head of the day.
+  const birthdays = useMemo(() => {
+    const byDay = new Map<string, string[]>()
+    for (const employee of plan?.employees ?? []) {
+      if (employee.birthday) byDay.set(employee.birthday, [...(byDay.get(employee.birthday) ?? []), employee.name])
+    }
+    return byDay
+  }, [plan?.employees])
 
   // The plan by site: every site of the phase with entries of the shown employees, planned in this year, or
   // open with activities still to plan; in the order the work starts there.
@@ -607,6 +615,51 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     })
   }
   useEffect(() => () => cancelAnimationFrame(frame.current), [])
+
+  // At the end of December, wiping on (or turning the wheel on) brings the next year with January; at the start
+  // of January, wiping back brings the previous year with December: as if the years were one.
+  const leaving = useRef(false)
+  useEffect(() => {
+    leaving.current = false
+  }, [year])
+  const atEdge = () => {
+    const element = scroller.current
+    if (!element) return { end: false, start: false }
+    return { end: element.scrollLeft + element.clientWidth >= element.scrollWidth - 2, start: element.scrollLeft <= 0 }
+  }
+  const crossYear = (direction: 1 | -1) => {
+    if (!onYearChange || leaving.current) return
+    leaving.current = true
+    openInYear(direction === 1 ? `${year + 1}-01-01` : addDays(`${year - 1}-12-31`, isPhone ? 0 : view === 'week' ? -13 : -30))
+  }
+  // A wipe that began at the edge and goes on beyond it.
+  const touchStart = useRef<{ x: number; end: boolean; start: boolean } | null>(null)
+  const onTouchStart = (event: TouchEvent) => {
+    touchStart.current = { x: event.touches[0].clientX, ...atEdge() }
+  }
+  const onTouchEnd = (event: TouchEvent) => {
+    const began = touchStart.current
+    touchStart.current = null
+    const touch = event.changedTouches[0]
+    if (!began || !touch) return
+    const moved = touch.clientX - began.x
+    const now = atEdge()
+    if (began.end && now.end && moved < -50) crossYear(1)
+    else if (began.start && now.start && moved > 50) crossYear(-1)
+  }
+  // The wheel (or the touchpad) turned on at the edge, by more than a little.
+  const pushed = useRef(0)
+  const onWheel = (event: WheelEvent) => {
+    const delta = event.deltaX || (event.shiftKey ? event.deltaY : 0)
+    const edge = atEdge()
+    if ((delta > 0 && edge.end) || (delta < 0 && edge.start)) {
+      pushed.current = Math.sign(delta) === Math.sign(pushed.current) || pushed.current === 0 ? pushed.current + delta : delta
+      if (Math.abs(pushed.current) > 150) {
+        pushed.current = 0
+        crossYear(delta > 0 ? 1 : -1)
+      }
+    } else pushed.current = 0
+  }
 
   // Runs after every drawing of the table: carries out a scroll that had to wait for it.
   useLayoutEffect(() => {
@@ -1523,6 +1576,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         style={scale === 100 ? undefined : { zoom: scale / 100 }}
         ref={scroller}
         onScroll={onScroll}
+        onWheel={onWheel}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         // Strg+C / Strg+X: the marked entry, else the whole field clicked last (with its notes);
         // Strg+V: into the selected fields, else into the field clicked last.
         onKeyDown={(event) => {
@@ -1555,6 +1611,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           </p>
         ) : perspective === 'employees' ? (
           <TimelineMatrix
+            birthdays={birthdays}
             days={yearDays}
             zoom={view}
             foldWeekends={weekendsFolded}
@@ -1576,6 +1633,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           />
         ) : (
           <SiteTimeline
+            birthdays={birthdays}
             corner={corner}
             isReserved={isReserved}
             days={yearDays}

@@ -43,7 +43,7 @@ export function NoteMark({ important }: { important: boolean }) {
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
 /** The name of a site; a service call with the sign of a wrench in place of "SE:". */
-function SiteName({ name }: { name: string }) {
+export function SiteName({ name }: { name: string }) {
   const tentative = tentativeName(name)
   if (tentative !== null)
     return (

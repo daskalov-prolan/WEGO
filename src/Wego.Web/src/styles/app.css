@@ -2206,6 +2206,11 @@ body.stretching * {
     padding: 1px 2px;
     font-size: 0.64rem;
   }
+
+  /* The narrow entry has hardly any room at its left: the wrench does not reach over its edge. */
+  .timeline .chip .service-icon {
+    margin-left: 0;
+  }
 }
 
 /* Urlaub and Krank: one colour, without the stripe at the left. */
@@ -2258,7 +2263,10 @@ body.stretching * {
   }
 
   .timeline .day-row th.week-start,
-  .timeline .day-row th.today {
+  .timeline .day-row th.today,
+  /* The first of January too: the plan can rest at the start of the year (wiping back from there goes on into
+     the year before). */
+  .timeline .day-row th[id$='-01-01'] {
     scroll-snap-align: start;
     scroll-margin-left: var(--name-col);
   }
@@ -2710,7 +2718,8 @@ html.zoomed .plan-scroll {
 }
 
 /* The calendar week above every Monday: in red like the weeks in the head of the plan. */
-.timeline .day-row th.week-start {
+.timeline .day-row th.week-start,
+.timeline .day-row th.has-birthday {
   position: sticky;
 }
 
@@ -2735,16 +2744,12 @@ html.zoomed .plan-scroll {
   padding-top: 14px;
 }
 
-/* A birthday: a present in the upper right corner of the field of the employee. Only that field is positioned:
-   positioning all fields of the plan made wiping on a phone stutter. */
-.timeline .cell.birthday {
-  position: relative;
-}
-
-.timeline .birthday-mark {
+/* A birthday: a present in the upper right corner of the head of the day (not in the fields of the sites); who it
+   is shows when pointing at it. The heads are positioned already (they stay on top): no field of the plan is. */
+.timeline .day-row th .birthday-mark {
   position: absolute;
-  top: 1px;
-  right: 2px;
+  top: 2px;
+  right: 3px;
   z-index: 2;
   font-size: 0.85rem;
   line-height: 1;
@@ -2774,4 +2779,26 @@ html.zoomed .plan-scroll {
   font-weight: 800;
   line-height: 1;
   vertical-align: 0.05em;
+}
+
+/* Mein Plan: an appointment not confirmed yet shows its question mark in a red ring, seen at once. */
+.my-entry .tentative-mark,
+.my-site-title .tentative-mark {
+  width: 1.35em;
+  height: 1.35em;
+  margin: 0 6px 0 0;
+  border: 2px solid var(--wego-red);
+  background: #fff;
+  color: var(--wego-red);
+  font-size: 0.85em;
+  vertical-align: 0.05em;
+}
+
+/* Mein Plan: the birthday of a colleague, with the present as in the plan. */
+.my-birthday {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--wego-navy);
 }

@@ -37,7 +37,7 @@ const byLastName = (a: { name: string }, b: { name: string }) =>
 const telLink = (phone: string) => `tel:${phone.replace(/[^+0-9]/g, '')}`
 
 /** On the phone: the active employees by last name, each with a button that calls them. */
-function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
+function PhoneList({ employees, showBirthdays }: { employees: EmployeeOverview[]; showBirthdays: boolean }) {
   // Short enough to scroll through: no search here.
   const shown = employees.filter((employee) => employee.isActive).sort(byLastName)
   return (
@@ -51,7 +51,7 @@ function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
                 <Text size="sm" c="dimmed">
                   {employee.phone ?? 'keine Nummer'}
                 </Text>
-                {birthdayText(employee) && (
+                {showBirthdays && birthdayText(employee) && (
                   <Text size="sm" c="dimmed">
                     Geburtstag: {birthdayText(employee)}
                   </Text>
@@ -70,7 +70,7 @@ function PhoneList({ employees }: { employees: EmployeeOverview[] }) {
   )
 }
 
-/** "05.07.1974" for Planer G (the whole date), "05.07." for everybody else. */
+/** "05.07.1974" for planners (the whole date), "05.07." for everybody else. */
 function birthdayText(employee: EmployeeOverview & Pick<Employee, 'birthDate'>) {
   const date = employee.birthDate
   if (date) return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`
@@ -85,7 +85,8 @@ const euroPerHour = (rate: number) =>
  * All employees with their role and telephone, for everybody. Planer G see the wage per hour as well and
  * open an employee in the administration to change them.
  */
-export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
+/** showBirthdays: planners only; craftsmen see the birthdays of their colleagues in their plan (Mein Plan). */
+export function EmployeesPage({ canEdit = false, showBirthdays = false }: { canEdit?: boolean; showBirthdays?: boolean }) {
   // Planer G get the full records, with the wage per hour.
   const [employees, setEmployees] = useState<(EmployeeOverview & Pick<Employee, 'hourlyRate' | 'birthDate'>)[]>([])
   const [error, setError] = useState('')
@@ -99,9 +100,12 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
   }, [canEdit])
 
   const needle = search.trim().toLowerCase()
-  const shown = employees
+  // Planer G see the order of the plan (they keep it); everybody else a telephone list by last name. The order in
+  // the plan stays as it is.
+  const filtered = employees
     .filter((employee) => shows(employee, show))
     .filter((employee) => !needle || employee.name.toLowerCase().includes(needle))
+  const shown = canEdit ? filtered : [...filtered].sort((a, b) => Number(a.isDeleted) - Number(b.isDeleted) || byLastName(a, b))
 
   if (phone)
     return (
@@ -117,7 +121,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
             {error}
           </Alert>
         )}
-        <PhoneList employees={employees} />
+        <PhoneList employees={employees} showBirthdays={showBirthdays} />
       </div>
     )
 
@@ -165,7 +169,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
               <Table.Th w={190}>Rolle</Table.Th>
               <Table.Th>Name</Table.Th>
               <Table.Th>Telefon</Table.Th>
-              <Table.Th>Geburtstag</Table.Th>
+              {showBirthdays && <Table.Th>Geburtstag</Table.Th>}
               {canEdit && (
                 <Table.Th w={130} ta="right">
                   Stundensatz
@@ -225,7 +229,7 @@ export function EmployeesPage({ canEdit = false }: { canEdit?: boolean }) {
                     </Anchor>
                   )}
                 </Table.Td>
-                <Table.Td className="nowrap">{birthdayText(employee)}</Table.Td>
+                {showBirthdays && <Table.Td className="nowrap">{birthdayText(employee)}</Table.Td>}
                 {canEdit && (
                   <Table.Td ta="right">{employee.hourlyRate == null ? '–' : euroPerHour(employee.hourlyRate)}</Table.Td>
                 )}

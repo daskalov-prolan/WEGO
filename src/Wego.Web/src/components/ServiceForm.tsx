@@ -19,18 +19,20 @@ interface Props {
   /** Creates the service call (a site marked as such) and puts it on the day. */
   onCreate: (input: SiteInput, time: ServiceTime) => Promise<Site>
   onClose: () => void
+  /** The time chosen first: the afternoon when the day has a site already. */
+  initialTime?: ServiceTime
 }
 
 /**
  * A service call (Serviceeinsatz): work done at one appointment, without the record of a whole site. Only what is
  * needed to get there and to call: the customer, the address, the telephone and what is to do.
  */
-export function ServiceForm({ date, tentative = false, onCreate, onClose }: Props) {
+export function ServiceForm({ date, tentative = false, onCreate, onClose, initialTime = 'day' }: Props) {
   // Not confirmed yet: an offer without a start; it becomes a site or a service call when it is confirmed.
   const [service, setService] = useState<SiteInput>(
     tentative ? { ...emptySite, status: 'Angebot', isTentative: true } : { ...emptySite, status: 'Bauphase', plannedStart: date, isService: true },
   )
-  const [time, setTime] = useState<ServiceTime>('day')
+  const [time, setTime] = useState<ServiceTime>(initialTime)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   // The town filled in from the postal code; one typed by hand is not replaced.

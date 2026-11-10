@@ -34,7 +34,7 @@ describe('EmployeesPage', () => {
   it('shows a deleted employee at the end as such, not to be opened', async () => {
     fetchMock.mockImplementation(async () =>
       new Response(JSON.stringify([...employees, employee(9, 'Dieter', false, { isDeleted: true })]), { status: 200 }))
-    renderWithProviders(<EmployeesPage canEdit />)
+    renderWithProviders(<EmployeesPage canEdit showBirthdays />)
     await screen.findByRole('link', { name: 'Anna' })
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows.at(-1)!.textContent).toContain('Dieter')
@@ -44,7 +44,7 @@ describe('EmployeesPage', () => {
 
   it('lists the active employees for Planer G with their wage, and opens one in the administration', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<EmployeesPage canEdit />)
+    renderWithProviders(<EmployeesPage canEdit showBirthdays />)
     expect(await screen.findByRole('link', { name: 'Anna' })).toHaveAttribute('href', '#/verwaltung/1')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Rolle',

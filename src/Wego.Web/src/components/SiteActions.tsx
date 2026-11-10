@@ -1,4 +1,5 @@
 import { Button, Group, Text } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import type { MouseEvent } from 'react'
 import type { Site } from '../api/types'
 import { formatAddress } from '../lib/sites'
@@ -33,16 +34,22 @@ export function SiteWayButtons({ site, size = 'sm' }: { site: Site; size?: strin
   )
 }
 
-/** The telephone number of the customer written out, with a button beside it that dials it. */
+/** Phones and tablets (no mouse) can dial: a computer at the desk has no use for a button that calls. */
+export const useCanCall = () => useMediaQuery('(hover: none)')
+
+/** The telephone number of the customer written out, on a phone with a button beside it that dials it. */
 export function CallButton({ phone, size = 'sm' }: { phone: string; size?: string }) {
+  const canCall = useCanCall()
   return (
     <Group gap={8} wrap="nowrap" className="call" onClick={own}>
       <Text component="span" size="sm" className="call-number">
         {phone}
       </Text>
-      <Button component="a" href={callHref(phone)} size={size} aria-label={`Anrufen: ${phone}`}>
-        Anrufen
-      </Button>
+      {canCall && (
+        <Button component="a" href={callHref(phone)} size={size} aria-label={`Anrufen: ${phone}`}>
+          Anrufen
+        </Button>
+      )}
     </Group>
   )
 }

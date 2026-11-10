@@ -121,7 +121,7 @@ export default function App() {
       selectedId && isAdmin ? (
         <EmployeeReportPage key={selectedId} year={year} onYearChange={setYear} employeeId={selectedId} />
       ) : (
-        <EmployeesPage canEdit={isAdmin} />
+        <EmployeesPage canEdit={isAdmin} showBirthdays={canPlan} />
       )
   else if (page === 'verwaltung' && isAdmin)
     content = <AdminPage key={selectedId ?? 0} year={year} employeeId={selectedId} onActivitiesChanged={reloadActivities} />

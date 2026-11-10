@@ -1,5 +1,7 @@
 import { ActionIcon, Badge, Button, Group, Paper, Stack, Text, Title, UnstyledButton } from '@mantine/core'
 import { YearPicker } from '../components/YearPicker'
+import { SiteName } from '../components/Chip'
+import { BirthdayIcon } from '../components/BirthdayIcon'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Entry, Plan, User } from '../api/types'
@@ -116,6 +118,15 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       })
 
   const holidayByDate = useMemo(() => holidaysByDate(plan?.schoolHolidays ?? []), [plan])
+  // The birthdays of the colleagues ("MM-DD" to the names); the own one is no news.
+  const birthdays = useMemo(() => {
+    const byDay = new Map<string, string[]>()
+    for (const employee of plan?.employees ?? []) {
+      if (employee.id === user.id || !employee.birthday) continue
+      byDay.set(employee.birthday, [...(byDay.get(employee.birthday) ?? []), employee.name])
+    }
+    return byDay
+  }, [plan, user.id])
 
   // The weeks of all years by their Mondays (the very first week may be short).
   const weeks = useMemo(() => {
@@ -301,8 +312,9 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           // A public holiday is free: vacation entered on it (e.g. by a company closure) is no vacation.
           const publicHoliday = holiday?.kind === 'Feiertag' && holiday.startDate === holiday.endDate
           const entries = (ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))
+          const born = birthdays.get(day.iso.slice(5))
           // Empty weekends only take up space; today always shows, it is where the list begins.
-          if (day.isWeekend && entries.length === 0 && day.iso !== today) return null
+          if (day.isWeekend && entries.length === 0 && day.iso !== today && !born) return null
 
           return (
             <Paper
@@ -335,6 +347,12 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                   </Badge>
                 )}
               </Group>
+
+              {born && (
+                <Text size="sm" fw={600} className="my-birthday">
+                  <BirthdayIcon /> Geburtstag: {born.join(', ')}
+                </Text>
+              )}
 
               {entries.length === 0 && (
                 <Text size="sm" c={publicHoliday ? 'green.8' : 'dimmed'} fw={publicHoliday ? 700 : undefined}>
@@ -371,7 +389,9 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                         </span>
                       )}
                       <span className="when">{formatDayTime(entry)}</span>
-                      <span className="where">{entry.siteName}</span>
+                      <span className="where">
+                        <SiteName name={entry.siteName ?? ''} />
+                      </span>
                       {entry.activity && (
                         <span className="what">
                           <ActivityIcon activity={entry.activity} size={13} /> {activityLabel(entry.activity)}
