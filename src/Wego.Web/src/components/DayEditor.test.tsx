@@ -71,6 +71,26 @@ describe('DayEditor', () => {
     expect(screen.queryByText(/überschneiden/)).not.toBeInTheDocument()
   })
 
+  it('drops the half clicked on as "verfügbar" when the other entry takes the whole day', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <DayEditor
+        employee={{ id: 3, name: 'Koko', mainActivity: 'Fliesen', additionalActivities: [] }}
+        date="2026-11-06"
+        entries={[morning]}
+        addHalf={{ start: '12:00', end: '16:00' }}
+        sites={[site]}
+        onCreateSite={async () => site}
+        onClose={() => {}}
+        onSave={async () => {}}
+      />,
+    )
+
+    expect(screen.getByLabelText('Eintrag 2 entfernen')).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: 'Auf den ganzen Tag ausweiten' })[0])
+    expect(screen.queryByLabelText('Eintrag 2 entfernen')).not.toBeInTheDocument()
+  })
+
   it('says that the other half becomes "verfügbar" and saves it so', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})
