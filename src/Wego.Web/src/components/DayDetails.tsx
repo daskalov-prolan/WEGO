@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core'
 import type { Entry, NamedItem, SchoolHoliday, Site } from '../api/types'
 import { formatAddress } from '../lib/sites'
+import { entryStyle } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
 import { Sheet } from './Sheet'
@@ -29,11 +30,17 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
           )}
         </Group>
         {entries.length === 0 && <Text>Nicht eingeplant.</Text>}
-        {entries.map((entry) => {
+        {/* Each appointment a card of its own, edged in its colour and numbered when there are several. */}
+        {entries.map((entry, index) => {
           const site = entry.siteId === null ? undefined : siteById.get(entry.siteId)
           const address = site && formatAddress(site)
           return (
-            <div key={entry.id} className="day-details-entry">
+            <div key={entry.id} className="day-details-entry" style={entryStyle(entry)}>
+              {entries.length > 1 && (
+                <Text size="xs" fw={700} c="dimmed" className="day-details-count">
+                  Termin {index + 1} von {entries.length}
+                </Text>
+              )}
               <Chip entry={entry} withActivity />
               {address && <Text size="sm">{address}</Text>}
               {site && (
