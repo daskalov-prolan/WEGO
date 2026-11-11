@@ -1181,10 +1181,26 @@ a:hover {
   color: inherit;
   text-decoration: underline;
 }
+/* One appointment of the day: a card edged in the colour of its activity, well apart from the next. */
 .day-details-entry {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 6px solid var(--entry-strong, var(--wego-teal));
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.day-details-entry + .day-details-entry {
+  margin-top: 6px;
+}
+
+.day-details-count {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .day-details-entry .chip {
@@ -2641,6 +2657,11 @@ html.plan-full .shell-nav {
 
   .plan-toolbar .plan-search {
     flex: 1 1 220px;
+  }
+
+  /* Flowing on, the arrows follow the views instead of pushing the rest away. */
+  .plan-toolbar .plan-arrows {
+    margin-right: 0 !important;
   }
 
   .plan-scroll {

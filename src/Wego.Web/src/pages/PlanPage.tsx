@@ -1468,7 +1468,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               </ActionIcon>
             </Group>
           ) : (
-            <Group gap="sm" wrap="wrap" ml="auto" justify="flex-end" className="plan-view-controls">
+            <Group gap="sm" wrap="wrap" justify="flex-end" w="100%" className="plan-view-controls">
+              {/* The arrows at the very left of the row; everything else keeps to the right. */}
+              <Group gap={4} wrap="nowrap" mr="auto" className="plan-arrows">
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
+                  ‹
+                </ActionIcon>
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
+                  ›
+                </ActionIcon>
+              </Group>
               <SegmentedControl
                 size="sm"
                 value={view}
@@ -1485,15 +1494,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               <Text fw={700} c="wego.9" className="plan-title">
                 {title}
               </Text>
-              {/* The arrows right after the weeks they move. */}
-              <Group gap={4} wrap="nowrap">
-                <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
-                  ‹
-                </ActionIcon>
-                <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
-                  ›
-                </ActionIcon>
-              </Group>
               <Switch
                 size="sm"
                 label="Wochenenden ausblenden"
