@@ -62,6 +62,7 @@ import {
   weekOf,
 } from '../lib/dates'
 import { cellKey, holidaysByDate, onDay, toInput } from '../lib/ui'
+import { jumpTo } from '../lib/jump'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -386,6 +387,27 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // The logo, with this plan as the start: to today.
   useWindowEvent(HOME_EVENT, () => goToday())
 
+  // Vollbild (a smartboard, a projector): the head and the menu of the page go, the browser fills the screen if
+  // it can; leaving the browser's full screen (Esc) brings them back.
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    document.documentElement.classList.toggle('plan-full', full)
+    return () => document.documentElement.classList.remove('plan-full')
+  }, [full])
+  useEffect(() => {
+    const left = () => {
+      if (!document.fullscreenElement) setFull(false)
+    }
+    document.addEventListener('fullscreenchange', left)
+    return () => document.removeEventListener('fullscreenchange', left)
+  }, [])
+  const toggleFull = () => {
+    const next = !full
+    setFull(next)
+    if (next) document.documentElement.requestFullscreen?.().catch(() => {})
+    else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  }
+
   useWindowEvent('keydown', (event) => {
     if (event.key !== 'Escape') return
     if (selected.size > 0) setSelected(new Set())
@@ -526,10 +548,22 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const clamp = (iso: string) => (iso < first ? first : iso > last ? last : iso)
 
   const nameWidth = () => scroller.current?.querySelector<HTMLElement>('th.corner')?.offsetWidth ?? 0
+  // How much bigger or smaller the plan is drawn (− and +): places on the screen are zoomed, the scroll position
+  // is not. Measured rather than taken from the setting, since browsers differ in what they zoom.
+  const zoomOf = (element: HTMLElement) => {
+    const table = element.querySelector<HTMLElement>('table')
+    const drawn = table?.getBoundingClientRect().width ?? 0
+    return table && table.offsetWidth > 0 && drawn > 0 ? drawn / table.offsetWidth : 1
+  }
+  // The plan gliding to a day (Heute), and when that is over.
+  const gliding = useRef(false)
+  const glideEnd = useRef(0)
+  useEffect(() => () => window.clearTimeout(glideEnd.current), [])
   // Where a column starts within the scrolled plan (offsetLeft would count from a box further out).
   const leftOf = (column: HTMLElement) => {
     const element = scroller.current!
-    return column.getBoundingClientRect().left - element.getBoundingClientRect().left - element.clientLeft + element.scrollLeft
+    const zoom = zoomOf(element)
+    return (column.getBoundingClientRect().left - element.getBoundingClientRect().left) / zoom - element.clientLeft + element.scrollLeft
   }
 
   // Where the day columns are, measured once after each drawing (and when the table changes its size): measuring
@@ -550,7 +584,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       const weekday = heads.find((head) => !head.classList.contains('weekend'))
       const weekend = heads.find((head) => head.classList.contains('weekend'))
       if (!weekday || weekday.offsetWidth === 0) return null
-      const widthOf = (head: HTMLElement | undefined) => head?.getBoundingClientRect().width ?? 0
+      const zoom = zoomOf(element)
+      const widthOf = (head: HTMLElement | undefined) => (head?.getBoundingClientRect().width ?? 0) / zoom
       const widths = { day: widthOf(weekday), end: weekend ? widthOf(weekend) : widthOf(weekday) }
       const offsets: number[] = []
       let sum = 0
@@ -583,9 +618,26 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     // plan or with Heute, starts the view itself: what is past lies to the left.
     const monday = isPhone && view === 'week' && iso !== today ? weekOf(iso)[0].iso : iso
     const column = document.getElementById(`col-${monday}`) ?? document.getElementById(`col-${iso}`)
-    if (!scroller.current || !column) return false
+    const element = scroller.current
+    if (!element || !column) return false
     pinned.current = column.id.slice(4)
-    scroller.current.scrollTo?.({ left: leftOf(column) - nameWidth(), behavior: smooth ? 'smooth' : 'auto' })
+    const left = leftOf(column) - nameWidth()
+    // On a phone (Safari on the iPhone above all) the plan jumps: gliding there, with the days snapping into
+    // place, it stopped short.
+    if (isPhone || !smooth || !element.scrollTo) {
+      if (isPhone) jumpTo(element, { left })
+      else element.scrollLeft = left
+      return true
+    }
+    // Gliding on a desktop: nothing snaps and nothing else sets the position until it is there.
+    element.style.scrollSnapType = 'none'
+    gliding.current = true
+    window.clearTimeout(glideEnd.current)
+    element.scrollTo({ left, behavior: 'smooth' })
+    glideEnd.current = window.setTimeout(() => {
+      gliding.current = false
+      element.style.scrollSnapType = ''
+    }, 900)
     return true
   }
 
@@ -677,10 +729,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     const keep = () => {
       columns.current = null
       const column = document.getElementById(`col-${pinned.current}`)
-      const corner = element.querySelector<HTMLElement>('th.corner')
-      if (!column || pendingScroll.current) return
-      const start = column.getBoundingClientRect().left - element.getBoundingClientRect().left - element.clientLeft + element.scrollLeft
-      const left = start - (corner?.offsetWidth ?? 0)
+      // Not while the plan glides to a day (Heute): setting the position would stop it halfway.
+      if (!column || pendingScroll.current || gliding.current) return
+      const left = leftOf(column) - nameWidth()
       if (Math.abs(element.scrollLeft - left) > 1) element.scrollLeft = left
     }
     const observer = new ResizeObserver(keep)
@@ -1417,7 +1468,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               </ActionIcon>
             </Group>
           ) : (
-            <Group gap="sm" wrap="nowrap" ml="auto">
+            <Group gap="sm" wrap="wrap" ml="auto" justify="flex-end" className="plan-view-controls">
               <SegmentedControl
                 size="sm"
                 value={view}
@@ -1474,6 +1525,23 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                   +
                 </ActionIcon>
               </Group>
+              <Tooltip label={full ? 'Kopf und Menü wieder zeigen (Esc)' : 'Nur den Kalender zeigen, über den ganzen Bildschirm (z. B. am Smartboard)'}>
+                <ActionIcon
+                  variant={full ? 'filled' : 'default'}
+                  size="input-sm"
+                  onClick={toggleFull}
+                  aria-label={full ? 'Vollbild beenden' : 'Vollbild'}
+                  aria-pressed={full}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    {full ? (
+                      <path d="M6 1.5V6H1.5M10 1.5V6h4.5M6 14.5V10H1.5M10 14.5V10h4.5" />
+                    ) : (
+                      <path d="M1.5 6V1.5H6M10 1.5h4.5V6M1.5 10v4.5H6M14.5 10v4.5H10" />
+                    )}
+                  </svg>
+                </ActionIcon>
+              </Tooltip>
             </Group>
           )}
         </Group>

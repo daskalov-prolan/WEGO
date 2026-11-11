@@ -10,6 +10,7 @@ import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
 import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, HALF_DAYS, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
 import { activityLabel, entryStyle, isFree, onlyHalfDay } from '../lib/activities'
+import { jumpTo } from '../lib/jump'
 import { holidaysByDate, useSwipe } from '../lib/ui'
 import { HOME_EVENT } from '../lib/home'
 import { useWindowEvent } from '@mantine/hooks'
@@ -186,10 +187,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
         : null) ??
       listRef.current?.querySelector<HTMLElement>(`[data-week="${monday}"]`)
     // Right below the head that stays on top, in whatever scrolls the page.
-    const scroller = section?.closest<HTMLElement>('.shell-main') ?? document.scrollingElement
-    if (section && scroller?.scrollBy) {
+    const scroller = section?.closest<HTMLElement>('.shell-main') ?? (document.scrollingElement as HTMLElement | null)
+    if (section && scroller) {
       const below = headRef.current?.getBoundingClientRect().bottom ?? 0
-      scroller.scrollBy({ top: section.getBoundingClientRect().top - below - 6 })
+      jumpTo(scroller, { top: scroller.scrollTop + section.getBoundingClientRect().top - below - 6 })
     }
     setInView(monday)
   }, [])
