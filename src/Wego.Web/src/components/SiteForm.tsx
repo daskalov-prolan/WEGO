@@ -1,9 +1,12 @@
-import { Alert, Button, Chip, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Alert, Anchor, Button, Chip, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Planner, SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
+
+/** How the customer is addressed (as on the server). */
+const SALUTATIONS = ['Herr', 'Frau', 'Familie']
 import { SCOPES } from '../lib/activities'
 import { Sheet } from './Sheet'
 
@@ -76,6 +79,8 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
   const other: SiteNameSource = site.nameSource === 'Strasse' ? 'Auftraggeber' : 'Strasse'
   const named = siteName(site) || !siteName({ ...site, nameSource: other }) ? site : { ...site, nameSource: other }
   const name = siteName(named)
+  // The other way of naming it, offered when it would give a name.
+  const switchTo: SiteNameSource = named.nameSource === 'Strasse' ? 'Auftraggeber' : 'Strasse'
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -96,7 +101,7 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
   }
 
   return (
-    <Sheet onClose={onClose} title={<Text fw={700}>{title}</Text>}>
+    <Sheet onClose={onClose} title={<Text fw={700}>{title}</Text>} size="58rem">
       <form onSubmit={submit}>
         <Stack gap="sm">
           {initial.status !== undefined && !enquiry && (
@@ -111,123 +116,127 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
               />
             </div>
           )}
-          <Section title="Kunde">
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              <TextInput label="Auftraggeber" maxLength={200} data-autofocus {...field('client')} />
-              <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
-            </SimpleGrid>
-          </Section>
-          <Section title="Adresse">
-            <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
-            <TextInput
-              label="Adresszusatz"
-              placeholder="z. B. Hinterhaus, 3. OG links, mit oder ohne Aufzug"
-              maxLength={200}
-              {...field('addressAddition')}
-            />
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-              <TextInput
-                label="PLZ"
-                maxLength={10}
-                inputMode="numeric"
-                value={site.postalCode ?? ''}
-                onChange={(event) => changePostalCode(event.currentTarget.value)}
-              />
-              <TextInput label="Ort" maxLength={100} style={{ gridColumn: 'span 2' }} {...field('city')} />
-            </SimpleGrid>
-          </Section>
-          <Section title="Name im Plan">
-            <Radio.Group
-              label="Name in den Übersichten"
-              value={site.nameSource}
-              onChange={(value) => setSite((current) => ({ ...current, nameSource: value as SiteNameSource }))}
-            >
-              <Group gap="lg" mt={4}>
-                <Radio value="Auftraggeber" label="Auftraggeber" />
-                <Radio value="Strasse" label="Straße" />
-              </Group>
-            </Radio.Group>
-            <Text size="sm" c={name ? 'wego.9' : 'red.7'}>
-              {name ? (
-                <>
-                  Im Plan steht: <strong>{name}</strong>
-                </>
-              ) : (
-                'Bitte einen Auftraggeber oder eine Straße angeben.'
-              )}
-            </Text>
-          </Section>
-          <Section title="Planung">
-            <Select
-              label="Zuständiger Planer"
-              placeholder="Planer wählen"
-              required
-              error={error && !site.responsiblePlannerId ? 'Bitte wählen' : undefined}
-              maw={320}
-              data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
-              value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
-              onChange={(value) => setSite((current) => ({ ...current, responsiblePlannerId: value ? Number(value) : null }))}
-              allowDeselect={false}
-            />
-            {/* The day the enquiry came in: where the offer phase begins (a new site: today). */}
-            {!site.isService && (
-              <DateInput
-                label="Anfrage am"
-                description="Wann die Anfrage des Kunden reinkam"
-                valueFormat="DD.MM.YYYY"
-                maw={220}
-                maxDate={new Date()}
-                placeholder="heute"
-                value={site.requestedOn ?? null}
-                onChange={(value) => setSite((current) => ({ ...current, requestedOn: value }))}
-              />
-            )}
-            {/* What the customer would like done: for an enquiry (not a service call); the details in the description. */}
-            {!site.isService && (
-              <Chip.Group multiple value={site.scope ?? []} onChange={(scope) => setSite((current) => ({ ...current, scope }))}>
-                <Stack gap={4}>
-                  <Text size="sm" fw={500}>
-                    Gewünschter Umfang
+          {/* Two columns side by side (one under the other on a phone): who and where, and what is planned. */}
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm" className="site-form-columns">
+            <Section title="Kunde und Adresse">
+              {/* How the customer is addressed, right before the name; "–" takes it off. */}
+              <Group gap="sm" align="flex-end" wrap="nowrap">
+                <div>
+                  <Text size="sm" fw={500} mb={4}>
+                    Anrede
                   </Text>
-                  <Group gap={6}>
-                    {SCOPES.map((scope) => (
-                      <Chip key={scope} value={scope} size="sm" variant="outline">
-                        {scope}
-                      </Chip>
-                    ))}
-                  </Group>
-                </Stack>
-              </Chip.Group>
-            )}
-            {/* An enquiry gets its start with the customer's yes (Zusage): a start set here would move it into the
-                construction phase by itself on that day, yes or no. */}
-            {!enquiry && (
-              <DateInput
-                label="Geplanter Start"
-                valueFormat="DD.MM.YYYY"
-                clearable
-                maw={220}
-                value={site.plannedStart}
-                // An end set before stays, unless it would now come before the start.
-                onChange={(value) =>
-                  setSite((current) => ({
-                    ...current,
-                    plannedStart: value,
-                    plannedEnd: value && current.plannedEnd && current.plannedEnd < value ? null : current.plannedEnd,
-                  }))
-                }
+                  <SegmentedControl
+                    size="sm"
+                    value={site.salutation ?? ''}
+                    onChange={(value) => setSite((current) => ({ ...current, salutation: value || null }))}
+                    data={[
+                      { value: '', label: '–' },
+                      ...SALUTATIONS.map((salutation) => ({ value: salutation, label: salutation })),
+                    ]}
+                  />
+                </div>
+                <TextInput label="Auftraggeber" maxLength={200} data-autofocus style={{ flex: 1, minWidth: 0 }} {...field('client')} />
+              </Group>
+              <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+              <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
+              <SimpleGrid cols={3} spacing="sm">
+                <TextInput
+                  label="PLZ"
+                  maxLength={10}
+                  inputMode="numeric"
+                  value={site.postalCode ?? ''}
+                  onChange={(event) => changePostalCode(event.currentTarget.value)}
+                />
+                <TextInput label="Ort" maxLength={100} style={{ gridColumn: 'span 2' }} {...field('city')} />
+              </SimpleGrid>
+              {/* The name in the plan: the client as a rule, the street at a click. */}
+              <Text size="sm" c={name ? 'wego.9' : 'red.7'}>
+                {name ? (
+                  <>
+                    Im Plan steht: <strong>{name}</strong>
+                    {siteName({ ...site, nameSource: switchTo }) && (
+                      <>
+                        {' · '}
+                        <Anchor component="button" type="button" size="sm" onClick={() => setSite((current) => ({ ...current, nameSource: switchTo }))}>
+                          {switchTo === 'Strasse' ? 'nach Straße benennen' : 'nach Auftraggeber benennen'}
+                        </Anchor>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  'Bitte einen Auftraggeber oder eine Straße angeben.'
+                )}
+              </Text>
+            </Section>
+            <Section title={site.isService ? 'Planung' : enquiry || site.status === 'Angebot' ? 'Anfrage' : 'Planung'}>
+              <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+                <Select
+                  label="Zuständiger Planer"
+                  placeholder="Planer wählen"
+                  required
+                  error={error && !site.responsiblePlannerId ? 'Bitte wählen' : undefined}
+                  data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
+                  value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
+                  onChange={(value) => setSite((current) => ({ ...current, responsiblePlannerId: value ? Number(value) : null }))}
+                  allowDeselect={false}
+                />
+                {/* The day the enquiry came in: where the offer phase begins (a new site: today). */}
+                {!site.isService && site.status !== 'Bauphase' && (
+                  <DateInput
+                    label="Anfrage am"
+                    valueFormat="DD.MM.YYYY"
+                    maxDate={new Date()}
+                    placeholder="heute"
+                    value={site.requestedOn ?? null}
+                    onChange={(value) => setSite((current) => ({ ...current, requestedOn: value }))}
+                  />
+                )}
+                {/* An enquiry gets its start with the customer's yes (Zusage): a start set here would move it into the
+                    construction phase by itself on that day, yes or no. */}
+                {!enquiry && site.status !== 'Angebot' && (
+                  <DateInput
+                    label="Geplanter Start"
+                    valueFormat="DD.MM.YYYY"
+                    clearable
+                    value={site.plannedStart}
+                    // An end set before stays, unless it would now come before the start.
+                    onChange={(value) =>
+                      setSite((current) => ({
+                        ...current,
+                        plannedStart: value,
+                        plannedEnd: value && current.plannedEnd && current.plannedEnd < value ? null : current.plannedEnd,
+                      }))
+                    }
+                  />
+                )}
+              </SimpleGrid>
+              {/* What the customer would like done: for an enquiry (not a service call); the details in the description. */}
+              {!site.isService && (
+                <Chip.Group multiple value={site.scope ?? []} onChange={(scope) => setSite((current) => ({ ...current, scope }))}>
+                  <Stack gap={4}>
+                    <Text size="sm" fw={500}>
+                      Gewünschter Umfang
+                    </Text>
+                    <Group gap={6}>
+                      {SCOPES.map((scope) => (
+                        <Chip key={scope} value={scope} size="xs" variant="outline">
+                          {scope}
+                        </Chip>
+                      ))}
+                    </Group>
+                  </Stack>
+                </Chip.Group>
+              )}
+              <Textarea
+                label="Beschreibung"
+                placeholder={site.isService ? 'Art des Umbaus, Fliesen, Hinweise' : 'Was genau: z. B. Bad 8 m², Wanne raus, bodengleiche Dusche'}
+                autosize
+                minRows={2}
+                maxLength={1000}
+                {...field('description')}
               />
-            )}
-            <Textarea
-              label="Beschreibung"
-              description={site.isService ? 'Art des Umbaus, Fliesen, Hinweise' : 'Was genau: Größe, Wünsche, Fliesen, Hinweise'}
-              placeholder={site.isService ? undefined : 'z. B. Bad 8 m², Wanne raus, bodengleiche Dusche'}
-              autosize
-              minRows={2}
-              maxLength={1000}
-              {...field('description')}
-            />
-          </Section>
+            </Section>
+          </SimpleGrid>
           {error && (
             <Alert color="red" variant="light">
               {error}

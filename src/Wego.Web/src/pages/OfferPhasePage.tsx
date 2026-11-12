@@ -27,20 +27,22 @@ export function OfferPhasePage({ calendar }: { calendar: ReactNode }) {
       // Without storage the choice holds until the page is left.
     }
   }
+  const switcher = (
+    <SegmentedControl
+      size="sm"
+      value={view}
+      onChange={(value) => change(value as View)}
+      data={[
+        { value: 'board', label: 'Übersicht' },
+        { value: 'calendar', label: 'Kalender' },
+      ]}
+    />
+  )
+  // The overview takes the switch into its own row of buttons; above the calendar it has a row of its own.
   return (
     <div className="offer-phase">
-      <div className="offer-phase-switch">
-        <SegmentedControl
-          size="sm"
-          value={view}
-          onChange={(value) => change(value as View)}
-          data={[
-            { value: 'board', label: 'Übersicht' },
-            { value: 'calendar', label: 'Kalender' },
-          ]}
-        />
-      </div>
-      <div className="offer-phase-content">{view === 'board' ? <OfferBoardPage /> : calendar}</div>
+      {view === 'calendar' && <div className="offer-phase-switch">{switcher}</div>}
+      <div className="offer-phase-content">{view === 'board' ? <OfferBoardPage head={switcher} /> : calendar}</div>
     </div>
   )
 }

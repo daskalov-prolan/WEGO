@@ -57,6 +57,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Name).HasMaxLength(220);
             e.Property(x => x.Client).HasMaxLength(200);
             e.Property(x => x.ClientPhone).HasMaxLength(50);
+            e.Property(x => x.Salutation).HasMaxLength(20);
             e.Property(x => x.LabelProjectNumber).HasMaxLength(50);
             e.Property(x => x.Street).HasMaxLength(200);
             e.Property(x => x.HouseNumber).HasMaxLength(20);

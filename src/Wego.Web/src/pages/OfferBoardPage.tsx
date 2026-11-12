@@ -1,7 +1,7 @@
 import { Alert, Anchor, Button, Group, Loader, Menu, MultiSelect, Radio, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Offers, OfferStep, PlanEmployee, Planner, Site, StepInput } from '../api/types'
 import { OfferSteps } from '../components/OfferSteps'
@@ -10,8 +10,10 @@ import { SiteForm } from '../components/SiteForm'
 import { TimeSelect } from '../components/TimeSelect'
 import { activityInfo, activityLabel, DECLINE_REASONS, textOfActivity } from '../lib/activities'
 import { addDays, CURRENT_YEAR, formatDate, todayIso } from '../lib/dates'
+import { FullViewButton } from '../components/FullViewButton'
+import { useFullView } from '../lib/fullView'
 import { offerSteps, waitingDays } from '../lib/offerSteps'
-import { emptySite, formatAddress, toSiteInput } from '../lib/sites'
+import { customerName, emptySite, formatAddress, toSiteInput } from '../lib/sites'
 
 /** Where an enquiry stands: its column, the step to plan next, or the appointments of the step ahead. */
 interface Stage {
@@ -75,13 +77,14 @@ const onCard = (event: MouseEvent<HTMLElement>) => {
  * fixed order and each once; when the day of a step has passed, the card moves on by itself. At the end the
  * customer says yes (Bauphase from its start) or no (with a reason), at any step.
  */
-export function OfferBoardPage() {
+export function OfferBoardPage({ head }: { head?: ReactNode }) {
   const [offers, setOffers] = useState<Offers | null>(null)
   const [people, setPeople] = useState<PlanEmployee[]>([])
   const [planners, setPlanners] = useState<Planner[]>([])
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Site | null>(null)
+  const { full, toggle: toggleFull } = useFullView()
   const [step, setStep] = useState<StepDraft | null>(null)
   const [accepting, setAccepting] = useState<Site | null>(null)
   const [declining, setDeclining] = useState<Site | null>(null)
@@ -159,7 +162,7 @@ export function OfferBoardPage() {
         onClick={(event) => onCard(event) && setEditing(site)}
       >
         <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
-          {site.name}
+          {customerName(site)}
         </button>
         {(address || site.clientPhone) && (
           <div className="offer-meta">
@@ -259,12 +262,13 @@ export function OfferBoardPage() {
 
   return (
     <div className="offer-board-page">
-      <Group justify="space-between" align="flex-start" className="offer-intro">
-        <Text size="sm" c="dimmed" maw={640}>
-          Jede Anfrage ist eine Karte. Pro Karte gibt es die Taste für den nächsten Schritt; ist der Tag eines Termins
-          vorbei, wandert die Karte von selbst weiter. Abgesagt werden kann jederzeit.
-        </Text>
-        <Button onClick={() => setCreating(true)}>+ Neue Anfrage</Button>
+      {/* One row: the switch to the calendar, a new enquiry, Vollbild. */}
+      <Group justify="space-between" gap="sm" className="offer-intro">
+        {head ?? <span />}
+        <Group gap="sm">
+          <Button onClick={() => setCreating(true)}>+ Neue Anfrage</Button>
+          <FullViewButton full={full} onToggle={toggleFull} what="die Übersicht" />
+        </Group>
       </Group>
 
       <div className="offer-board">

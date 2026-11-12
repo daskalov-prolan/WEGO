@@ -59,6 +59,8 @@ export type SiteNameSource = 'Auftraggeber' | 'Strasse'
 export interface SiteInput {
   /** Auftraggeber: the customer or the property management. */
   client: string | null
+  /** Anrede of the customer: Herr, Frau, Familie. */
+  salutation?: string | null
   /** Telephone number of the customer. */
   clientPhone: string | null
   /** Number of the project in Label, the merchandise management software. */

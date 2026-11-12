@@ -381,6 +381,10 @@ namespace Wego.Api.Migrations
                     b.Property<int?>("ResponsiblePlannerId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Salutation")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(400)

@@ -2990,7 +2990,26 @@ html.plan-full .shell-nav {
 }
 
 .offer-intro {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+
+/* A short screen (smartboard, projector): the overview closes up like the plan. */
+@media (min-width: 721px) and (max-height: 860px) {
+  .offer-phase-switch {
+    padding: 6px 8px 0;
+  }
+
+  .offer-board-page {
+    padding: 6px 8px 24px;
+  }
+
+  .offer-intro {
+    margin-bottom: 6px;
+  }
+
+  .offer-board .offer-column h3 {
+    padding-block: 4px;
+  }
 }
 
 .offer-board {
