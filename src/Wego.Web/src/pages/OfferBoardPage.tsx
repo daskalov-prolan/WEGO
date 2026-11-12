@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Group, Loader, MultiSelect, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, Group, Loader, Menu, MultiSelect, Radio, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
@@ -139,12 +139,18 @@ export function OfferBoardPage() {
     const address = formatAddress(site)
     const appointments = appointmentsOf(own, order)
     const columnActivity = columns.find((c) => c.key === stage.column)?.activity
-    const colour = (columnActivity ? activityInfo(columnActivity)?.background : undefined) ?? '#b8c6ca'
+    const colour = (columnActivity ? activityInfo(columnActivity)?.background : undefined) ?? '#d9e3e6'
     // One more appointment of a step that may have several, until the step after it is planned.
     const repeat = REPEATABLE.find((activity) => {
       const after = order[order.indexOf(activity) + 1]
       return own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
     })
+    const labelOf = (activity: Activity, date: string) => {
+      const ofStep = appointments.filter((a) => a.activity === activity)
+      return `${activityLabel(activity)}${ofStep.length > 1 ? ` ${ofStep.findIndex((a) => a.date === date) + 1}` : ''}`
+    }
+    const done = appointments.filter((a) => a.date <= today)
+    const ahead = appointments.filter((a) => a.date > today)
     return (
       <article
         key={site.id}
@@ -155,61 +161,65 @@ export function OfferBoardPage() {
         <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
           {site.name}
         </button>
-        {address && <Text size="xs" c="dimmed">{address}</Text>}
-        {site.clientPhone && (
-          <Anchor href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="xs" className="offer-phone">
-            ☎ {site.clientPhone}
-          </Anchor>
+        {(address || site.clientPhone) && (
+          <div className="offer-meta">
+            {address && <span>{address}</span>}
+            {site.clientPhone && (
+              <a href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} className="offer-phone">
+                ☎ {site.clientPhone}
+              </a>
+            )}
+          </div>
         )}
-        {(site.scope?.length ?? 0) > 0 && (
-          <Group gap={4}>
-            {site.scope!.map((scope) => (
-              <Badge key={scope} size="sm" variant="light" color="gray" radius="sm">
-                {scope}
-              </Badge>
-            ))}
-          </Group>
-        )}
-        {site.description && (
-          <Text size="xs" fs="italic" c="dimmed" lineClamp={3}>
-            {site.description}
-          </Text>
+        {/* What the customer would like done: the scope as small labels, the details below. */}
+        {((site.scope?.length ?? 0) > 0 || site.description) && (
+          <div className="offer-scope">
+            {site.scope?.map((scope) => <span key={scope}>{scope}</span>)}
+            {site.description && <em>{site.description}</em>}
+          </div>
         )}
         <ul className="offer-history">
           {site.requestedOn && <li>Anfrage {shortDate(site.requestedOn)}</li>}
-          {appointments.map(({ activity, date, entries }) => {
-            const ofStep = appointments.filter((a) => a.activity === activity)
-            const label = `${activityLabel(activity)}${ofStep.length > 1 ? ` ${ofStep.findIndex((a) => a.date === date) + 1}` : ''}`
-            const text = `${label} ${shortDate(date)}${date > today ? ` ${hm(entries[0].startTime)} · ${entries.map((e) => e.employeeName).join(', ')}` : ''}`
-            return (
-              <li key={`${activity}-${date}`} className={date > today ? 'ahead' : ''}>
-                {date > today ? (
-                  // An appointment ahead can be moved from here.
-                  <button type="button" title="Termin verschieben" onClick={() => setStep({ site, activity, current: entries })}>
-                    {text}
-                  </button>
-                ) : (
-                  text
-                )}
-              </li>
-            )
-          })}
+          {done.map(({ activity, date }) => (
+            <li key={`${activity}-${date}`}>
+              {labelOf(activity, date)} {shortDate(date)}
+            </li>
+          ))}
         </ul>
-        <Group gap={6} wrap="nowrap">
-          <Text size="xs" c="dimmed">Planer:</Text>
-          <Select
-            size="xs"
-            variant="unstyled"
-            className="offer-planner"
-            aria-label={`Zuständiger Planer für ${site.name}`}
-            data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
-            value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
-            placeholder="wählen"
-            allowDeselect={false}
-            onChange={(value) => value && changePlanner(site, Number(value))}
-            comboboxProps={{ withinPortal: true }}
-          />
-        </Group>
+        {/* The appointments ahead: a click moves one. */}
+        {ahead.map(({ activity, date, entries }) => (
+          <button
+            key={`${activity}-${date}`}
+            type="button"
+            className="offer-appointment"
+            title="Termin verschieben"
+            onClick={() => setStep({ site, activity, current: entries })}
+          >
+            <b>{labelOf(activity, date)}</b> {shortDate(date)} {hm(entries[0].startTime)} · {entries.map((e) => e.employeeName).join(', ')}
+          </button>
+        ))}
+        <div className="offer-meta offer-meta-row">
+          <span>
+            Planer: <b>{plannerName(site.responsiblePlannerId) ?? '–'}</b>
+          </span>
+          {/* The planner in charge; a click changes it. */}
+          <Menu position="bottom-start" withinPortal>
+            <Menu.Target>
+              <button type="button" className="offer-link" aria-label={`Zuständigen Planer für ${site.name} ändern`}>
+                ändern
+              </button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Zuständiger Planer</Menu.Label>
+              {planners.map((p) => (
+                <Menu.Item key={p.id} onClick={() => p.id !== site.responsiblePlannerId && changePlanner(site, p.id)}>
+                  {p.id === site.responsiblePlannerId ? '✓ ' : ''}
+                  {p.name}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        </div>
         <Group gap={8}>
           <OfferSteps steps={lib} waiting={waiting} />
         </Group>
@@ -240,11 +250,6 @@ export function OfferBoardPage() {
             </>
           )}
         </Group>
-        {stage.column !== WAITING && (
-          <Anchor component="button" type="button" size="xs" c="dimmed" onClick={() => setDeclining(site)} className="offer-decline">
-            Kunde hat abgesagt
-          </Anchor>
-        )}
       </article>
     )
   }
@@ -308,17 +313,7 @@ export function OfferBoardPage() {
               {declined.map((d) => (
                 <li key={d.siteId}>
                   {d.name}: {d.declineReason}
-                  {d.declineNote ? ` (${d.declineNote})` : ''}{' '}
-                  <Anchor
-                    component="button"
-                    type="button"
-                    size="xs"
-                    onClick={() => decide(api.reopenOffer(d.siteId), `${d.name} ist wieder im Angebot.`).catch((e) =>
-                      notifications.show({ message: messageOf(e), color: 'red' }),
-                    )}
-                  >
-                    wieder ins Angebot
-                  </Anchor>
+                  {d.declineNote ? ` (${d.declineNote})` : ''}
                 </li>
               ))}
             </ul>
@@ -345,6 +340,18 @@ export function OfferBoardPage() {
           title={`Anfrage · ${editing.name}`}
           initial={toSiteInput(editing)}
           enquiry
+          extra={
+            <Button
+              variant="subtle"
+              color="red"
+              onClick={() => {
+                setDeclining(editing)
+                setEditing(null)
+              }}
+            >
+              Kunde hat abgesagt
+            </Button>
+          }
           onClose={() => setEditing(null)}
           onSave={async (input) => {
             await api.updateSite(editing.id, input)

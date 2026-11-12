@@ -15,6 +15,8 @@ interface Props {
   onSave: (input: SiteInput) => Promise<void>
   /** An enquiry of the offer phase: it starts in the offer, nothing to choose. */
   enquiry?: boolean
+  /** A further action at the left of the buttons (e.g. "Kunde hat abgesagt" for an enquiry). */
+  extra?: ReactNode
 }
 
 /** A group of fields on a white card with a petrol edge and a small heading. */
@@ -28,7 +30,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** The record of a construction site: client, address, and which of the two names it in the plan. */
-export function SiteForm({ title, initial, onClose, onSave, enquiry = false }: Props) {
+export function SiteForm({ title, initial, onClose, onSave, enquiry = false, extra }: Props) {
   // Street and house number are one field; a house number kept apart before joins the street.
   const [site, setSite] = useState<SiteInput>(() => ({
     ...initial,
@@ -232,6 +234,7 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false }: P
             </Alert>
           )}
           <Group justify="flex-end">
+            {extra && <div style={{ marginRight: 'auto' }}>{extra}</div>}
             <Button variant="default" onClick={onClose}>
               Abbrechen
             </Button>

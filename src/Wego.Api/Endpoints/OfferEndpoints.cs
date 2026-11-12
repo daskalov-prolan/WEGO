@@ -21,7 +21,7 @@ public static class OfferEndpoints
     public static readonly string[] DeclineReasons =
     [
         "Preis zu hoch", "Anderer Anbieter beauftragt", "Baubeginn zu spät / Termin passt nicht",
-        "Vorhaben verschoben", "Finanzierung oder Förderung nicht geklärt", "Umfang passt nicht",
+        "Vorhaben verschoben", "Finanzierung oder Förderung nicht geklärt",
         "Keine Rückmeldung mehr", "Sonstiges",
     ];
 
@@ -178,21 +178,6 @@ public static class OfferEndpoints
             site.DeclineNote = note;
             ChangeStatus(db, user, site, SiteStatus.Abgelehnt);
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Abgelehnt", siteId, before, SiteEndpoints.ToDto(site));
-            await db.SaveChangesAsync();
-            return Results.Ok(await LoadAsync(db));
-        });
-
-        // Declined by mistake: back into the offer.
-        group.MapPost("/{siteId:int}/reopen", async (int siteId, ClaimsPrincipal user, WegoDbContext db) =>
-        {
-            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == siteId);
-            if (site is null) return Results.NotFound();
-            if (site.Status != SiteStatus.Abgelehnt) return ApiErrors.BadRequest("Nur eine abgelehnte Anfrage kann wieder ins Angebot.");
-            var before = SiteEndpoints.ToDto(site);
-            site.DeclineReason = null;
-            site.DeclineNote = null;
-            ChangeStatus(db, user, site, SiteStatus.Angebot);
-            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Wieder im Angebot", siteId, before, SiteEndpoints.ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(await LoadAsync(db));
         });

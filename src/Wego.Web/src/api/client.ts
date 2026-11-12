@@ -125,7 +125,6 @@ export const api = {
   acceptOffer: (siteId: number, plannedStart: string) => request<Offers>('POST', `/api/offers/${siteId}/accept`, { plannedStart }),
   declineOffer: (siteId: number, reason: string, note: string | null) =>
     request<Offers>('POST', `/api/offers/${siteId}/decline`, { reason, note }),
-  reopenOffer: (siteId: number) => request<Offers>('POST', `/api/offers/${siteId}/reopen`),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
   /** One year, or without it the whole time of the site. */
