@@ -101,6 +101,7 @@ describe('SitesPage', () => {
     await screen.findAllByText('Chung')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Name',
+      'Anfrage am',
       'Geplanter Start ▲',
       'Status',
       'Zuständig',

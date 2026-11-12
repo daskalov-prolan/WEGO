@@ -24,13 +24,16 @@ public static class OfferAccess
     private static async Task<HashSet<string>> OfferActivitiesAsync(WegoDbContext db) =>
         (await db.Activities.Where(a => a.Phase == SiteStatus.Angebot).Select(a => a.Key).ToListAsync()).ToHashSet();
 
-    public static bool Shows(this Rules rules, Site site) => rules.SeesOffers || site.Status != SiteStatus.Angebot;
+    /// <summary>A declined offer stays as hidden as the offer was.</summary>
+    public static bool Shows(this Rules rules, Site site) =>
+        rules.SeesOffers || site.Status is not (SiteStatus.Angebot or SiteStatus.Abgelehnt);
 
     /// <summary>An entry of somebody else that is offer work: by its activity, or (without one) by its site.</summary>
     public static bool Shows(this Rules rules, PlanEntry entry, IReadOnlyDictionary<int, SiteStatus> siteStatus)
     {
         if (rules.SeesOffers || entry.EmployeeId == rules.EmployeeId || entry.Type != EntryType.Baustelle) return true;
         if (entry.Activity is not null) return !rules.OfferActivities.Contains(entry.Activity);
-        return entry.SiteId is { } siteId && siteStatus.TryGetValue(siteId, out var status) && status != SiteStatus.Angebot;
+        return entry.SiteId is { } siteId && siteStatus.TryGetValue(siteId, out var status)
+            && status is not (SiteStatus.Angebot or SiteStatus.Abgelehnt);
     }
 }

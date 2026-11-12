@@ -18,6 +18,7 @@ const EmployeeReportPage = lazy(() => import('./pages/EmployeeReportPage').then(
 const MyAreaPage = lazy(() => import('./pages/MyAreaPage').then((module) => ({ default: module.MyAreaPage })))
 const SitePage = lazy(() => import('./pages/SitePage').then((module) => ({ default: module.SitePage })))
 const SitesPage = lazy(() => import('./pages/SitesPage').then((module) => ({ default: module.SitesPage })))
+const OfferPhasePage = lazy(() => import('./pages/OfferPhasePage').then((module) => ({ default: module.OfferPhasePage })))
 
 function useHashRoute(): string[] {
   const [hash, setHash] = useState(window.location.hash)
@@ -125,8 +126,8 @@ export default function App() {
       )
   else if (page === 'verwaltung' && isAdmin)
     content = <AdminPage key={selectedId ?? 0} year={year} employeeId={selectedId} onActivitiesChanged={reloadActivities} />
-  else
-    content = (
+  else {
+    const plan = (
       <PlanPage
         key={`${year}|${activities}`}
         year={year}
@@ -137,6 +138,9 @@ export default function App() {
         onYearChange={setYear}
       />
     )
+    // The offer phase for planners: the overview of the enquiries, or the calendar.
+    content = phase === 'Angebot' && canPlan ? <OfferPhasePage calendar={plan} /> : plan
+  }
 
   return (
     <AppShell

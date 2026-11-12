@@ -44,6 +44,8 @@ import { PlanSearch } from '../components/PlanSearch'
 import { DayEditor } from '../components/DayEditor'
 import { shortNames, SiteTimeline, TimelineMatrix, type SiteRow } from '../components/PlanMatrix'
 import { SiteDayDialog } from '../components/SiteDayDialog'
+import { OfferSteps } from '../components/OfferSteps'
+import { offerSteps, waitingDays } from '../lib/offerSteps'
 import { CellMenu, ClipMenu } from '../components/CellMenu'
 import { NoteDialog, NoteView } from '../components/CalendarNotes'
 import { useStretch } from '../lib/stretch'
@@ -466,6 +468,18 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     revealOnLoad.current = null
   })
   const yearDays = useMemo(() => daysOfYear(year), [year])
+  // The offer phase by site: how far each site is (its steps in their fixed order) and how long it has waited.
+  const stepsBySite = useMemo(() => {
+    const bySite = new Map<number, ReactNode>()
+    if (!plan || phase !== 'Angebot') return bySite
+    for (const site of plan.sites) {
+      if (site.status !== 'Angebot' || site.isService) continue
+      const steps = offerSteps(site, plan.entries, today)
+      bySite.set(site.id, <OfferSteps steps={steps} waiting={waitingDays(steps, today)} />)
+    }
+    return bySite
+  }, [plan, phase, today])
+  const stepsOf = useCallback((site: Site) => stepsBySite.get(site.id), [stepsBySite])
   // Who has a birthday on which day ("MM-DD"), planners as well: a present in the head of the day. The own one
   // is "Mein Geburtstag".
   const birthdays = useMemo(() => {
@@ -1705,6 +1719,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         ) : (
           <SiteTimeline
             birthdays={birthdays}
+            stepsOf={phase === 'Angebot' ? stepsOf : undefined}
+            requestedOf={phase === 'Angebot' ? (site) => site.requestedOn : undefined}
             corner={corner}
             isReserved={isReserved}
             days={yearDays}

@@ -17,7 +17,8 @@ export interface ActivityDef {
 export type ActivityInput = Pick<ActivityDef, 'label' | 'phase' | 'color'>
 
 /** Where a construction site stands: offer, construction, done, or cancelled. */
-export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert'
+/** Abgelehnt: the customer said no to the offer, with a reason. */
+export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert' | 'Abgelehnt'
 
 export interface StatusChange {
   from: SiteStatus | null
@@ -80,6 +81,10 @@ export interface SiteInput {
   isService?: boolean
   /** An appointment the customer has not confirmed yet: in the plan without colour, "? Kunde". */
   isTentative?: boolean
+  /** yyyy-MM-dd: the day the enquiry came in (Anfrage), where the offer phase begins; a new site: today. */
+  requestedOn?: string | null
+  /** What the customer would like done (Umfang), from SCOPES; left out it stays. */
+  scope?: string[]
 }
 
 /** A planner who can be in charge of a site. */
@@ -101,6 +106,53 @@ export interface SiteTask {
 export interface Site extends NamedItem, SiteInput {
   status: SiteStatus
   tasks: SiteTask[]
+  /** Why the customer said no (a declined offer), with a few words. */
+  declineReason?: string | null
+  declineNote?: string | null
+}
+
+/** One appointment of a step of the offer phase: an entry in the plan of an employee. Times "HH:mm:ss". */
+export interface OfferStep {
+  siteId: number
+  activity: Activity
+  entryId: number
+  employeeId: number
+  employeeName: string
+  date: string
+  startTime: string | null
+  endTime: string | null
+}
+
+/** A site decided lately: into the construction phase (Zusage) or declined. */
+export interface DecidedOffer {
+  siteId: number
+  name: string
+  status: SiteStatus
+  decidedAt: string
+  plannedStart: string | null
+  declineReason: string | null
+  declineNote: string | null
+}
+
+/** The offer phase as an overview: the enquiries, their steps (in the order of stepActivities), the decided. */
+export interface Offers {
+  sites: Site[]
+  steps: OfferStep[]
+  stepActivities: Activity[]
+  decided: DecidedOffer[]
+}
+
+export interface StepInput {
+  activity: Activity
+  employeeIds: number[]
+  /** yyyy-MM-dd, times HH:mm */
+  date: string
+  startTime: string
+  endTime: string
+  /** One more appointment of a step that may have several (Objektauswahl). */
+  another?: boolean
+  /** The day of the appointment moved, when the step has several. */
+  from?: string
 }
 
 /** Betriebsferien: the company is closed, every craftsman has vacation on its working days. */

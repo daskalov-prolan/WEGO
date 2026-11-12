@@ -652,6 +652,27 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_site_keeps_the_day_its_enquiry_came_in()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var id = await CreateSiteAsync(g, "Anfrage heute");
+        var site = await g.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
+        Assert.Equal(DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd"), site.GetProperty("requestedOn").GetString());
+
+        // Came in by telephone a few days ago: changed.
+        var input = new { client = "Anfrage heute", nameSource = "Auftraggeber", requestedOn = "2026-01-05" };
+        var changed = await (await g.PutAsJsonAsync($"/api/sites/{id}", input)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-01-05", changed.GetProperty("requestedOn").GetString());
+        // Left out: it stays.
+        var kept = await (await g.PutAsJsonAsync($"/api/sites/{id}", new { client = "Anfrage heute", nameSource = "Auftraggeber" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-01-05", kept.GetProperty("requestedOn").GetString());
+        // Not in the future.
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await g.PutAsJsonAsync($"/api/sites/{id}", input with { requestedOn = "2999-01-01" })).StatusCode);
+    }
+
+    [Fact]
     public async Task The_offer_phase_begins_with_the_enquiry()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
@@ -1192,6 +1213,117 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Contains(("2032-03-26", "Karfreitag"), holidays);
 
         await g.DeleteAsync($"/api/schoolholidays/{closure}");
+    }
+
+    private static async Task<HttpResponseMessage> PlanStepAsync(HttpClient planer, int siteId, string activity, int employeeId,
+        string date, string start = "09:00", string end = "10:00") =>
+        await planer.PostAsJsonAsync($"/api/offers/{siteId}/steps",
+            new { activity, employeeIds = new[] { employeeId }, date, startTime = start, endTime = end });
+
+    private static List<JsonElement> StepsOf(JsonElement offers, int siteId) =>
+        offers.GetProperty("steps").EnumerateArray().Where(s => s.GetProperty("siteId").GetInt32() == siteId).ToList();
+
+    [Fact]
+    public async Task An_enquiry_keeps_what_the_customer_would_like_done()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var response = await g.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Umfang Kunde", nameSource = "Auftraggeber", scope = new[] { "Sonstiges", "Gäste-WC" },
+        });
+        var site = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // In the order of the list.
+        Assert.Equal(new[] { "Gäste-WC", "Sonstiges" }, site.GetProperty("scope").EnumerateArray().Select(x => x.GetString()!).ToArray());
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Umfang falsch", nameSource = "Auftraggeber", scope = new[] { "Swimmingpool" },
+        })).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_steps_of_an_offer_come_in_their_order_each_once()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var planner = await CreateEmployeeAsync(g, "Schritt Planer", null, null, "PlanerA");
+        var craftsman = await CreateEmployeeAsync(g, "Schritt Handwerker", null, null);
+        var site = await CreateSiteAsync(g, "Schritt Kunde");
+
+        // Objektauswahl before the Besichtigung: no.
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Objektauswahl", planner, "2030-03-05")).StatusCode);
+        // A craftsman without Besichtigungen: no.
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Besichtigung", craftsman, "2030-03-04")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-04")).StatusCode);
+        // Planned again, it moves: still one.
+        var moved = await (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-06", "11:00", "12:00"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var steps = StepsOf(moved, site);
+        Assert.Single(steps);
+        Assert.Equal("2030-03-06", steps[0].GetProperty("date").GetString());
+
+        // Not before the Besichtigung; after it, yes.
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Objektauswahl", planner, "2030-03-05")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PlanStepAsync(g, site, "Objektauswahl", planner, "2030-03-10")).StatusCode);
+        // The Besichtigung cannot move behind the Objektauswahl.
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-11")).StatusCode);
+        // Not over another appointment of the same employee.
+        var other = await CreateSiteAsync(g, "Schritt Anderer");
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await PlanStepAsync(g, other, "Besichtigung", planner, "2030-03-10", "09:30", "10:30")).StatusCode);
+
+        // A second Objektauswahl when one is not enough; a second Besichtigung no (it moves).
+        Task<HttpResponseMessage> Another(string activity, string date, string? from = null) =>
+            g.PostAsJsonAsync($"/api/offers/{site}/steps", new
+            {
+                activity, employeeIds = new[] { planner }, date, startTime = "14:00", endTime = "15:00",
+                another = from is null, from,
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, (await Another("Besichtigung", "2030-03-07")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Another("Objektauswahl", "2030-03-17")).StatusCode);
+        // Moving one of them moves that one only.
+        var two = await (await Another("Objektauswahl", "2030-03-18", from: "2030-03-17")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(new[] { "2030-03-06", "2030-03-10", "2030-03-18" },
+            StepsOf(two, site).Select(s => s.GetProperty("date").GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task A_customer_says_no_with_a_reason_or_yes_with_the_start()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var planner = await CreateEmployeeAsync(g, "Entscheid Planer", null, null, "PlanerA");
+        await CreateEmployeeAsync(g, "Entscheid Leser", "entscheid.leser", "entscheid-pw");
+        var craftsman = await LoginAsync("entscheid.leser", "entscheid-pw");
+
+        var no = await CreateSiteAsync(g, "Sagt Nein");
+        await PlanStepAsync(g, no, "Besichtigung", planner, "2030-04-02");
+        // "Sonstiges" needs a few words; an unknown reason is none.
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync($"/api/offers/{no}/decline", new { reason = "Sonstiges" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync($"/api/offers/{no}/decline", new { reason = "Wetter" })).StatusCode);
+        var declined = await (await g.PostAsJsonAsync($"/api/offers/{no}/decline", new { reason = "Preis zu hoch" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        // Out of the offers, among the decided; the appointment ahead is gone; craftsmen do not see it.
+        Assert.DoesNotContain(declined.GetProperty("sites").EnumerateArray(), s => s.GetProperty("id").GetInt32() == no);
+        var decided = declined.GetProperty("decided").EnumerateArray().Single(d => d.GetProperty("siteId").GetInt32() == no);
+        Assert.Equal("Abgelehnt", decided.GetProperty("status").GetString());
+        Assert.Equal("Preis zu hoch", decided.GetProperty("declineReason").GetString());
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2030");
+        Assert.DoesNotContain(plan.GetProperty("entries").EnumerateArray(), e => e.TryGetProperty("siteId", out var s) && s.ValueKind == JsonValueKind.Number && s.GetInt32() == no);
+        Assert.Equal(HttpStatusCode.NotFound, (await craftsman.GetAsync($"/api/sites/{no}")).StatusCode);
+        // Declined by mistake: back.
+        var reopened = await (await g.PostAsync($"/api/offers/{no}/reopen", null)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(reopened.GetProperty("sites").EnumerateArray(), s => s.GetProperty("id").GetInt32() == no);
+
+        var yes = await CreateSiteAsync(g, "Sagt Ja");
+        var accepted = await (await g.PostAsJsonAsync($"/api/offers/{yes}/accept", new { plannedStart = "2030-05-04" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(accepted.GetProperty("decided").EnumerateArray(),
+            d => d.GetProperty("siteId").GetInt32() == yes && d.GetProperty("status").GetString() == "Bauphase");
+        var site = await g.GetFromJsonAsync<JsonElement>($"/api/sites/{yes}");
+        Assert.Equal("Bauphase", site.GetProperty("status").GetString());
+        Assert.Equal("2030-05-04", site.GetProperty("plannedStart").GetString());
+        Assert.NotEmpty(site.GetProperty("tasks").EnumerateArray());
+        // Decided once: not again.
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync($"/api/offers/{yes}/decline", new { reason = "Preis zu hoch" })).StatusCode);
     }
 
     private static async Task<int> CreateEmployeeAsync(HttpClient planer, string name, string? userName,

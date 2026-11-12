@@ -313,16 +313,21 @@ export function DayEditor(props: Props) {
               <Button size="sm" onClick={() => setRows((current) => withSecond(current, emptyRow('Baustelle', null, main)))}>
                 + Baustelle
               </Button>
-              <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
-                <Button size="sm" color="wegoRed.6" onClick={() => setAddingService('service')}>
-                  + Serviceauftrag
-                </Button>
-              </Tooltip>
-              <Tooltip label="Für einen Kunden reservieren, der den Termin noch nicht bestätigt hat: im Kalender ohne Farbe">
-                <Button size="sm" variant="outline" onClick={() => setAddingService('tentative')}>
-                  + Termin (unbestätigt)
-                </Button>
-              </Tooltip>
+              {/* An enquiry always becomes a site: the offer phase has neither service calls nor reservations. */}
+              {props.phase !== 'Angebot' && (
+                <>
+                  <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
+                    <Button size="sm" color="wegoRed.6" onClick={() => setAddingService('service')}>
+                      + Serviceauftrag
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="Für einen Kunden reservieren, der den Termin noch nicht bestätigt hat: im Kalender ohne Farbe">
+                    <Button size="sm" variant="outline" onClick={() => setAddingService('tentative')}>
+                      + Termin (unbestätigt)
+                    </Button>
+                  </Tooltip>
+                </>
+              )}
             </Group>
           </Group>
           {rows.length === 0 && (

@@ -66,6 +66,18 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.NameSource).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Description).HasMaxLength(1000);
+            // Stored as a list separated by "|": the scopes are fixed words without it.
+            e.Property(x => x.Scope)
+                .HasConversion(
+                    v => string.Join('|', v),
+                    v => v.Split('|', StringSplitOptions.RemoveEmptyEntries).ToList(),
+                    new ValueComparer<List<string>>(
+                        (a, b) => a!.SequenceEqual(b!),
+                        v => v.Aggregate(0, (hash, scope) => HashCode.Combine(hash, scope)),
+                        v => v.ToList()))
+                .HasMaxLength(400);
+            e.Property(x => x.DeclineReason).HasMaxLength(60);
+            e.Property(x => x.DeclineNote).HasMaxLength(500);
             // Not unique: one property management can order jobs at several addresses.
             e.HasIndex(x => x.Name);
             e.HasOne(x => x.ResponsiblePlanner).WithMany().HasForeignKey(x => x.ResponsiblePlannerId)

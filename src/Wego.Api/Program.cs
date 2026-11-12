@@ -142,6 +142,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" })).AllowAnonymou
 app.MapAuthEndpoints();
 app.MapPlanEndpoints();
 app.MapSiteEndpoints();
+app.MapOfferEndpoints();
 app.MapReportEndpoints();
 app.MapEmployeeEndpoints();
 app.MapSchoolHolidayEndpoints();

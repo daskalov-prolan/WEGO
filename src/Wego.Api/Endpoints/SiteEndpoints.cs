@@ -10,7 +10,9 @@ public static class SiteEndpoints
     public record SiteDto(int Id, string Name, string? Client, string? Street, string? HouseNumber,
         string? AddressAddition, string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
-        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService, bool IsTentative);
+        string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService, bool IsTentative,
+        DateOnly? RequestedOn = null, IReadOnlyList<string>? Scope = null,
+        string? DeclineReason = null, string? DeclineNote = null);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -19,7 +21,8 @@ public static class SiteEndpoints
         string? PostalCode, string? City, SiteNameSource NameSource, string? Description,
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
         string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null,
-        bool? IsService = null, bool? IsTentative = null);
+        bool? IsService = null, bool? IsTentative = null, DateOnly? RequestedOn = null,
+        IReadOnlyList<string>? Scope = null);
 
     public record StatusRequest(SiteStatus Status);
 
@@ -79,6 +82,8 @@ public static class SiteEndpoints
             if (error is not null) return ApiErrors.BadRequest(error);
             // Without a choice, whoever creates the site is in charge of it.
             site.ResponsiblePlannerId = input.ResponsiblePlannerId ?? user.EmployeeId();
+            // The enquiry came in today, unless another day is given.
+            if (!site.IsService) site.RequestedOn ??= DateOnly.FromDateTime(DateTime.Today);
 
             site.StatusChanges.Add(new SiteStatusChange
             {
@@ -337,7 +342,8 @@ public static class SiteEndpoints
         s.PostalCode, s.City, s.NameSource, s.Description, s.PlannedStart, s.PlannedEnd, s.Status,
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
-        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService, s.IsTentative);
+        s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService, s.IsTentative, s.RequestedOn,
+        s.Scope, s.DeclineReason, s.DeclineNote);
 
     private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
         plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
@@ -370,6 +376,10 @@ public static class SiteEndpoints
             return "Bitte eine Straße angeben, sie ist der Name der Baustelle.";
         if (input.PlannedEnd < input.PlannedStart)
             return "Das geplante Ende darf nicht vor dem geplanten Start liegen.";
+        if (input.RequestedOn > DateOnly.FromDateTime(DateTime.Today))
+            return "Die Anfrage kann nicht in der Zukunft liegen.";
+        if (input.Scope?.FirstOrDefault(s => !OfferEndpoints.Scopes.Contains(s)) is { } unknown)
+            return $"Unbekannter Umfang „{unknown}“.";
 
         site.Client = client;
         site.ClientPhone = Clean(input.ClientPhone);
@@ -383,6 +393,10 @@ public static class SiteEndpoints
         site.LabelProjectNumber = Clean(input.LabelProjectNumber);
         site.PlannedStart = input.PlannedStart;
         site.PlannedEnd = input.PlannedEnd;
+        // Left out: the scope stays as it is.
+        if (input.Scope is { } scope) site.Scope = OfferEndpoints.Scopes.Where(scope.Contains).ToList();
+        // Left out: the day of the enquiry stays as it is.
+        if (input.RequestedOn is { } requested) site.RequestedOn = requested;
         // Left out: it stays as it is (a site does not turn into a service call by being changed).
         if (input.IsService is { } isService) site.IsService = isService;
         // Only a new site starts as not confirmed; afterwards it is confirmed (see confirm), not changed back.
