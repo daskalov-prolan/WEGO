@@ -2054,16 +2054,31 @@ body.stretching * {
 }
 
 /* Above the plan the activities stand out in their full colour, like the header of the page. */
+/* The activities above the plan: calm white buttons, each with a dot in its colour (the entry dragged out of
+   it keeps that colour). */
 .activity-row .flow-step {
-  background: var(--entry-strong);
-  border-color: var(--entry-strong);
-  color: var(--entry-text, #14232a);
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #14232a;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(7, 42, 54, 0.25);
+}
+
+.activity-row .flow-step::before {
+  content: '';
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--entry-strong);
+}
+
+.activity-row .flow-step .activity-icon {
+  display: none;
 }
 
 .activity-row .flow-step:hover {
-  filter: brightness(1.06);
+  border-color: var(--entry-strong);
+  background: #f6f9fa;
 }
 
 /* The summary of a site: its customer, address and planning side by side, as cards like in its form. */
