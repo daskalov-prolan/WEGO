@@ -1,4 +1,7 @@
 import type {
+  Absence,
+  AbsenceInput,
+  AbsenceRange,
   Access,
   Activity,
   ActivityDef,
@@ -135,6 +138,9 @@ export const api = {
   myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
   teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
+  absences: (year: number) => request<Absence[]>('GET', `/api/absences?year=${year}`),
+  saveAbsence: (input: AbsenceInput) => request<{ days: number; removedSites: number }>('POST', '/api/absences', input),
+  removeAbsence: (range: AbsenceRange) => request<{ days: number }>('POST', '/api/absences/remove', range),
 
   employeeNames: () => request<NamedItem[]>('GET', '/api/employees/names'),
   employees: () => request<Employee[]>('GET', '/api/employees'),

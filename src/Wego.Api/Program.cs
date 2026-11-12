@@ -144,6 +144,7 @@ app.MapPlanEndpoints();
 app.MapSiteEndpoints();
 app.MapOfferEndpoints();
 app.MapReportEndpoints();
+app.MapAbsenceEndpoints();
 app.MapEmployeeEndpoints();
 app.MapSchoolHolidayEndpoints();
 app.MapActivityEndpoints();

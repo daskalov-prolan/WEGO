@@ -652,6 +652,51 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Planer_G_enter_absences_for_a_stretch_under_Verwaltung()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Planer Abwesend", "planer.abwesend", "planer-a-pw", "PlanerA");
+        var a = await LoginAsync("planer.abwesend", "planer-a-pw");
+        var id = await CreateEmployeeAsync(g, "Abwesender", null, null);
+        var siteId = await CreateSiteAsync(g, "Familie Pfingsten");
+        // Planned on Tuesday 4 June 2030.
+        await g.PutAsJsonAsync($"/api/plan/{id}/2030-06-04", new object[] { new { type = "Baustelle", siteId } });
+
+        // Mon 3 to Tue 11 June: the weekend and Whit Monday (10 June) are no working days.
+        var vacation = new { employeeId = id, type = "Urlaub", from = "2030-06-03", to = "2030-06-11" };
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.PostAsJsonAsync("/api/absences", vacation)).StatusCode);
+        // The site planned is named first.
+        var conflict = await g.PostAsJsonAsync("/api/absences", vacation);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Contains("Familie Pfingsten", await conflict.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK,
+            (await g.PostAsJsonAsync("/api/absences", new { employeeId = id, type = "Urlaub", from = "2030-06-03", to = "2030-06-11", force = true })).StatusCode);
+
+        async Task<JsonElement[]> Mine() => (await g.GetFromJsonAsync<JsonElement[]>("/api/absences?year=2030"))!
+            .Where(x => x.GetProperty("employeeId").GetInt32() == id).ToArray();
+        var one = Assert.Single(await Mine());
+        Assert.Equal(("Urlaub", "2030-06-03", "2030-06-11", 6),
+            (one.GetProperty("type").GetString(), one.GetProperty("from").GetString(), one.GetProperty("to").GetString(), one.GetProperty("workDays").GetInt32()));
+        // The site gave way.
+        var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2030");
+        Assert.DoesNotContain(plan.GetProperty("entries").EnumerateArray(), e => e.GetProperty("employeeId").GetInt32() == id
+            && e.GetProperty("type").GetString() == "Baustelle");
+
+        // Changed: sick on two days instead.
+        Assert.Equal(HttpStatusCode.OK, (await g.PostAsJsonAsync("/api/absences", new
+        {
+            employeeId = id, type = "Krank", from = "2030-06-03", to = "2030-06-04",
+            replaces = new { employeeId = id, type = "Urlaub", from = "2030-06-03", to = "2030-06-11" },
+        })).StatusCode);
+        var sick = Assert.Single(await Mine());
+        Assert.Equal(("Krank", 2), (sick.GetProperty("type").GetString(), sick.GetProperty("workDays").GetInt32()));
+
+        Assert.Equal(HttpStatusCode.OK, (await g.PostAsJsonAsync("/api/absences/remove",
+            new { employeeId = id, type = "Krank", from = "2030-06-03", to = "2030-06-04" })).StatusCode);
+        Assert.Empty(await Mine());
+    }
+
+    [Fact]
     public async Task A_site_keeps_the_day_its_enquiry_came_in()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

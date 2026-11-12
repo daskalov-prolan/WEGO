@@ -27,6 +27,7 @@ import { api, messageOf } from '../api/client'
 import type { Access, Activity, Employee, EmployeeInput, HolidayKind, Role, SchoolHoliday } from '../api/types'
 import { activitiesOfStatus, activityLabel } from '../lib/activities'
 import { toEmployeeInput } from '../lib/employees'
+import { AbsencesAdmin } from '../components/AbsencesAdmin'
 import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
 import { Sheet } from '../components/Sheet'
 import { YearPicker } from '../components/YearPicker'
@@ -39,21 +40,24 @@ interface AdminPageProps {
   /** An employee to open right away, e.g. from the list of employees. */
   employeeId?: number | null
   onActivitiesChanged: () => Promise<void>
+  /** The tab to open, e.g. "abwesenheiten" from a vacation in the plan. */
+  tab?: string | null
 }
 
-export function AdminPage({ year, employeeId = null, onActivitiesChanged }: AdminPageProps) {
+export function AdminPage({ year, employeeId = null, onActivitiesChanged, tab = null }: AdminPageProps) {
   return (
     <div className="page">
       <Title order={2} mb={4} className="page-title">
         Verwaltung
       </Title>
       <Text c="dimmed" mb="md">
-        Mitarbeiter, Tätigkeiten, Ferien und Feiertage
+        Mitarbeiter, Tätigkeiten, Abwesenheiten, Ferien und Feiertage
       </Text>
-      <Tabs defaultValue="employees" keepMounted={false} className="brand-tabs">
+      <Tabs defaultValue={tab === 'abwesenheiten' ? 'absences' : 'employees'} keepMounted={false} className="brand-tabs">
         <Tabs.List mb="md">
           <Tabs.Tab value="employees">Mitarbeiter</Tabs.Tab>
           <Tabs.Tab value="activities">Tätigkeiten</Tabs.Tab>
+          <Tabs.Tab value="absences">Abwesenheiten</Tabs.Tab>
           <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
@@ -61,6 +65,9 @@ export function AdminPage({ year, employeeId = null, onActivitiesChanged }: Admi
         </Tabs.Panel>
         <Tabs.Panel value="activities">
           <ActivitiesAdmin onChanged={onActivitiesChanged} />
+        </Tabs.Panel>
+        <Tabs.Panel value="absences">
+          <AbsencesAdmin year={year} />
         </Tabs.Panel>
         <Tabs.Panel value="holidays">
           <SchoolHolidaysSection year={year} />

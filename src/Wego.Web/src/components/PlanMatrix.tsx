@@ -425,7 +425,7 @@ function Compact({
     <span
       className={['cell-compact', `compact-${first.type.toLowerCase()}`, dimmed ? 'dimmed' : '', draggable ? 'drag-source' : '', reserved ? 'reserved' : ''].join(' ')}
       style={entryStyle(first)}
-      {...dragSource({ kind: 'entry', entry: first }, draggable)}
+      {...dragSource({ kind: 'entry', entry: first }, draggable && first.type === 'Baustelle')}
     >
       <span className="compact-name" onClick={onTextClick}>
         {text}

@@ -100,7 +100,7 @@ export default function App() {
 
   const canPlan = canPlanRole(user.role)
   const isAdmin = user.role === 'PlanerG'
-  const selectedId = param ? Number(param) : null
+  const selectedId = param && /^\d+$/.test(param) ? Number(param) : null
 
   // Craftsmen start with their own week, planners with the plan of everybody (in the construction phase).
   // On a phone everybody in the plan starts with his own plan.
@@ -125,7 +125,9 @@ export default function App() {
         <EmployeesPage canEdit={isAdmin} showBirthdays={canPlan} />
       )
   else if (page === 'verwaltung' && isAdmin)
-    content = <AdminPage key={selectedId ?? 0} year={year} employeeId={selectedId} onActivitiesChanged={reloadActivities} />
+    content = (
+      <AdminPage key={param ?? 0} year={year} employeeId={selectedId} tab={param} onActivitiesChanged={reloadActivities} />
+    )
   else {
     const plan = (
       <PlanPage

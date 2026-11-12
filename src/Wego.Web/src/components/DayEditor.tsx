@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Button,
   Checkbox,
   CloseButton,
@@ -32,6 +33,8 @@ interface Props {
   onGoToSite?: (siteId: number) => void
   /** Urlaub and Krank are for Planer G: without it such a row stays as it is. */
   canAbsence?: boolean
+  /** Planer G: Urlaub and Krank are changed under Verwaltung, a link leads there. */
+  absenceLink?: boolean
   onClose: () => void
   /** Saves the day; a rejected promise keeps the editor open and shows the message. */
   onSave: (entries: DayEntryInput[]) => Promise<void>
@@ -359,6 +362,22 @@ export function DayEditor(props: Props) {
                     />
                   )}
                 </Group>
+                {/* Urlaub and Krank are changed under Verwaltung, not here. */}
+                {row.type !== 'Baustelle' && !canAbsence && (
+                  <Text size="xs" c="dimmed">
+                    Urlaub und Krank werden unter Verwaltung → Abwesenheiten eingetragen
+                    {props.absenceLink ? (
+                      <>
+                        {': '}
+                        <Anchor href="#/verwaltung/abwesenheiten" size="xs">
+                          In der Verwaltung ändern
+                        </Anchor>
+                      </>
+                    ) : (
+                      ' (Geschäftsleitung).'
+                    )}
+                  </Text>
+                )}
                 {/* A row without a site yet can stay free, e.g. the other half of the day. */}
                 {row.type === 'Baustelle' && (row.free || row.siteId === null) && (
                   <Checkbox

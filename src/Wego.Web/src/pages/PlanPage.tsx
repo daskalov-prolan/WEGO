@@ -5,7 +5,9 @@ import {
   Group,
   Menu,
   Paper,
+  Popover,
   SegmentedControl,
+  Stack,
   Switch,
   Text,
   Tooltip,
@@ -14,26 +16,24 @@ import {
 import { useWindowEvent } from '@mantine/hooks'
 import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from 'react'
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
 import { forgetHandedUndo, handedUndo } from '../lib/undoHandoff'
+import { MonthJump } from '../components/MonthJump'
 import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
 import { toSiteInput } from '../lib/sites'
-import { ActivityIcon } from '../components/ActivityIcon'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
 import {
-  ABSENCE,
   ACTIVITIES,
   activityLabel,
   allowedActivities,
   defaultActivity,
   entryName,
-  textOn,
   isFree,
   isOpen,
   isReservation,
@@ -801,6 +801,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   }
 
   const goToday = () => (inYear(today) ? scrollToDate(today, true) : openInYear(today))
+  /** A month chosen above the plan: its first day, in this plan or in the plan of its year. */
+  const jump = (iso: string) => (inYear(iso) ? scrollToDate(iso, true) : openInYear(iso))
 
   /** A day of the found site: the plan goes there and shows its entry. */
   const showFound = (siteId: number, day: string) => {
@@ -1145,26 +1147,10 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       color: 'orange',
       message:
         type === 'Urlaub'
-          ? 'Urlaub wird nur seitens der Geschäftsleitung im Kalender eingetragen.'
-          : 'Krankheitstage werden nur seitens der Geschäftsleitung im Kalender eingetragen.',
+          ? 'Urlaub wird unter Verwaltung → Abwesenheiten eingetragen (Geschäftsleitung).'
+          : 'Krankheitstage werden unter Verwaltung → Abwesenheiten eingetragen (Geschäftsleitung).',
       autoClose: 5000,
     })
-
-  /** A click on Urlaub / Krank above the plan: into the selected fields, else how to use it. */
-  const markAbsence = (type: AbsenceType) => {
-    if (!canAbsence) {
-      absenceHint(type)
-      return
-    }
-    if (selected.size === 0) {
-      notifications.show({ message: `${type} auf einen Tag ziehen, oder zuerst Felder auswählen.`, autoClose: 3000 })
-      return
-    }
-    // Vacation over several days leaves out weekends and public holidays; one day alone is what was meant.
-    const skip = (date: string) => type === 'Urlaub' && keepsFree() && !isWorkday(date)
-    const days = [...selected].map(parseKey).filter(({ date }) => !skip(date)).length
-    applyToSelection(() => absenceDay(type), absenceMessage(type, days), skip)
-  }
 
   /** Dragging an end of the marked stretch along its row: the employee's row ('e') or the site's row ('s'). */
   const onStretchStart = (rows: 'e' | 's') =>
@@ -1466,69 +1452,84 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               </ActionIcon>
             </Group>
           ) : (
-            <Group gap="sm" wrap="wrap" justify="flex-end" w="100%" className="plan-view-controls">
-              {/* The arrows at the very left of the row; everything else keeps to the right. */}
-              <Group gap={4} wrap="nowrap" mr="auto" className="plan-arrows">
+            <>
+              {/* The time in view in the middle, between its arrows; a click on it jumps to a month or a year. */}
+              <Group gap={6} wrap="nowrap" className="plan-when">
                 <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
                   ‹
                 </ActionIcon>
+                <MonthJump title={title} year={year} years={[...PLAN_YEARS, year]} today={today} onJump={jump} />
                 <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
                   ›
                 </ActionIcon>
+                <Button size="sm" color="wegoRed.6" onClick={goToday}>
+                  Heute
+                </Button>
               </Group>
-              <SegmentedControl
-                size="sm"
-                value={view}
-                onChange={(value) => changeZoom(value as View)}
-                data={[
-                  { value: 'week', label: 'Woche' },
-                  { value: 'month', label: 'Monat' },
-                ]}
-              />
-              <YearSelect year={year} onChange={onYearChange} />
-              <Button size="sm" color="wegoRed.6" onClick={goToday}>
-                Heute
-              </Button>
-              <Text fw={700} c="wego.9" className="plan-title">
-                {title}
-              </Text>
-              <Switch
-                size="sm"
-                label="Wochenenden ausblenden"
-                checked={foldWeekends}
-                onChange={(event) => toggleWeekends(event.currentTarget.checked)}
-              />
-              <Group gap={2} wrap="nowrap" className="plan-scale">
-                <ActionIcon
-                  variant="default"
-                  size="input-sm"
-                  aria-label="Kleiner"
-                  disabled={scale === SCALES[0]}
-                  onClick={() => changeScale(SCALES[SCALES.indexOf(scale) - 1])}
-                >
-                  −
-                </ActionIcon>
-                <Tooltip label="Zurück auf 100 %">
-                  <UnstyledButton className="plan-scale-value" aria-label={`Größe ${scale} %`} onClick={() => changeScale(100)}>
-                    {scale} %
-                  </UnstyledButton>
-                </Tooltip>
-                <ActionIcon
-                  variant="default"
-                  size="input-sm"
-                  aria-label="Größer"
-                  disabled={scale === SCALES.at(-1)}
-                  onClick={() => changeScale(SCALES[SCALES.indexOf(scale) + 1])}
-                >
-                  +
-                </ActionIcon>
+              <Group gap="sm" wrap="nowrap" className="plan-view-controls">
+                <SegmentedControl
+                  size="sm"
+                  value={view}
+                  onChange={(value) => changeZoom(value as View)}
+                  data={[
+                    { value: 'week', label: 'Woche' },
+                    { value: 'month', label: 'Monat' },
+                  ]}
+                />
+                {/* What is changed seldom: the weekends and the size. */}
+                <Popover position="bottom-end" shadow="md" withinPortal>
+                  <Popover.Target>
+                    <Button size="sm" variant="default" rightSection="▾">
+                      Ansicht
+                    </Button>
+                  </Popover.Target>
+                  <Popover.Dropdown>
+                    <Stack gap="sm">
+                      <Switch
+                        size="sm"
+                        label="Wochenenden ausblenden"
+                        checked={foldWeekends}
+                        onChange={(event) => toggleWeekends(event.currentTarget.checked)}
+                      />
+                      <Group gap={6} wrap="nowrap">
+                        <Text size="sm">Größe</Text>
+                        <Group gap={2} wrap="nowrap" className="plan-scale">
+                          <ActionIcon
+                            variant="default"
+                            size="input-sm"
+                            aria-label="Kleiner"
+                            disabled={scale === SCALES[0]}
+                            onClick={() => changeScale(SCALES[SCALES.indexOf(scale) - 1])}
+                          >
+                            −
+                          </ActionIcon>
+                          <Tooltip label="Zurück auf 100 %">
+                            <UnstyledButton className="plan-scale-value" aria-label={`Größe ${scale} %`} onClick={() => changeScale(100)}>
+                              {scale} %
+                            </UnstyledButton>
+                          </Tooltip>
+                          <ActionIcon
+                            variant="default"
+                            size="input-sm"
+                            aria-label="Größer"
+                            disabled={scale === SCALES.at(-1)}
+                            onClick={() => changeScale(SCALES[SCALES.indexOf(scale) + 1])}
+                          >
+                            +
+                          </ActionIcon>
+                        </Group>
+                      </Group>
+                    </Stack>
+                  </Popover.Dropdown>
+                </Popover>
+                <FullViewButton full={full} onToggle={toggleFull} what="den Kalender" />
               </Group>
-              <FullViewButton full={full} onToggle={toggleFull} what="den Kalender" />
-            </Group>
+            </>
           )}
         </Group>
 
-        {/* Undo and redo, the activities of the phase right above the plan, Urlaub and Krank at the right end (Planer G). */}
+        {/* Undo and redo, the activities of the phase right above the plan, then the search. Urlaub and Krank are
+            entered under Verwaltung (Planer G) and only shown in the plan. */}
         <div className="activity-row">
           {canEdit && (
             <Group gap={4} wrap="nowrap" className="history-buttons">
@@ -1561,41 +1562,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
               change what the employee does there; a phone cannot drag them, so they stay away there. */}
           {!isPhone && <PhaseActivities phase={phase} draggable={canEdit} />}
-          {/* The search in the middle, between the activities and Urlaub / Krank. */}
+          {/* The search right after the activities. */}
           <div className="plan-search">{search}</div>
-          {canEdit && perspective === 'employees' && (
-            <span className="flow-steps absence-steps" role="group" aria-label="Abwesenheit eintragen">
-              {(['Urlaub', 'Krank'] as const).map((type) => (
-                <Tooltip
-                  key={type}
-                  label={
-                    canAbsence
-                      ? `Auf einen Tag eines Mitarbeiters ziehen, oder Felder auswählen und hier klicken: ${type}`
-                      : `${type} trägt nur die Geschäftsleitung ein.`
-                  }
-                  multiline
-                  w={260}
-                >
-                  <button
-                    type="button"
-                    className="flow-step drag-source"
-                    style={
-                      {
-                        '--entry-bg': ABSENCE.tint,
-                        '--entry-strong': ABSENCE.background,
-                        '--entry-text': textOn(ABSENCE.background),
-                      } as CSSProperties
-                    }
-                    onClick={() => markAbsence(type)}
-                    {...dragSource({ kind: 'absence', type }, !isPhone && canAbsence)}
-                  >
-                    {type === 'Urlaub' && <ActivityIcon type={type} size={11} />}
-                    {type}
-                  </button>
-                </Tooltip>
-              ))}
-            </span>
-          )}
         </div>
         {canEdit && perspective === 'sites' && !isPhone && phaseEmployees.length > 0 && (
           <div className="employee-palette" role="group" aria-label="Mitarbeiter zum Einplanen">
@@ -1742,7 +1710,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                 size="xs"
                 variant="subtle"
                 color="gray"
-                onClick={() => applyToSelection(() => [], `${selected.size} Felder geleert.`)}
+                // Urlaub and Krank stay: they are changed under Verwaltung.
+                onClick={() =>
+                  applyToSelection(
+                    (employeeId, date) => entriesOf(employeeId, date).filter((entry) => entry.type !== 'Baustelle').map(toInput),
+                    `${selected.size} Felder geleert.`,
+                  )
+                }
               >
                 Leeren
               </Button>
@@ -1805,7 +1779,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             sites={plan.sites}
             onCreateSite={createSite}
             onGoToSite={canEdit ? shared.onOpenSite : undefined}
-            canAbsence={canAbsence}
+            canAbsence={false}
+            absenceLink={canAbsence}
             onConfirm={async (site, asService) => {
               await api.confirmSite(site.id, asService)
               // Its days got their activities on the server: the plan anew.

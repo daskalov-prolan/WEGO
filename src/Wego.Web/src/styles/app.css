@@ -194,6 +194,82 @@ a:hover {
   white-space: nowrap;
 }
 
+/* The first row above the plan: the view at the left, the time in view in the middle, Woche/Monat, Ansicht and
+   Vollbild at the right. */
+.plan-controls {
+  justify-content: space-between;
+}
+
+/* The time in view is a button: it opens the months of the year to jump to. */
+.plan-title-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 290px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f3f7f8;
+  color: var(--mantine-color-wego-9, #08394a);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.plan-title-button:hover {
+  background: #e3eef1;
+}
+
+.plan-title-caret {
+  color: var(--muted, #5b6f77);
+  font-size: 0.8rem;
+}
+
+/* The months open just as wide as the time in view above them, in the same writing. */
+.month-jump {
+  min-width: 290px;
+  padding: 10px;
+}
+
+.month-jump-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--mantine-color-wego-9, #08394a);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.month-jump-months {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.month-jump-months button {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #eef2f4;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.month-jump-months button:hover {
+  background: #d6e6ea;
+}
+
+.month-jump-months button.now {
+  outline: 2px solid var(--wego-red, #d71f27);
+  outline-offset: -2px;
+}
+
 .plan-scroll {
   flex: 1;
   min-height: 0;
@@ -3260,6 +3336,25 @@ html.plan-full .shell-nav {
 }
 
 /* The dots of the steps on a card, as below the name in the calendar. */
+
+/* Urlaub and Krank in the list under Verwaltung. */
+.absence-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.absence-badge.vacation {
+  background: #fff3c4;
+  color: #8a6a00;
+}
+
+.absence-badge.sick {
+  background: #fde2e2;
+  color: #a32525;
+}
 
 /* The dots of the steps on a card, side by side. */
 .offer-card .offer-steps {
