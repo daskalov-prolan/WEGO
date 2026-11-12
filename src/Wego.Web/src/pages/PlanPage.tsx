@@ -1561,7 +1561,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
               change what the employee does there; a phone cannot drag them, so they stay away there. */}
-          {!isPhone && <PhaseActivities phase={phase} draggable={canEdit} />}
+          {!isPhone && (
+            <>
+              {canEdit && <span className="plan-sep" aria-hidden />}
+              <PhaseActivities phase={phase} draggable={canEdit} />
+              <span className="plan-sep" aria-hidden />
+            </>
+          )}
           {/* The search right after the activities. */}
           <div className="plan-search">{search}</div>
         </div>

@@ -2054,6 +2054,20 @@ body.stretching * {
 }
 
 /* Above the plan the activities stand out in their full colour, like the header of the page. */
+/* A fine line between undo, the activities and the search. */
+.plan-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* The search right after the activities, not in the middle of what is left. */
+.activity-row .plan-search {
+  flex: 0 1 300px;
+  justify-content: flex-start;
+}
+
 /* The activities above the plan: calm white buttons, each with a dot in its colour (the entry dragged out of
    it keeps that colour). */
 .activity-row .flow-step {
@@ -2747,12 +2761,6 @@ html.plan-full .shell-nav {
 
   .activity-row {
     gap: 4px 10px;
-  }
-
-  /* The search gives way, so that Urlaub and Krank stay in the row of the activities. */
-  .plan-toolbar .plan-search {
-    flex-basis: 150px;
-    min-width: 150px;
   }
 }
 
