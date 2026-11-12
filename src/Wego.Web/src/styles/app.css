@@ -3067,7 +3067,11 @@ html.plan-full .shell-nav {
 
 .offer-phone {
   align-self: flex-start;
-  font-weight: 600;
+}
+
+.offer-scope,
+.offer-description {
+  line-height: 1.3;
 }
 
 /* An appointment ahead: a click moves it. */

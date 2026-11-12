@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Group, Loader, MultiSelect, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, Group, Loader, MultiSelect, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
@@ -157,21 +157,18 @@ export function OfferBoardPage() {
         </button>
         {address && <Text size="xs" c="dimmed">{address}</Text>}
         {site.clientPhone && (
-          <Anchor href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="xs" className="offer-phone">
+          <Anchor href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="xs" c="dimmed" className="offer-phone">
             ☎ {site.clientPhone}
           </Anchor>
         )}
         {(site.scope?.length ?? 0) > 0 && (
-          <Group gap={4}>
-            {site.scope!.map((scope) => (
-              <Badge key={scope} size="sm" variant="light" color="gray" radius="sm">
-                {scope}
-              </Badge>
-            ))}
-          </Group>
+          // What the customer would like done, underlined; the details below in the same writing.
+          <Text size="sm" td="underline" className="offer-scope">
+            {site.scope!.join(', ')}
+          </Text>
         )}
         {site.description && (
-          <Text size="xs" fs="italic" c="dimmed" lineClamp={3}>
+          <Text size="sm" lineClamp={3} className="offer-description">
             {site.description}
           </Text>
         )}
