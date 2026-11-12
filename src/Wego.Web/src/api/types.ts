@@ -211,6 +211,31 @@ export interface SiteMapLocations {
   pending: number
 }
 
+export type AbsenceType = Exclude<EntryType, 'Baustelle'>
+
+/** Urlaub or Krank over working days one after the other (weekends and public holidays in between belong to it). */
+export interface Absence {
+  employeeId: number
+  employeeName: string
+  type: AbsenceType
+  from: string
+  to: string
+  workDays: number
+}
+
+export interface AbsenceRange {
+  employeeId: number
+  type: AbsenceType
+  from: string
+  to: string
+}
+
+/** `force`: also over days with sites planned (they give way); `replaces`: the stretch changed. */
+export interface AbsenceInput extends AbsenceRange {
+  force?: boolean
+  replaces?: AbsenceRange | null
+}
+
 /** A stretch of vacation: days one after the other (a weekend in between does not break it). */
 export interface VacationBlock {
   from: string

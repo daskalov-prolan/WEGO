@@ -138,7 +138,9 @@ describe('PlanPage', () => {
     const table = () => document.querySelector('table.timeline')!
 
     expect(table()).toHaveClass('fold-weekends')
-    await userEvent.click(screen.getByRole('switch', { name: 'Wochenenden ausblenden' }))
+    // Under "Ansicht", with the size.
+    await userEvent.click(screen.getByRole('button', { name: /^Ansicht/ }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }))
     expect(table()).not.toHaveClass('fold-weekends')
     expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
   })
@@ -506,31 +508,20 @@ describe('PlanPage', () => {
     expect(within(cell(/Anna, Donnerstag, 05.03.2026/)).getAllByText('Besichtigung')).not.toHaveLength(0)
   })
 
-  it('tells Planer A that Urlaub is entered by the management only', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<PlanPage year={2026} canEdit />)
-    await screen.findByText(/KW 10/)
-    const vacation = within(screen.getByRole('group', { name: 'Abwesenheit eintragen' })).getByRole('button', { name: 'Urlaub' })
-    expect(vacation).not.toHaveAttribute('draggable', 'true')
-    await user.click(vacation)
-    expect(await screen.findByText('Urlaub wird nur seitens der Geschäftsleitung im Kalender eingetragen.')).toBeInTheDocument()
-  })
-
-  it('enters Krank by dragging it onto a day', async () => {
+  it('has no Urlaub or Krank to drag above the plan: they are entered under Verwaltung', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit canAbsence />)
     await screen.findByText(/KW 10/)
-    const sick = within(screen.getByRole('group', { name: 'Abwesenheit eintragen' })).getByRole('button', { name: 'Krank' })
-    const day = cell(/Anna, Mittwoch, 04.03.2026/).closest('td')!
-    fireEvent.dragStart(sick)
-    expect(fireEvent.dragOver(day)).toBe(false)
-    fireEvent.drop(day)
-    fireEvent.dragEnd(sick)
+    expect(screen.queryByRole('group', { name: 'Abwesenheit eintragen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Urlaub' })).not.toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
-    expect(JSON.parse(String(call[1].body))).toEqual([
-      { employeeId: 1, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Krank', siteId: null })] },
-    ])
+  it('jumps to a month chosen from the time in view', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(/KW 10/)
+    await user.click(screen.getByRole('button', { name: 'Zu Monat oder Jahr springen' }))
+    await user.click(await screen.findByRole('button', { name: 'Jun' }))
+    expect(await screen.findByText(/KW 2[23]/)).toBeInTheDocument()
   })
 
   it('shows no vacation count in the plan: that is under Mein Bereich', async () => {
@@ -579,25 +570,21 @@ describe('PlanPage', () => {
     await user.keyboard('{/Control}')
 
     expect(screen.getByText('2 Felder ausgewählt')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Urlaub' }))
+    // Filled with a site through "Baustelle …" is tested below; here they are emptied.
+    await user.click(screen.getByRole('button', { name: 'Leeren' }))
 
-    await waitFor(() => expect(within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Urlaub')).not.toHaveLength(0))
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
-    expect(JSON.parse(String(call[1].body))).toEqual([
-      expect.objectContaining({ employeeId: 2, date: '2026-03-04', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
-      expect.objectContaining({ employeeId: 2, date: '2026-03-05', entries: [expect.objectContaining({ type: 'Urlaub' })] }),
+    const batches = () => fetchMock.mock.calls.filter(([url]) => url === '/api/plan/batch').map(([, init]) => JSON.parse(String(init.body)))
+    await waitFor(() => expect(batches()).toHaveLength(1))
+    expect(batches()[0]).toEqual([
+      { employeeId: 2, date: '2026-03-04', entries: [] },
+      { employeeId: 2, date: '2026-03-05', entries: [] },
     ])
     expect(screen.queryByText('2 Felder ausgewählt')).not.toBeInTheDocument()
 
     // Taken back with the button above the plan, and done again.
-    const batches = () => fetchMock.mock.calls.filter(([url]) => url === '/api/plan/batch').map(([, init]) => JSON.parse(String(init.body)))
     expect(screen.getByRole('button', { name: /Wiederherstellen/ })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: /Rückgängig/ }))
     await waitFor(() => expect(batches()).toHaveLength(2))
-    expect(batches()[1]).toEqual([
-      { employeeId: 2, date: '2026-03-04', entries: [] },
-      { employeeId: 2, date: '2026-03-05', entries: [] },
-    ])
     await waitFor(() => expect(screen.getByRole('button', { name: /Rückgängig/ })).toBeDisabled())
     await user.click(screen.getByRole('button', { name: /Wiederherstellen/ }))
     await waitFor(() => expect(batches()).toHaveLength(3))
@@ -1137,7 +1124,7 @@ describe('PlanPage', () => {
       const chip = within(cell(/Bernd, Dienstag, 03.03.2026/)).getAllByText('Familie Meier')[0].closest('.chip')!
       // Its own cell and anything outside the plan do not take it.
       expect(dropOn(chip, cell(/Bernd, Dienstag, 03.03.2026/).closest('td')!)).toBe(false)
-      expect(dropOn(chip, screen.getByRole('switch', { name: 'Wochenenden ausblenden' }))).toBe(false)
+      expect(dropOn(chip, screen.getByRole('button', { name: /^Ansicht/ }))).toBe(false)
       expect(batch()).toBeNull()
 
       expect(dropOn(chip, cell(/Bernd, Donnerstag, 05.03.2026/).closest('td')!)).toBe(true)

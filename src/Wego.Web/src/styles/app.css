@@ -194,6 +194,92 @@ a:hover {
   white-space: nowrap;
 }
 
+/* The first row above the plan: the view at the left, the time in view in the middle, Woche/Monat, Ansicht and
+   Vollbild at the right. */
+.plan-controls {
+  justify-content: space-between;
+}
+
+/* The time in view is a button: it opens the months of the year to jump to. */
+.plan-title-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 290px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f3f7f8;
+  color: var(--mantine-color-wego-9, #08394a);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+/* The calendar week in the same size and weight as the dates beside it, only in red. */
+.plan-title-button .kw {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.plan-title-button {
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-title-button:hover {
+  background: #e3eef1;
+}
+
+.plan-title-caret {
+  color: var(--muted, #5b6f77);
+  font-size: 0.8rem;
+}
+
+/* The months open just as wide as the time in view above them, in the same writing. */
+.month-jump {
+  min-width: 290px;
+  padding: 10px;
+}
+
+.month-jump-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--mantine-color-wego-9, #08394a);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.month-jump-months {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.month-jump-months button {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #eef2f4;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.month-jump-months button:hover {
+  background: #d6e6ea;
+}
+
+.month-jump-months button.now {
+  outline: 2px solid var(--wego-red, #d71f27);
+  outline-offset: -2px;
+}
+
 .plan-scroll {
   flex: 1;
   min-height: 0;
@@ -1978,16 +2064,45 @@ body.stretching * {
 }
 
 /* Above the plan the activities stand out in their full colour, like the header of the page. */
+/* A fine line between undo, the activities and the search. */
+.plan-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* The search right after the activities, not in the middle of what is left. */
+.activity-row .plan-search {
+  flex: 0 1 300px;
+  justify-content: flex-start;
+}
+
+/* The activities above the plan: calm white buttons, each with a dot in its colour (the entry dragged out of
+   it keeps that colour). */
 .activity-row .flow-step {
-  background: var(--entry-strong);
-  border-color: var(--entry-strong);
-  color: var(--entry-text, #14232a);
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #14232a;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(7, 42, 54, 0.25);
+}
+
+.activity-row .flow-step::before {
+  content: '';
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--entry-strong);
+}
+
+.activity-row .flow-step .activity-icon {
+  display: none;
 }
 
 .activity-row .flow-step:hover {
-  filter: brightness(1.06);
+  border-color: var(--entry-strong);
+  background: #f6f9fa;
 }
 
 /* The summary of a site: its customer, address and planning side by side, as cards like in its form. */
@@ -2657,12 +2772,6 @@ html.plan-full .shell-nav {
   .activity-row {
     gap: 4px 10px;
   }
-
-  /* The search gives way, so that Urlaub and Krank stay in the row of the activities. */
-  .plan-toolbar .plan-search {
-    flex-basis: 150px;
-    min-width: 150px;
-  }
 }
 
 /* The description of a site, in red, so that it is read. */
@@ -3260,6 +3369,25 @@ html.plan-full .shell-nav {
 }
 
 /* The dots of the steps on a card, as below the name in the calendar. */
+
+/* Urlaub and Krank in the list under Verwaltung. */
+.absence-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.absence-badge.vacation {
+  background: #fff3c4;
+  color: #8a6a00;
+}
+
+.absence-badge.sick {
+  background: #fde2e2;
+  color: #a32525;
+}
 
 /* The dots of the steps on a card, side by side. */
 .offer-card .offer-steps {

@@ -78,12 +78,12 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
   const siteId = entry.siteId
   return (
     <span
-      className={[className, draggable ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : ''].filter(Boolean).join(' ')}
+      className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
       // With a note, pointing at the entry shows the note instead of site and activity.
       title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry)}
       data-entry-id={entry.id}
-      {...dragSource({ kind: 'entry', entry }, draggable)}
+      {...dragSource({ kind: 'entry', entry }, draggable && entry.type === 'Baustelle')}
       {...drop}
     >
       <span className="chip-line">
