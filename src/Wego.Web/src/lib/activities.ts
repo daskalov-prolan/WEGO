@@ -118,7 +118,6 @@ export const DECLINE_REASONS = [
   'Baubeginn zu spät / Termin passt nicht',
   'Vorhaben verschoben',
   'Finanzierung oder Förderung nicht geklärt',
-  'Umfang passt nicht',
   'Keine Rückmeldung mehr',
   'Sonstiges',
 ]

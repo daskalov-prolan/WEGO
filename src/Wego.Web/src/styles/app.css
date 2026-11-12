@@ -3029,11 +3029,12 @@ html.plan-full .shell-nav {
 }
 
 /* One enquiry: a white card edged in the colour of its step. */
+/* The blocks of a card: the head (who and where) lightly in the colour of its column, what is wanted, the
+   appointments and the buttons, set off by fine lines. */
 .offer-card {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 10px;
+  overflow: hidden;
   border-left: 5px solid var(--card-edge, var(--border));
   border-radius: 10px;
   background: var(--surface);
@@ -3069,6 +3070,62 @@ html.plan-full .shell-nav {
   align-self: flex-start;
 }
 
+.offer-card > * {
+  padding: 7px 10px;
+}
+
+.offer-card-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.offer-card-head {
+  background: color-mix(in srgb, var(--card-edge, #b8c6ca) 20%, var(--surface));
+}
+
+.offer-card > .offer-history,
+.offer-card > .offer-card-foot {
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.offer-card-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* The planner in charge: the initials in a small round. */
+.offer-initials {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e1eef1;
+  color: var(--wego-teal-dark);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.offer-initials.none {
+  background: #fff1dc;
+  color: #b86e00;
+}
+
+.offer-card .offer-waiting {
+  color: #b86e00;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .offer-scope,
 .offer-description {
   line-height: 1.3;
@@ -3100,37 +3157,26 @@ html.plan-full .shell-nav {
   font-size: 0.76rem;
 }
 
+/* The mark at the left, the text beside it, wrapped lines under the text. */
+.offer-history li {
+  display: flex;
+  gap: 0.3em;
+}
+
 .offer-history li::before {
-  content: '✓ ';
+  flex-shrink: 0;
+  content: '✓';
   color: #3f8f4a;
 }
 
 .offer-history li.ahead::before {
-  content: '→ ';
+  content: '→';
   color: var(--wego-teal);
 }
 
 .offer-history li.ahead {
   font-weight: 700;
   color: var(--wego-teal-dark);
-}
-
-.offer-planner {
-  flex: 1;
-  min-width: 0;
-}
-
-.offer-planner .mantine-Select-input {
-  height: auto;
-  min-height: 0;
-  padding: 0;
-  font-weight: 700;
-  font-size: 0.76rem;
-}
-
-.offer-decline {
-  align-self: flex-start;
-  text-decoration: underline;
 }
 
 .offer-empty {
@@ -3174,8 +3220,3 @@ html.plan-full .shell-nav {
 }
 
 /* The dots of the steps on a card, as below the name in the calendar. */
-.offer-card .offer-steps {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}

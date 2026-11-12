@@ -78,6 +78,8 @@ describe('OfferBoardPage', () => {
     renderWithProviders(<OfferBoardPage />)
     const card = (await screen.findByText('Ausgewählt')).closest('article')!
     expect(within(card).getByRole('link', { name: /030 123 45/ })).toHaveAttribute('href', 'tel:03012345')
+    // The planner in charge by the initials.
+    expect(within(card).getByRole('button', { name: /Zuständiger Planer für Ausgewählt: Marina/ })).toHaveTextContent('M')
     // Until the Angebotsübergabe is planned, the Objektauswahl may get another appointment.
     expect(within(card).getByRole('button', { name: '+ weitere Objektauswahl' })).toBeInTheDocument()
     expect(within(column('Wartet auf Zusage')).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
@@ -89,8 +91,10 @@ describe('OfferBoardPage', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderWithProviders(<OfferBoardPage />)
     await screen.findByText('Neu')
-    await user.click(within(column('Anfrage')).getByRole('button', { name: 'Kunde hat abgesagt' }))
-    const dialog = await screen.findByRole('dialog')
+    // From the enquiry window, opened by a click on the card.
+    await user.click(within(column('Anfrage')).getByRole('button', { name: 'Neu' }))
+    await user.click(await screen.findByRole('button', { name: 'Kunde hat abgesagt' }))
+    const dialog = await screen.findByRole('dialog', { name: /Abgelehnt/ })
     const save = within(dialog).getByRole('button', { name: 'Abgelehnt' })
     expect(save).toBeDisabled()
     await user.click(screen.getByRole('radio', { name: 'Sonstiges' }))

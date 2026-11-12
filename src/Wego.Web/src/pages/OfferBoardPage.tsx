@@ -1,10 +1,9 @@
-import { Alert, Anchor, Button, Group, Loader, MultiSelect, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, Group, Loader, Menu, MultiSelect, Radio, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Entry, Offers, OfferStep, PlanEmployee, Planner, Site, StepInput } from '../api/types'
-import { OfferSteps } from '../components/OfferSteps'
 import { Sheet } from '../components/Sheet'
 import { SiteForm } from '../components/SiteForm'
 import { TimeSelect } from '../components/TimeSelect'
@@ -63,6 +62,15 @@ interface StepDraft {
   /** One more appointment of the step (a second Objektauswahl). */
   another?: boolean
 }
+
+/** "Marina Daskalov" -> "MD" */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
 /** A click on the card itself, not on one of its buttons, fields or menus. */
 const onCard = (event: MouseEvent<HTMLElement>) => {
@@ -133,7 +141,7 @@ export function OfferBoardPage() {
   const card = (site: Site) => {
     const stage = stageOf(site, offers.steps, order, today)
     const own = offers.steps.filter((s) => s.siteId === site.id)
-    // The dots and the waiting days, worked out as in the calendar.
+    // How long it has been waiting for its next step (as in the calendar).
     const lib = offerSteps(site, own as unknown as Entry[], today)
     const waiting = stage.column === WAITING ? null : waitingDays(lib, today)
     const address = formatAddress(site)
@@ -145,6 +153,7 @@ export function OfferBoardPage() {
       const after = order[order.indexOf(activity) + 1]
       return own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
     })
+    const planner = plannerName(site.responsiblePlannerId)
     return (
       <article
         key={site.id}
@@ -152,26 +161,34 @@ export function OfferBoardPage() {
         style={{ '--card-edge': colour } as CSSProperties}
         onClick={(event) => onCard(event) && setEditing(site)}
       >
-        <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
-          {site.name}
-        </button>
-        {address && <Text size="xs" c="dimmed">{address}</Text>}
-        {site.clientPhone && (
-          <Anchor href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="xs" c="dimmed" className="offer-phone">
-            ☎ {site.clientPhone}
-          </Anchor>
+        {/* Who and where. */}
+        <div className="offer-card-block offer-card-head">
+          <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
+            {site.name}
+          </button>
+          {address && <Text size="xs" c="dimmed">{address}</Text>}
+          {site.clientPhone && (
+            <Anchor href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} size="xs" c="dimmed" className="offer-phone">
+              ☎ {site.clientPhone}
+            </Anchor>
+          )}
+        </div>
+        {/* What: the scope underlined, the details below in the same writing. */}
+        {((site.scope?.length ?? 0) > 0 || site.description) && (
+          <div className="offer-card-block">
+            {(site.scope?.length ?? 0) > 0 && (
+              <Text size="sm" td="underline" className="offer-scope">
+                {site.scope!.join(', ')}
+              </Text>
+            )}
+            {site.description && (
+              <Text size="sm" lineClamp={3} className="offer-description">
+                {site.description}
+              </Text>
+            )}
+          </div>
         )}
-        {(site.scope?.length ?? 0) > 0 && (
-          // What the customer would like done, underlined; the details below in the same writing.
-          <Text size="sm" td="underline" className="offer-scope">
-            {site.scope!.join(', ')}
-          </Text>
-        )}
-        {site.description && (
-          <Text size="sm" lineClamp={3} className="offer-description">
-            {site.description}
-          </Text>
-        )}
+        {/* When. */}
         <ul className="offer-history">
           {site.requestedOn && <li>Anfrage {shortDate(site.requestedOn)}</li>}
           {appointments.map(({ activity, date, entries }) => {
@@ -192,56 +209,64 @@ export function OfferBoardPage() {
             )
           })}
         </ul>
-        <Group gap={6} wrap="nowrap">
-          <Text size="xs" c="dimmed">Planer:</Text>
-          <Select
-            size="xs"
-            variant="unstyled"
-            className="offer-planner"
-            aria-label={`Zuständiger Planer für ${site.name}`}
-            data={planners.map((planner) => ({ value: String(planner.id), label: planner.name }))}
-            value={site.responsiblePlannerId ? String(site.responsiblePlannerId) : null}
-            placeholder="wählen"
-            allowDeselect={false}
-            onChange={(value) => value && changePlanner(site, Number(value))}
-            comboboxProps={{ withinPortal: true }}
-          />
-        </Group>
-        <Group gap={8}>
-          <OfferSteps steps={lib} waiting={waiting} />
-        </Group>
-        <Group gap={6}>
-          {stage.planned && (
-            <Button size="compact-xs" variant="default" onClick={() => setStep({ site, activity: stage.planned![0].activity, current: stage.planned! })}>
-              Termin verschieben
-            </Button>
-          )}
-          {stage.next && (
-            <Button size="compact-xs" onClick={() => setStep({ site, activity: stage.next!, current: [] })}>
-              {activityLabel(stage.next)} planen
-            </Button>
-          )}
-          {repeat && (
-            <Button size="compact-xs" variant="light" onClick={() => setStep({ site, activity: repeat, current: [], another: true })}>
-              + weitere {activityLabel(repeat)}
-            </Button>
-          )}
-          {stage.column === WAITING && (
-            <>
-              <Button size="compact-xs" color="green" onClick={() => setAccepting(site)}>
-                Zusage
+        <div className="offer-card-foot">
+          <Group gap={6}>
+            {stage.planned && (
+              <Button size="compact-xs" variant="default" onClick={() => setStep({ site, activity: stage.planned![0].activity, current: stage.planned! })}>
+                Termin verschieben
               </Button>
-              <Button size="compact-xs" color="red" onClick={() => setDeclining(site)}>
-                Abgelehnt
+            )}
+            {stage.next && (
+              <Button size="compact-xs" onClick={() => setStep({ site, activity: stage.next!, current: [] })}>
+                {activityLabel(stage.next)} planen
               </Button>
-            </>
-          )}
-        </Group>
-        {stage.column !== WAITING && (
-          <Anchor component="button" type="button" size="xs" c="dimmed" onClick={() => setDeclining(site)} className="offer-decline">
-            Kunde hat abgesagt
-          </Anchor>
-        )}
+            )}
+            {repeat && (
+              <Button size="compact-xs" variant="light" onClick={() => setStep({ site, activity: repeat, current: [], another: true })}>
+                + weitere {activityLabel(repeat)}
+              </Button>
+            )}
+            {stage.column === WAITING && (
+              <>
+                <Button size="compact-xs" color="green" onClick={() => setAccepting(site)}>
+                  Zusage
+                </Button>
+                <Button size="compact-xs" color="red" onClick={() => setDeclining(site)}>
+                  Abgelehnt
+                </Button>
+              </>
+            )}
+          </Group>
+          <Group gap={6} wrap="nowrap" className="offer-card-side">
+            {waiting !== null && (
+              <span className="offer-waiting" title={`wartet seit ${waiting} Tagen`}>
+                {waiting} T.
+              </span>
+            )}
+            {/* The planner in charge, by the initials; a click changes it. */}
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <button
+                  type="button"
+                  className={`offer-initials${planner ? '' : ' none'}`}
+                  aria-label={`Zuständiger Planer für ${site.name}: ${planner ?? 'keiner'}`}
+                  title={planner ? `Planer: ${planner}` : 'Planer wählen'}
+                >
+                  {planner ? initials(planner) : '?'}
+                </button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>Zuständiger Planer</Menu.Label>
+                {planners.map((p) => (
+                  <Menu.Item key={p.id} onClick={() => p.id !== site.responsiblePlannerId && changePlanner(site, p.id)}>
+                    {p.id === site.responsiblePlannerId ? '✓ ' : ''}
+                    {p.name}
+                  </Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
+        </div>
       </article>
     )
   }
@@ -305,17 +330,7 @@ export function OfferBoardPage() {
               {declined.map((d) => (
                 <li key={d.siteId}>
                   {d.name}: {d.declineReason}
-                  {d.declineNote ? ` (${d.declineNote})` : ''}{' '}
-                  <Anchor
-                    component="button"
-                    type="button"
-                    size="xs"
-                    onClick={() => decide(api.reopenOffer(d.siteId), `${d.name} ist wieder im Angebot.`).catch((e) =>
-                      notifications.show({ message: messageOf(e), color: 'red' }),
-                    )}
-                  >
-                    wieder ins Angebot
-                  </Anchor>
+                  {d.declineNote ? ` (${d.declineNote})` : ''}
                 </li>
               ))}
             </ul>
@@ -342,6 +357,18 @@ export function OfferBoardPage() {
           title={`Anfrage · ${editing.name}`}
           initial={toSiteInput(editing)}
           enquiry
+          extra={
+            <Button
+              variant="subtle"
+              color="red"
+              onClick={() => {
+                setDeclining(editing)
+                setEditing(null)
+              }}
+            >
+              Kunde hat abgesagt
+            </Button>
+          }
           onClose={() => setEditing(null)}
           onSave={async (input) => {
             await api.updateSite(editing.id, input)

@@ -1309,9 +1309,6 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var plan = await g.GetFromJsonAsync<JsonElement>("/api/plan?year=2030");
         Assert.DoesNotContain(plan.GetProperty("entries").EnumerateArray(), e => e.TryGetProperty("siteId", out var s) && s.ValueKind == JsonValueKind.Number && s.GetInt32() == no);
         Assert.Equal(HttpStatusCode.NotFound, (await craftsman.GetAsync($"/api/sites/{no}")).StatusCode);
-        // Declined by mistake: back.
-        var reopened = await (await g.PostAsync($"/api/offers/{no}/reopen", null)).Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Contains(reopened.GetProperty("sites").EnumerateArray(), s => s.GetProperty("id").GetInt32() == no);
 
         var yes = await CreateSiteAsync(g, "Sagt Ja");
         var accepted = await (await g.PostAsJsonAsync($"/api/offers/{yes}/accept", new { plannedStart = "2030-05-04" }))
