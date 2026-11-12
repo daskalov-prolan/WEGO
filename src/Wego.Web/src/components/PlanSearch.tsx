@@ -80,6 +80,8 @@ export function PlanSearch({ sites, daysOf, today, year, found, onFind, onGo }: 
       w="100%"
       aria-label="Im Plan suchen"
       placeholder="Suchen: Kunde, Baustelle, Adresse"
+      // No arrow at the right: it is a search, not a list to open.
+      rightSection={<span />}
       leftSection={
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
           <circle cx="7" cy="7" r="4.8" />
