@@ -65,6 +65,8 @@ import {
 } from '../lib/dates'
 import { cellKey, holidaysByDate, onDay, toInput } from '../lib/ui'
 import { jumpTo } from '../lib/jump'
+import { FullViewButton } from '../components/FullViewButton'
+import { useFullView } from '../lib/fullView'
 import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
@@ -389,26 +391,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // The logo, with this plan as the start: to today.
   useWindowEvent(HOME_EVENT, () => goToday())
 
-  // Vollbild (a smartboard, a projector): the head and the menu of the page go, the browser fills the screen if
-  // it can; leaving the browser's full screen (Esc) brings them back.
-  const [full, setFull] = useState(false)
-  useEffect(() => {
-    document.documentElement.classList.toggle('plan-full', full)
-    return () => document.documentElement.classList.remove('plan-full')
-  }, [full])
-  useEffect(() => {
-    const left = () => {
-      if (!document.fullscreenElement) setFull(false)
-    }
-    document.addEventListener('fullscreenchange', left)
-    return () => document.removeEventListener('fullscreenchange', left)
-  }, [])
-  const toggleFull = () => {
-    const next = !full
-    setFull(next)
-    if (next) document.documentElement.requestFullscreen?.().catch(() => {})
-    else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
-  }
+  // Vollbild (a smartboard, a projector): only the plan.
+  const { full, toggle: toggleFull } = useFullView()
 
   useWindowEvent('keydown', (event) => {
     if (event.key !== 'Escape') return
@@ -1539,23 +1523,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                   +
                 </ActionIcon>
               </Group>
-              <Tooltip label={full ? 'Kopf und Menü wieder zeigen (Esc)' : 'Nur den Kalender zeigen, über den ganzen Bildschirm (z. B. am Smartboard)'}>
-                <ActionIcon
-                  variant={full ? 'filled' : 'default'}
-                  size="input-sm"
-                  onClick={toggleFull}
-                  aria-label={full ? 'Vollbild beenden' : 'Vollbild'}
-                  aria-pressed={full}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                    {full ? (
-                      <path d="M6 1.5V6H1.5M10 1.5V6h4.5M6 14.5V10H1.5M10 14.5V10h4.5" />
-                    ) : (
-                      <path d="M1.5 6V1.5H6M10 1.5h4.5V6M1.5 10v4.5H6M14.5 10v4.5H10" />
-                    )}
-                  </svg>
-                </ActionIcon>
-              </Tooltip>
+              <FullViewButton full={full} onToggle={toggleFull} what="den Kalender" />
             </Group>
           )}
         </Group>

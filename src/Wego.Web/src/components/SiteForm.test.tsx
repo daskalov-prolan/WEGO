@@ -38,7 +38,7 @@ describe('SiteForm', () => {
     expect(screen.queryByLabelText(/Adresszusatz/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'Frau' }))
 
-    await user.click(screen.getByRole('radio', { name: 'Straße' }))
+    await user.click(screen.getByRole('button', { name: 'nach Straße benennen' }))
     expect(screen.getByText('Hauptstraße 12', { selector: 'strong' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
