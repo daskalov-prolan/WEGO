@@ -174,6 +174,9 @@ public class Site
     /// <summary>Auftraggeber: the customer or the property management.</summary>
     public string? Client { get; set; }
 
+    /// <summary>Anrede of the customer: Herr, Frau or Familie (see SiteEndpoints.Salutations).</summary>
+    public string? Salutation { get; set; }
+
     /// <summary>Telephone number of the customer, to call before a visit or the start of the work.</summary>
     public string? ClientPhone { get; set; }
 

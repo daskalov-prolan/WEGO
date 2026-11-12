@@ -11,7 +11,7 @@ import { TimeSelect } from '../components/TimeSelect'
 import { activityInfo, activityLabel, DECLINE_REASONS, textOfActivity } from '../lib/activities'
 import { addDays, CURRENT_YEAR, formatDate, todayIso } from '../lib/dates'
 import { offerSteps, waitingDays } from '../lib/offerSteps'
-import { emptySite, formatAddress, toSiteInput } from '../lib/sites'
+import { customerName, emptySite, formatAddress, toSiteInput } from '../lib/sites'
 
 /** Where an enquiry stands: its column, the step to plan next, or the appointments of the step ahead. */
 interface Stage {
@@ -159,7 +159,7 @@ export function OfferBoardPage() {
         onClick={(event) => onCard(event) && setEditing(site)}
       >
         <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
-          {site.name}
+          {customerName(site)}
         </button>
         {(address || site.clientPhone) && (
           <div className="offer-meta">

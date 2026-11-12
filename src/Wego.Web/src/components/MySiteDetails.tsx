@@ -4,7 +4,7 @@ import type { Entry, Plan, Site } from '../api/types'
 import { SiteName } from './Chip'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { formatDate, formatDateLong, formatDayTime } from '../lib/dates'
-import { formatAddress } from '../lib/sites'
+import { clientName, formatAddress } from '../lib/sites'
 import { CallButton, SiteWayButtons } from './SiteActions'
 
 interface Props {
@@ -74,7 +74,7 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
 
         {(site.client || site.clientPhone) && (
           <Row label="Kunde">
-            {site.client && <Text fw={600}>{site.client}</Text>}
+            {site.client && <Text fw={600}>{clientName(site)}</Text>}
             {site.clientPhone && (
               <Group mt={6}>
                 <CallButton phone={site.clientPhone} />

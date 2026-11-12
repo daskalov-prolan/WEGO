@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { api, messageOf } from '../api/client'
 import type { Planner, SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
+
+/** How the customer is addressed (as on the server). */
+const SALUTATIONS = ['Herr', 'Frau', 'Familie']
 import { SCOPES } from '../lib/activities'
 import { Sheet } from './Sheet'
 
@@ -112,6 +115,21 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
             </div>
           )}
           <Section title="Kunde">
+            {/* How the customer is addressed: once more a click on the chosen one takes it off. */}
+            <div>
+              <Text size="sm" fw={500} mb={4}>
+                Anrede
+              </Text>
+              <SegmentedControl
+                size="sm"
+                value={site.salutation ?? ''}
+                onChange={(value) => setSite((current) => ({ ...current, salutation: value || null }))}
+                data={[
+                  { value: '', label: 'keine' },
+                  ...SALUTATIONS.map((salutation) => ({ value: salutation, label: salutation })),
+                ]}
+              />
+            </div>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
               <TextInput label="Auftraggeber" maxLength={200} data-autofocus {...field('client')} />
               <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
@@ -119,12 +137,6 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
           </Section>
           <Section title="Adresse">
             <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
-            <TextInput
-              label="Adresszusatz"
-              placeholder="z. B. Hinterhaus, 3. OG links, mit oder ohne Aufzug"
-              maxLength={200}
-              {...field('addressAddition')}
-            />
             <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
               <TextInput
                 label="PLZ"

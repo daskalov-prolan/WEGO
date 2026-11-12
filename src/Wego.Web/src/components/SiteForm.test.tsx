@@ -31,11 +31,12 @@ describe('SiteForm', () => {
     await user.type(input(/^Straße und Hausnummer/), 'Hauptstraße 12')
     await user.type(input(/^Telefon Kunde/), '030 1234567')
     expect(screen.getByText('Hausverwaltung Nord', { selector: 'strong' })).toBeInTheDocument()
-    // Neither the number in Label nor a planned end; the address addition hints at the lift.
+    // Neither the number in Label nor a planned end, nor an address addition; the Anrede of the customer.
     expect(screen.queryByLabelText(/Projektnummer/)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/Geplantes Ende/)).not.toBeInTheDocument()
     expect(screen.queryByText('Kunde oder Hausverwaltung')).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText('z. B. Hinterhaus, 3. OG links, mit oder ohne Aufzug')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Adresszusatz/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'Frau' }))
 
     await user.click(screen.getByRole('radio', { name: 'Straße' }))
     expect(screen.getByText('Hauptstraße 12', { selector: 'strong' })).toBeInTheDocument()
@@ -47,6 +48,7 @@ describe('SiteForm', () => {
         street: 'Hauptstraße 12',
         houseNumber: null,
         clientPhone: '030 1234567',
+        salutation: 'Frau',
         nameSource: 'Strasse',
         status: 'Angebot',
       }),

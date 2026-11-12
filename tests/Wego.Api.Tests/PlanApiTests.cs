@@ -1229,14 +1229,19 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var response = await g.PostAsJsonAsync("/api/sites", new
         {
-            client = "Umfang Kunde", nameSource = "Auftraggeber", scope = new[] { "Sonstiges", "Gäste-WC" },
+            client = "Umfang Kunde", nameSource = "Auftraggeber", scope = new[] { "Sonstiges", "Gäste-WC" }, salutation = "Frau",
         });
         var site = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Frau", site.GetProperty("salutation").GetString());
         // In the order of the list.
         Assert.Equal(new[] { "Gäste-WC", "Sonstiges" }, site.GetProperty("scope").EnumerateArray().Select(x => x.GetString()!).ToArray());
         Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync("/api/sites", new
         {
             client = "Umfang falsch", nameSource = "Auftraggeber", scope = new[] { "Swimmingpool" },
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await g.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Anrede falsch", nameSource = "Auftraggeber", salutation = "Majestät",
         })).StatusCode);
     }
 
