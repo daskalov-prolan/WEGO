@@ -3029,13 +3029,12 @@ html.plan-full .shell-nav {
 }
 
 /* One enquiry: a white card edged in the colour of its step. */
-/* The blocks of a card: the head (who and where) lightly in the colour of its column, what is wanted, the
-   appointments and the buttons, set off by fine lines. */
 .offer-card {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border-left: 5px solid var(--card-edge, var(--border));
+  gap: 6px;
+  padding: 10px;
+  border-left: 4px solid var(--card-edge, var(--border));
   border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -3066,64 +3065,86 @@ html.plan-full .shell-nav {
   text-decoration: underline;
 }
 
-.offer-phone {
-  align-self: flex-start;
-}
-
-.offer-card > * {
-  padding: 7px 10px;
-}
-
-.offer-card-block {
+/* Address and phone, small and grey, one under the other. */
+.offer-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  color: var(--muted, #5b6f77);
+  font-size: 0.78rem;
 }
 
-.offer-card-head {
-  background: color-mix(in srgb, var(--card-edge, #b8c6ca) 20%, var(--surface));
+.offer-meta-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
 }
 
-.offer-card > .offer-history,
-.offer-card > .offer-card-foot {
-  padding: 7px 10px;
-  border-top: 1px solid var(--border);
+.offer-meta b {
+  color: var(--mantine-color-dark-7, #102a33);
 }
 
-.offer-card-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px;
+.offer-phone {
+  align-self: flex-start;
+  color: inherit;
+  text-decoration: none;
 }
 
-/* The planner in charge: the initials in a small round. */
-.offer-initials {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
+.offer-phone:hover,
+.offer-link:hover {
+  text-decoration: underline;
+}
+
+.offer-link {
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: #e1eef1;
-  color: var(--wego-teal-dark);
+  background: none;
+  color: var(--muted, #5b6f77);
   font: inherit;
-  font-size: 11px;
-  font-weight: 800;
+  text-decoration: underline;
   cursor: pointer;
 }
 
-.offer-initials.none {
-  background: #fff1dc;
-  color: #b86e00;
+/* The scope as small sand-coloured labels, the description below. */
+.offer-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 0.74rem;
 }
 
-.offer-card .offer-waiting {
-  color: #b86e00;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+.offer-scope span {
+  padding: 1px 8px;
+  border: 1px solid #e2d6bd;
+  border-radius: 999px;
+  background: #f3ede1;
+}
+
+.offer-scope em {
+  flex-basis: 100%;
+  color: var(--muted, #5b6f77);
+}
+
+/* An appointment ahead in a grey box; a click moves it. */
+.offer-appointment {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: #f1f6f7;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.offer-appointment b {
+  color: var(--wego-teal-dark);
+}
+
+.offer-appointment:hover {
+  background: #e3eef1;
 }
 
 .offer-scope,
@@ -3220,3 +3241,10 @@ html.plan-full .shell-nav {
 }
 
 /* The dots of the steps on a card, as below the name in the calendar. */
+
+/* The dots of the steps on a card, side by side. */
+.offer-card .offer-steps {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
