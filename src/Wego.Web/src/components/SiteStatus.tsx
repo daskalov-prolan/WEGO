@@ -10,6 +10,7 @@ const ACTION: Record<SiteStatus, string> = {
   Bauphase: 'Bauphase beginnen',
   Abgeschlossen: 'Erledigt',
   Storniert: 'Stornieren',
+  Abgelehnt: 'Abgelehnt',
 }
 
 /** An appointment the customer has not confirmed yet, in place of its status. */

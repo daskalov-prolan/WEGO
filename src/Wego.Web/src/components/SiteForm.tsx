@@ -1,9 +1,10 @@
-import { Alert, Button, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Alert, Button, Chip, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Planner, SiteInput, SiteNameSource, SiteStatus } from '../api/types'
 import { siteName } from '../lib/sites'
+import { SCOPES } from '../lib/activities'
 import { Sheet } from './Sheet'
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   onClose: () => void
   /** Saves the site; a rejected promise keeps the form open and shows the message. */
   onSave: (input: SiteInput) => Promise<void>
+  /** An enquiry of the offer phase: it starts in the offer, nothing to choose. */
+  enquiry?: boolean
 }
 
 /** A group of fields on a white card with a petrol edge and a small heading. */
@@ -25,7 +28,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** The record of a construction site: client, address, and which of the two names it in the plan. */
-export function SiteForm({ title, initial, onClose, onSave }: Props) {
+export function SiteForm({ title, initial, onClose, onSave, enquiry = false }: Props) {
   // Street and house number are one field; a house number kept apart before joins the street.
   const [site, setSite] = useState<SiteInput>(() => ({
     ...initial,
@@ -94,7 +97,7 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
     <Sheet onClose={onClose} title={<Text fw={700}>{title}</Text>}>
       <form onSubmit={submit}>
         <Stack gap="sm">
-          {initial.status !== undefined && (
+          {initial.status !== undefined && !enquiry && (
             <div>
               <Text size="sm" fw={500} mb={4}>
                 Beginnt als
@@ -164,24 +167,59 @@ export function SiteForm({ title, initial, onClose, onSave }: Props) {
               onChange={(value) => setSite((current) => ({ ...current, responsiblePlannerId: value ? Number(value) : null }))}
               allowDeselect={false}
             />
-            <DateInput
-              label="Geplanter Start"
-              valueFormat="DD.MM.YYYY"
-              clearable
-              maw={220}
-              value={site.plannedStart}
-              // An end set before stays, unless it would now come before the start.
-              onChange={(value) =>
-                setSite((current) => ({
-                  ...current,
-                  plannedStart: value,
-                  plannedEnd: value && current.plannedEnd && current.plannedEnd < value ? null : current.plannedEnd,
-                }))
-              }
-            />
+            {/* The day the enquiry came in: where the offer phase begins (a new site: today). */}
+            {!site.isService && (
+              <DateInput
+                label="Anfrage am"
+                description="Wann die Anfrage des Kunden reinkam"
+                valueFormat="DD.MM.YYYY"
+                maw={220}
+                maxDate={new Date()}
+                placeholder="heute"
+                value={site.requestedOn ?? null}
+                onChange={(value) => setSite((current) => ({ ...current, requestedOn: value }))}
+              />
+            )}
+            {/* What the customer would like done: for an enquiry (not a service call); the details in the description. */}
+            {!site.isService && (
+              <Chip.Group multiple value={site.scope ?? []} onChange={(scope) => setSite((current) => ({ ...current, scope }))}>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Gewünschter Umfang
+                  </Text>
+                  <Group gap={6}>
+                    {SCOPES.map((scope) => (
+                      <Chip key={scope} value={scope} size="sm" variant="outline">
+                        {scope}
+                      </Chip>
+                    ))}
+                  </Group>
+                </Stack>
+              </Chip.Group>
+            )}
+            {/* An enquiry gets its start with the customer's yes (Zusage): a start set here would move it into the
+                construction phase by itself on that day, yes or no. */}
+            {!enquiry && (
+              <DateInput
+                label="Geplanter Start"
+                valueFormat="DD.MM.YYYY"
+                clearable
+                maw={220}
+                value={site.plannedStart}
+                // An end set before stays, unless it would now come before the start.
+                onChange={(value) =>
+                  setSite((current) => ({
+                    ...current,
+                    plannedStart: value,
+                    plannedEnd: value && current.plannedEnd && current.plannedEnd < value ? null : current.plannedEnd,
+                  }))
+                }
+              />
+            )}
             <Textarea
               label="Beschreibung"
-              description="Art des Umbaus, Fliesen, Hinweise"
+              description={site.isService ? 'Art des Umbaus, Fliesen, Hinweise' : 'Was genau: Größe, Wünsche, Fliesen, Hinweise'}
+              placeholder={site.isService ? undefined : 'z. B. Bad 8 m², Wanne raus, bodengleiche Dusche'}
               autosize
               minRows={2}
               maxLength={1000}

@@ -20,7 +20,7 @@ interface Props {
 // Left the plans (the own one, and the plan of everybody per phase), right the records.
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
-  { page: 'angebotsphase', label: 'Planung Angebotsphase', short: 'Angebot', visible: (user: User) => user.seesOffers !== false },
+  { page: 'angebotsphase', label: 'Angebotsphase', short: 'Angebot', visible: (user: User) => user.seesOffers !== false },
   { page: 'bauphase', label: 'Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },

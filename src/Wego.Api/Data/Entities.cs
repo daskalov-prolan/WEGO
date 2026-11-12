@@ -96,13 +96,17 @@ public class Employee
     public List<PlanEntry> Entries { get; set; } = [];
 }
 
-/// <summary>Where a construction site stands, in this order. Storniert is no longer offered; old sites may still have it.</summary>
+/// <summary>
+/// Where a construction site stands, in this order. Storniert is no longer offered; old sites may still have it.
+/// Abgelehnt: the customer said no to the offer (with a reason, see OfferEndpoints).
+/// </summary>
 public enum SiteStatus
 {
     Angebot,
     Bauphase,
     Abgeschlossen,
     Storniert,
+    Abgelehnt,
 }
 
 public static class SiteStatusFlow
@@ -222,6 +226,18 @@ public class Site
 
     public DateOnly? PlannedStart { get; set; }
     public DateOnly? PlannedEnd { get; set; }
+
+    /// <summary>The day the enquiry of the customer came in (Anfrage): where the offer phase begins.</summary>
+    public DateOnly? RequestedOn { get; set; }
+
+    /// <summary>What the customer would like done (Umfang), from a fixed list (see OfferEndpoints.Scopes).</summary>
+    public List<string> Scope { get; set; } = [];
+
+    /// <summary>Why the customer said no (see OfferEndpoints.DeclineReasons); only for a declined offer.</summary>
+    public string? DeclineReason { get; set; }
+
+    /// <summary>A few words to the reason, needed for "Sonstiges".</summary>
+    public string? DeclineNote { get; set; }
 
     /// <summary>What is done there: kind of conversion, tiles, remarks.</summary>
     public string? Description { get; set; }

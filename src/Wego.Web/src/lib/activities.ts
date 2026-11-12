@@ -95,6 +95,32 @@ export const SITE_STATUSES: { value: SiteStatus; label: string; color: string; h
   { value: 'Abgeschlossen', label: 'Erledigt', color: 'green', hex: '#2f9e44' },
   // Grey: the red is the Bauphase's.
   { value: 'Storniert', label: 'Storniert', color: 'gray', hex: '#868e96' },
+  // The customer said no to the offer.
+  { value: 'Abgelehnt', label: 'Abgelehnt', color: 'dark', hex: '#5c5f66' },
+]
+
+/** What the customer may want done (Umfang), as on the server. */
+export const SCOPES = [
+  'Komplettsanierung Bad',
+  'Gäste-WC',
+  'Duschumbau',
+  'Wanne zu Dusche',
+  'Nur Fliesen',
+  'Nur Sanitär',
+  'Sanierung Wohnung / Haus',
+  'Sonstiges',
+]
+
+/** Why a customer said no, as on the server; "Sonstiges" needs a few words. */
+export const DECLINE_REASONS = [
+  'Preis zu hoch',
+  'Anderer Anbieter beauftragt',
+  'Baubeginn zu spät / Termin passt nicht',
+  'Vorhaben verschoben',
+  'Finanzierung oder Förderung nicht geklärt',
+  'Umfang passt nicht',
+  'Keine Rückmeldung mehr',
+  'Sonstiges',
 ]
 
 /** Done or cancelled: nothing is planned there any more. */

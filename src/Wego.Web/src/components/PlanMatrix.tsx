@@ -704,6 +704,10 @@ export interface SiteRow {
 interface SiteTimelineProps {
   /** Who has a birthday (see MatrixProps.birthdays). */
   birthdays?: Map<string, string[]>
+  /** The offer phase: below the name of a site how far it is (its steps), drawn by the plan. */
+  stepsOf?: (site: Site) => ReactNode
+  /** The offer phase: the day the enquiry of a site came in, marked in its row. */
+  requestedOf?: (site: Site) => string | null | undefined
   /** In place of the word in the corner, e.g. the choice of the employees on a phone. */
   corner?: ReactNode
   /** A reserved day of an offer site: framed in black on white. */
@@ -749,6 +753,8 @@ interface SiteCellProps {
   found: Set<number> | undefined
   draggable: boolean
   stretches: boolean
+  /** The enquiry of the site came in on this day (the offer phase). */
+  request: boolean
 }
 
 const LABELS = '\u0001'
@@ -790,6 +796,12 @@ const SiteCell = memo(function SiteCell(cell: SiteCellProps) {
         }}
       >
         <span className="cell-full">
+          {/* The enquiry came in this day: where the offer phase of the site begins. */}
+          {cell.request && (
+            <span className="chip chip-baustelle request-chip" style={entryStyle({ type: 'Baustelle', activity: 'Anfrage', siteName: site.name })}>
+              Anfrage
+            </span>
+          )}
           {entries.map((entry, index) => (
             <Chip
               key={entry.id}
@@ -856,6 +868,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
             <span className="site-link" role="link" onClick={() => onOpenSite(site.id)}>
               {site.name}
             </span>
+            {props.stepsOf?.(site)}
           </th>
           {siteLive.start > 0 && <td colSpan={siteLive.start} className="live-gap" />}
           {days.slice(siteLive.start, siteLive.end).map((day) => {
@@ -875,6 +888,7 @@ export function SiteTimeline(props: SiteTimelineProps) {
                 found={found && entries.some((entry) => found.has(entry.id)) ? found : undefined}
                 draggable={draggable}
                 stretches={!!props.onStretchStart}
+                request={props.requestedOf?.(site) === day.iso}
               />
             )
           })}

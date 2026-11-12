@@ -15,6 +15,7 @@ import type {
   Entry,
   HolidayKind,
   NamedItem,
+  Offers,
   Plan,
   Planner,
   SchoolHoliday,
@@ -26,6 +27,7 @@ import type {
   SiteReport,
   SiteStatus,
   StatusChange,
+  StepInput,
   User,
   Vacation,
 } from './types'
@@ -116,6 +118,14 @@ export const api = {
   confirmSite: (id: number, asService: boolean) => request<Site>('POST', `/api/sites/${id}/confirm`, { asService }),
   updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
     request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
+  /** The offer phase: the enquiries with their steps, and the sites decided lately. */
+  offers: () => request<Offers>('GET', '/api/offers'),
+  /** Plans the step (in its order; planned again, it moves) and gives the offers anew. */
+  planOfferStep: (siteId: number, input: StepInput) => request<Offers>('POST', `/api/offers/${siteId}/steps`, input),
+  acceptOffer: (siteId: number, plannedStart: string) => request<Offers>('POST', `/api/offers/${siteId}/accept`, { plannedStart }),
+  declineOffer: (siteId: number, reason: string, note: string | null) =>
+    request<Offers>('POST', `/api/offers/${siteId}/decline`, { reason, note }),
+  reopenOffer: (siteId: number) => request<Offers>('POST', `/api/offers/${siteId}/reopen`),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
   /** One year, or without it the whole time of the site. */

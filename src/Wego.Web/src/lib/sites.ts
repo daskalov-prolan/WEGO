@@ -18,7 +18,8 @@ export const emptySite: SiteInput = {
 
 export function toSiteInput(site: Site): SiteInput {
   const { client, street, houseNumber, addressAddition, postalCode, city, nameSource, description } = site
-  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone, responsiblePlannerId, isService } = site
+  const { plannedStart, plannedEnd, labelProjectNumber, clientPhone, responsiblePlannerId, isService, requestedOn } = site
+  const { scope } = site
   return {
     client,
     clientPhone,
@@ -34,6 +35,8 @@ export function toSiteInput(site: Site): SiteInput {
     plannedEnd,
     responsiblePlannerId,
     isService,
+    requestedOn,
+    scope: scope ?? [],
   }
 }
 

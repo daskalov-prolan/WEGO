@@ -1181,10 +1181,26 @@ a:hover {
   color: inherit;
   text-decoration: underline;
 }
+/* One appointment of the day: a card edged in the colour of its activity, well apart from the next. */
 .day-details-entry {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 6px solid var(--entry-strong, var(--wego-teal));
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.day-details-entry + .day-details-entry {
+  margin-top: 6px;
+}
+
+.day-details-count {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .day-details-entry .chip {
@@ -2569,6 +2585,86 @@ html.zoomed .plan-scroll {
   scroll-snap-type: none;
 }
 
+/* Zoomed in with two fingers, a window (a note, a day, a menu sheet) covers just the part in view and is drawn
+   at its usual size there: the whole screen, shrunk by the zoom, and moved to where the part in view lies. */
+html.zoomed .mantine-Modal-overlay,
+html.zoomed .mantine-Modal-inner,
+html.zoomed .mantine-Drawer-overlay,
+html.zoomed .mantine-Drawer-inner {
+  top: var(--view-top, 0) !important;
+  left: var(--view-left, 0) !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: scale(var(--view-shrink, 1));
+  transform-origin: 0 0;
+}
+
+/* ---------- Vollbild and short screens (smartboard, projector) ---------- */
+
+/* Vollbild: only the plan, without the head and the menu of the page. */
+html.plan-full .shell-header,
+html.plan-full .shell-nav {
+  display: none;
+}
+
+/* The buttons keep their writing whole: the row wraps rather than squeezing them. */
+.plan-view-controls > * {
+  flex-shrink: 0;
+}
+
+/* A screen of little height (a smartboard, a projector, a laptop zoomed in): head, menu and the bar above the
+   plan close up, so that the plan keeps most of the height. */
+@media (min-width: 721px) and (max-height: 860px) {
+  .shell-header {
+    padding: 4px 16px;
+    border-bottom-width: 2px;
+  }
+
+  .shell-header img {
+    height: 20px;
+  }
+
+  .user-initials {
+    width: 24px;
+    height: 24px;
+  }
+
+  .shell-nav {
+    padding: 4px 12px;
+  }
+
+  .shell-nav a {
+    padding: 4px 14px;
+  }
+
+  /* The bar keeps its three rows, only closer together. */
+  .plan-toolbar {
+    gap: 4px;
+    margin: 6px 8px 0;
+    padding: 6px 12px;
+  }
+
+  .plan-scroll {
+    margin: 6px 8px 8px;
+  }
+
+  .plan-controls {
+    row-gap: 4px;
+  }
+
+  .activity-row {
+    gap: 4px 10px;
+  }
+
+  /* The search gives way, so that Urlaub and Krank stay in the row of the activities. */
+  .plan-toolbar .plan-search {
+    flex-basis: 150px;
+    min-width: 150px;
+  }
+}
+
 /* The description of a site, in red, so that it is read. */
 .site-description {
   color: var(--wego-red);
@@ -2823,4 +2919,259 @@ html.zoomed .plan-scroll {
 
 .my-note-text {
   white-space: pre-line;
+}
+
+/* The offer phase by site: below the name how far the site is, one dot per step in its fixed order. */
+.timeline th.site-head .offer-steps {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.offer-step {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid #b8c6ca;
+  background: transparent;
+  flex: none;
+}
+
+.offer-step.done {
+  border-color: var(--step-color);
+  background: var(--step-color);
+}
+
+.offer-step.planned {
+  border-color: var(--step-color);
+  background: #fff;
+}
+
+.offer-waiting {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--wego-red);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The enquiry in the row of its site: the colour of "Anfrage", without an employee. */
+.timeline .request-chip {
+  border-left-color: var(--entry-fill);
+  background: var(--entry-fill);
+  color: var(--entry-text);
+}
+
+/* ---------- Angebotsphase: Übersicht (enquiries in the columns of their steps) or Kalender ---------- */
+
+.offer-phase {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.offer-phase-switch {
+  padding: 10px 12px 0;
+}
+
+.offer-phase-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.offer-board-page {
+  height: 100%;
+  overflow: auto;
+  padding: 10px 12px 40px;
+}
+
+.offer-intro {
+  margin-bottom: 10px;
+}
+
+.offer-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.offer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: #e4ebee;
+}
+
+.offer-column h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.offer-count {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  font-size: 0.78rem;
+}
+
+/* One enquiry: a white card edged in the colour of its step. */
+.offer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+  border-left: 5px solid var(--card-edge, var(--border));
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* A click on the card opens the enquiry. */
+.offer-card {
+  cursor: pointer;
+}
+
+.offer-card:hover {
+  box-shadow: 0 2px 10px rgb(16 42 51 / 14%);
+}
+
+.offer-card-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mantine-color-dark-7, #102a33);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.offer-card-name:hover {
+  text-decoration: underline;
+}
+
+.offer-phone {
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+/* An appointment ahead: a click moves it. */
+.offer-history li button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.offer-history li button:hover {
+  text-decoration: underline;
+}
+
+.offer-history {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.76rem;
+}
+
+.offer-history li::before {
+  content: '✓ ';
+  color: #3f8f4a;
+}
+
+.offer-history li.ahead::before {
+  content: '→ ';
+  color: var(--wego-teal);
+}
+
+.offer-history li.ahead {
+  font-weight: 700;
+  color: var(--wego-teal-dark);
+}
+
+.offer-planner {
+  flex: 1;
+  min-width: 0;
+}
+
+.offer-planner .mantine-Select-input {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
+.offer-decline {
+  align-self: flex-start;
+  text-decoration: underline;
+}
+
+.offer-empty {
+  padding: 14px 6px;
+  border: 1px dashed #c3ced3;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.offer-decided {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.offer-decided section {
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.offer-decided h4 {
+  margin: 0 0 6px;
+}
+
+.offer-decided ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .offer-decided {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The dots of the steps on a card, as below the name in the calendar. */
+.offer-card .offer-steps {
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }

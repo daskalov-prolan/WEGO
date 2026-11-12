@@ -55,6 +55,8 @@ interface Row {
   activity: Activity | null
   /** Kept free, no site: "verfügbar" (e.g. the other half of a split day). */
   free: boolean
+  /** Was "verfügbar" when the day was opened (clicked on to give it a site, it is no longer free). */
+  wasFree?: boolean
   start: string
   end: string
   note: string
@@ -174,13 +176,15 @@ export function DayEditor(props: Props) {
       siteId: e.siteId,
       activity: e.activity,
       free: !props.fillFree && isFree(e),
+      wasFree: isFree(e),
       start: e.startTime?.slice(0, 5) ?? '',
       end: e.endTime?.slice(0, 5) ?? '',
       note: e.note ?? '',
       important: e.noteImportant,
     }))
     if (props.addActivity) return [...saved, emptyRow('Baustelle', null, props.addActivity)]
-    if (props.addHalf) return [...saved, { ...emptyRow('Baustelle', null, main), ...props.addHalf }]
+    // A click on the free half ("verfügbar"): its row was free until now.
+    if (props.addHalf) return [...saved, { ...emptyRow('Baustelle', null, main), ...props.addHalf, wasFree: true }]
     return saved.length === 0 ? [emptyRow('Baustelle', null, main)] : saved
   })
   const [error, setError] = useState('')
@@ -309,16 +313,21 @@ export function DayEditor(props: Props) {
               <Button size="sm" onClick={() => setRows((current) => withSecond(current, emptyRow('Baustelle', null, main)))}>
                 + Baustelle
               </Button>
-              <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
-                <Button size="sm" color="wegoRed.6" onClick={() => setAddingService('service')}>
-                  + Serviceauftrag
-                </Button>
-              </Tooltip>
-              <Tooltip label="Für einen Kunden reservieren, der den Termin noch nicht bestätigt hat: im Kalender ohne Farbe">
-                <Button size="sm" variant="outline" onClick={() => setAddingService('tentative')}>
-                  + Termin (unbestätigt)
-                </Button>
-              </Tooltip>
+              {/* An enquiry always becomes a site: the offer phase has neither service calls nor reservations. */}
+              {props.phase !== 'Angebot' && (
+                <>
+                  <Tooltip label="Arbeiten an einem Termin, ohne eigene Baustelle: nur Kunde, Adresse, Telefon und was zu tun ist">
+                    <Button size="sm" color="wegoRed.6" onClick={() => setAddingService('service')}>
+                      + Serviceauftrag
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="Für einen Kunden reservieren, der den Termin noch nicht bestätigt hat: im Kalender ohne Farbe">
+                    <Button size="sm" variant="outline" onClick={() => setAddingService('tentative')}>
+                      + Termin (unbestätigt)
+                    </Button>
+                  </Tooltip>
+                </>
+              )}
             </Group>
           </Group>
           {rows.length === 0 && (
@@ -427,9 +436,12 @@ export function DayEditor(props: Props) {
                     <Button
                       size="compact-xs"
                       variant="light"
+                      // The whole day: the other half, if it was "verfügbar" and got no site meanwhile, goes with it.
                       onClick={() =>
                         setRows((current) =>
-                          current.filter((other, i) => i === index || !other.free).map((other) => (other === row ? { ...other, ...WHOLE_DAY } : other)),
+                          current
+                            .filter((other, i) => i === index || !(other.free || (other.wasFree && other.siteId === null)))
+                            .map((other) => (other === row ? { ...other, ...WHOLE_DAY } : other)),
                         )
                       }
                     >

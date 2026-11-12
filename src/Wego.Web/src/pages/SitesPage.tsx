@@ -19,10 +19,11 @@ function PhoneLink({ phone }: { phone: string }) {
   return <CallButton phone={phone} size="compact-xs" />
 }
 
-type SortKey = 'name' | 'plannedStart'
+type SortKey = 'name' | 'requestedOn' | 'plannedStart'
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
+  { key: 'requestedOn', label: 'Anfrage am' },
   { key: 'plannedStart', label: 'Geplanter Start' },
 ]
 
@@ -56,8 +57,8 @@ function shows(site: Site, show: Show, today: string): boolean {
 type Grouping = 'none' | 'planner' | 'status'
 
 function compare(a: Site, b: Site, key: SortKey): number {
-  const left = a[key]
-  const right = b[key]
+  const left = a[key] ?? null
+  const right = b[key] ?? null
   // Sites without the value come last, whichever the direction.
   if (!left || !right) return left ? -1 : right ? 1 : a.name.localeCompare(b.name, 'de')
   return left.localeCompare(right, 'de') || a.name.localeCompare(b.name, 'de')
@@ -358,7 +359,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
                 <Fragment key={group.key}>
                   {group.label && (
                     <Table.Tr className="group-row">
-                      <Table.Td colSpan={7}>
+                      <Table.Td colSpan={8}>
                         {group.label} ({group.sites.length})
                       </Table.Td>
                     </Table.Tr>
@@ -374,6 +375,7 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
                         <Table.Td fw={600}>
                           <a href={`#/baustellen/${site.id}`}>{site.name}</a>
                         </Table.Td>
+                        <Table.Td>{site.requestedOn && formatDate(site.requestedOn)}</Table.Td>
                         <Table.Td>{site.plannedStart && formatDate(site.plannedStart)}</Table.Td>
                         <Table.Td>
                           {site.isTentative ? <TentativeBadge /> : <StatusBadge status={site.status} />}
