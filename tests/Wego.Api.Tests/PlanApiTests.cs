@@ -1316,6 +1316,9 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.OK, (await PlanStepAsync(g, site, "Objektauswahl", planner, "2030-03-10")).StatusCode);
         // The Besichtigung cannot move behind the Objektauswahl.
         Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-11")).StatusCode);
+        // Nor behind it on the same day (the Objektauswahl 09:00–10:00), nor into it.
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-10", "10:30", "11:30")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PlanStepAsync(g, site, "Besichtigung", planner, "2030-03-10", "08:30", "09:30")).StatusCode);
         // Not over another appointment of the same employee.
         var other = await CreateSiteAsync(g, "Schritt Anderer");
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -1334,6 +1337,29 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var two = await (await Another("Objektauswahl", "2030-03-18", from: "2030-03-17")).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(new[] { "2030-03-06", "2030-03-10", "2030-03-18" },
             StepsOf(two, site).Select(s => s.GetProperty("date").GetString()!).ToArray());
+
+        // In the plan the same order: no Objektauswahl before the Besichtigung (06.03.), after it yes.
+        Task<HttpResponseMessage> InPlan(string date) => g.PutAsJsonAsync($"/api/plan/{planner}/{date}", new[]
+        {
+            new { type = "Baustelle", siteId = (int?)site, activity = "Objektauswahl", startTime = "09:00", endTime = "10:00", note = (string?)null, noteImportant = false },
+        });
+        var early = await InPlan("2030-03-04");
+        Assert.Equal(HttpStatusCode.BadRequest, early.StatusCode);
+        Assert.Contains("Besichtigung", await early.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, (await InPlan("2030-03-25")).StatusCode);
+        // Not without the step before it: no Angebotsübergabe on a site without Objektauswahl.
+        var bare = await CreateSiteAsync(g, "Schritt Ohne");
+        await PlanStepAsync(g, bare, "Besichtigung", planner, "2030-04-01");
+        var skipped = await g.PutAsJsonAsync($"/api/plan/{planner}/2030-04-08", new[]
+        {
+            new { type = "Baustelle", siteId = (int?)bare, activity = "Angebotsuebergabe", startTime = "09:00", endTime = "10:00", note = (string?)null, noteImportant = false },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, skipped.StatusCode);
+        Assert.Contains("Objektauswahl", await skipped.Content.ReadAsStringAsync());
+        // The Besichtigung of the first site goes only after its Objektauswahl.
+        var gone = await g.PutAsJsonAsync($"/api/plan/{planner}/2030-03-06", Array.Empty<object>());
+        Assert.Equal(HttpStatusCode.BadRequest, gone.StatusCode);
+        Assert.Contains("erst", await gone.Content.ReadAsStringAsync());
     }
 
     [Fact]

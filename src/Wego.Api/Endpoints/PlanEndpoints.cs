@@ -171,6 +171,8 @@ public static class PlanEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync();
         // Appointments not confirmed yet that lose an entry: one left without any entry goes from the sites too.
         var tentativeIds = new HashSet<int>();
+        var added = new List<PlanEntry>();
+        var removedEntries = new List<PlanEntry>();
 
         foreach (var day in days)
         {
@@ -180,6 +182,7 @@ public static class PlanEndpoints
                 .OrderBy(e => e.Id)
                 .ToListAsync();
             db.PlanEntries.RemoveRange(existing);
+            removedEntries.AddRange(existing);
             foreach (var removed in existing)
                 if (removed.Site is { IsTentative: true } tentative) tentativeIds.Add(tentative.Id);
             var before = existing.Select(e => new LoggedEntry(e.Type, e.SiteId, e.Site?.Name, e.Activity,
@@ -203,6 +206,10 @@ public static class PlanEndpoints
                     NoteImportant = input.NoteImportant && !string.IsNullOrWhiteSpace(input.Note),
                 };
                 db.PlanEntries.Add(entry);
+                // New or changed (a day is saved as a whole: what stays as it was is not new).
+                if (!existing.Any(x => x.SiteId == entry.SiteId && x.Activity == entry.Activity
+                        && x.StartTime == entry.StartTime && x.EndTime == entry.EndTime))
+                    added.Add(entry);
                 after.Add(new LoggedEntry(entry.Type, entry.SiteId,
                     entry.SiteId is { } siteId ? siteNames[siteId] : null, entry.Activity,
                     entry.StartTime, entry.EndTime, entry.Note, entry.NoteImportant));
@@ -220,6 +227,7 @@ public static class PlanEndpoints
         }
 
         await db.SaveChangesAsync();
+        if (await StepOrderErrorAsync(db, added, removedEntries) is { } orderError) return ApiErrors.BadRequest(orderError);
 
         if (tentativeIds.Count > 0)
         {
@@ -243,6 +251,56 @@ public static class PlanEndpoints
         return Results.Ok(Sort(saved.Select(ToDto)));
     }
 
+
+    /// <summary>
+    /// The steps of an enquiry in their order, also when a day is changed in the plan, as in the offer phase: an
+    /// appointment entered or changed here needs the step before it, and lies after the steps before it and before
+    /// those after it (on the same day by the time); a step goes only after the steps after it. Only what changes
+    /// now is looked at, so that one wrong from before does not stop every other change.
+    /// </summary>
+    private static async Task<string?> StepOrderErrorAsync(WegoDbContext db, List<PlanEntry> added, List<PlanEntry> removed)
+    {
+        var steps = await OfferEndpoints.StepActivitiesAsync(db);
+        bool IsStep(PlanEntry e) => e.SiteId is not null && e.Activity is not null && steps.Contains(e.Activity);
+        var saved = added.Where(IsStep).ToList();
+        var gone = removed.Where(IsStep).ToList();
+        if (saved.Count == 0 && gone.Count == 0) return null;
+        var ids = saved.Concat(gone).Select(e => e.SiteId!.Value).Distinct().ToList();
+        var sites = await db.Sites.Where(s => ids.Contains(s.Id) && s.Status == SiteStatus.Angebot).ToDictionaryAsync(s => s.Id, s => s.Name);
+        var offers = sites.Keys.ToList();
+        var all = await db.PlanEntries
+            .Where(e => e.SiteId != null && offers.Contains(e.SiteId.Value) && e.Activity != null && steps.Contains(e.Activity))
+            .ToListAsync();
+        var labels = await db.Activities.ToDictionaryAsync(a => a.Key, a => a.Label);
+        static bool Before(PlanEntry first, PlanEntry second) =>
+            first.Date < second.Date
+            || (first.Date == second.Date && (first.EndTime is null || second.StartTime is null || first.EndTime <= second.StartTime));
+        // A step taken out while a later one is still there.
+        foreach (var entry in gone.Where(e => offers.Contains(e.SiteId!.Value)))
+        {
+            var ofSite = all.Where(o => o.SiteId == entry.SiteId).ToList();
+            var index = steps.IndexOf(entry.Activity!);
+            if (ofSite.Any(o => o.Activity == entry.Activity)) continue;
+            if (ofSite.Where(o => steps.IndexOf(o.Activity!) > index).OrderBy(o => steps.IndexOf(o.Activity!)).FirstOrDefault() is { } later)
+                return $"{sites[entry.SiteId!.Value]}: erst „{labels[later.Activity!]}“ entfernen oder verschieben, dann „{labels[entry.Activity!]}“.";
+        }
+        foreach (var entry in saved.Where(e => offers.Contains(e.SiteId!.Value)))
+        {
+            // The step before has to be there.
+            var index = steps.IndexOf(entry.Activity!);
+            if (index > 0 && !all.Any(o => o.SiteId == entry.SiteId && o.Activity == steps[index - 1]))
+                return $"{sites[entry.SiteId!.Value]}: erst kommt „{labels[steps[index - 1]]}“, dann „{labels[entry.Activity!]}“.";
+            foreach (var other in all.Where(o => o.SiteId == entry.SiteId && o.Id != entry.Id))
+            {
+                var (mine, theirs) = (steps.IndexOf(entry.Activity!), steps.IndexOf(other.Activity!));
+                if (mine == theirs) continue;
+                var (first, second) = mine < theirs ? (entry, other) : (other, entry);
+                if (!Before(first, second))
+                    return $"{sites[entry.SiteId!.Value]}: „{labels[first.Activity!]}“ ({OfferEndpoints.When(first)}) muss vor „{labels[second.Activity!]}“ ({OfferEndpoints.When(second)}) liegen.";
+            }
+        }
+        return null;
+    }
 
     private static List<LoggedEntry> Absences(IEnumerable<LoggedEntry> entries) =>
         entries.Where(e => e.Type != EntryType.Baustelle).ToList();

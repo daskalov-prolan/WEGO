@@ -432,12 +432,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                     })
                     return (
                       <div className="my-entry my-visit" key="visits" style={entryStyle({ type: 'Baustelle', activity: VISIT })}>
-                        <span className="visit-band">
-                          <ActivityIcon activity={VISIT} size={13} /> Besichtigung
-                        </span>
-                        <div className="my-visit-body">
                           {time && <span className="when">{time}</span>}
-                          <span className="where">{customers(group.visits.length)}</span>
+                          <span className="where">
+                            <ActivityIcon activity={VISIT} size={15} /> {customers(group.visits.length)}
+                          </span>
+                          <span className="what">Besichtigung</span>
                           {/* Who comes along, e.g. to a visit planned before the customer is known. */}
                           {group.window && colleaguesOf(group.window).length > 0 && (
                             <span className="detail">mit {colleaguesOf(group.window).join(', ')}</span>
@@ -461,10 +460,9 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                           })}
                           {addresses.some(Boolean) && (
                             <a className="my-visit-route" href={mapsLink([COMPANY_ADDRESS, ...addresses, COMPANY_ADDRESS])} target="_blank" rel="noreferrer">
-                              Route in Google Maps
+                              Route in Google Maps ›
                             </a>
                           )}
-                        </div>
                       </div>
                     )
                   }

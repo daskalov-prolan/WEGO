@@ -81,18 +81,18 @@ public static class OfferEndpoints
             var labels = await db.Activities.ToDictionaryAsync(a => a.Key, a => a.Label);
             var siteEntries = await db.PlanEntries.Where(e => e.SiteId == siteId && e.Activity != null && steps.Contains(e.Activity))
                 .ToListAsync();
-            // The step before has to be there, and this one comes after it (and before the step after it).
-            if (index > 0)
-            {
-                var before = siteEntries.Where(e => e.Activity == steps[index - 1]).ToList();
-                if (before.Count == 0)
-                    return ApiErrors.BadRequest($"Erst kommt „{labels[steps[index - 1]]}“, dann „{labels[input.Activity]}“.");
-                if (input.Date < before.Max(e => e.Date))
-                    return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht vor „{labels[steps[index - 1]]}“ ({before.Max(e => e.Date):dd.MM.yyyy}) liegen.");
-            }
-            if (index < steps.Count - 1 && siteEntries.Where(e => e.Activity == steps[index + 1]).ToList() is { Count: > 0 } after
-                && input.Date > after.Min(e => e.Date))
-                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht nach „{labels[steps[index + 1]]}“ ({after.Min(e => e.Date):dd.MM.yyyy}) liegen.");
+            // The step before has to be there; this one comes after every step before it and before every step after
+            // it (on the same day by the time, e.g. not a visit after the Angebotsübergabe of that morning).
+            if (index > 0 && !siteEntries.Any(e => e.Activity == steps[index - 1]))
+                return ApiErrors.BadRequest($"Erst kommt „{labels[steps[index - 1]]}“, dann „{labels[input.Activity]}“.");
+            if (siteEntries.Where(e => steps.IndexOf(e.Activity!) < index)
+                    .OrderByDescending(e => e.Date).ThenByDescending(e => e.EndTime)
+                    .FirstOrDefault(e => e.Date > input.Date || (e.Date == input.Date && e.EndTime is { } end && end > input.StartTime)) is { } earlier)
+                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht vor „{labels[earlier.Activity!]}“ ({When(earlier)}) liegen.");
+            if (siteEntries.Where(e => steps.IndexOf(e.Activity!) > index)
+                    .OrderBy(e => e.Date).ThenBy(e => e.StartTime)
+                    .FirstOrDefault(e => e.Date < input.Date || (e.Date == input.Date && e.StartTime is { } start && start < input.EndTime)) is { } later)
+                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht nach „{labels[later.Activity!]}“ ({When(later)}) liegen.");
 
             // Who does it: planners all steps, craftsmen those given to them (e.g. Besichtigung).
             var employees = await db.Employees.Where(e => employeeIds.Contains(e.Id) && e.IsActive).ToListAsync();
@@ -186,6 +186,8 @@ public static class OfferEndpoints
     /// <summary>An enquiry: a site in the offer, neither a service call nor an appointment not confirmed yet.</summary>
     private static bool IsOffer(Site site) => site.Status == SiteStatus.Angebot && !site.IsService && !site.IsTentative;
 
+    internal static string When(PlanEntry e) => e.StartTime is { } start ? $"{e.Date:dd.MM.yyyy} {start:HH\\:mm}" : $"{e.Date:dd.MM.yyyy}";
+
     private static bool IsFree(PlanEntry e) => e.Type == EntryType.Baustelle && e.SiteId is null && e.Activity is null;
 
     /// <summary>An entry without times takes the whole day.</summary>
@@ -208,7 +210,7 @@ public static class OfferEndpoints
         site.Status = to;
     }
 
-    private static async Task<List<string>> StepActivitiesAsync(WegoDbContext db) =>
+    internal static async Task<List<string>> StepActivitiesAsync(WegoDbContext db) =>
         await db.Activities.Where(a => a.Phase == SiteStatus.Angebot && a.Key != "Anfrage")
             .OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
 

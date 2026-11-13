@@ -66,6 +66,23 @@ interface StepDraft {
   another?: boolean
 }
 
+/**
+ * The heads of the columns stay right below the row at the top while the enquiries scroll by: told how far down
+ * that row reaches (it may take two lines on a phone).
+ */
+function followIntro(intro: HTMLDivElement | null) {
+  if (!intro || typeof ResizeObserver === 'undefined') return
+  const page = intro.parentElement!
+  const measure = () => {
+    const top = parseFloat(getComputedStyle(intro).top) || 0
+    page.style.setProperty('--offer-intro-bottom', `${intro.offsetHeight + top}px`)
+  }
+  const observer = new ResizeObserver(measure)
+  observer.observe(intro)
+  measure()
+  return () => observer.disconnect()
+}
+
 /** A click on the card itself, not on one of its buttons, fields or menus. */
 const onCard = (event: MouseEvent<HTMLElement>) => {
   const target = event.target as HTMLElement
@@ -143,10 +160,12 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
     const appointments = appointmentsOf(own, order)
     const columnActivity = columns.find((c) => c.key === stage.column)?.activity
     const colour = (columnActivity ? activityInfo(columnActivity)?.background : undefined) ?? '#d9e3e6'
-    // One more appointment of a step that may have several, until the step after it is planned.
+    // One more appointment of a step that may have several: once the card has come to its column (the steps
+    // before it done, e.g. not while the visit is still ahead), until the step after it is planned.
     const repeat = REPEATABLE.find((activity) => {
       const after = order[order.indexOf(activity) + 1]
-      return own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
+      return order.indexOf(stage.column as Activity) >= order.indexOf(activity)
+        && own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
     })
     const labelOf = (activity: Activity, date: string) => {
       const ofStep = appointments.filter((a) => a.activity === activity)
@@ -263,7 +282,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
   return (
     <div className="offer-board-page">
       {/* One row: the switch to the calendar, a new enquiry, Vollbild. */}
-      <Group justify="space-between" gap="sm" className="offer-intro">
+      <Group justify="space-between" gap="sm" className="offer-intro" ref={followIntro}>
         {head ?? <span />}
         <Group gap="sm">
           <Button onClick={() => setCreating(true)}>+ Neue Anfrage</Button>
