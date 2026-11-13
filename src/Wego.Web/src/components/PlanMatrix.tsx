@@ -8,6 +8,8 @@ import { serviceName, entryName, entryStyle, entryTitle, isFree, onlyHalfDay } f
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
+import { VisitChip } from './VisitChip'
+import { customers, isVisit, visitGroup, visitsAsOne } from '../lib/visitGroup'
 
 /** Handlers that make a cell a place to drop entries and open activities on (see dropTarget). */
 type DropHandlers = Record<string, unknown>
@@ -505,8 +507,12 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const props = () => now().props
   const first = entries[0]
   // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
-  const free = cell.showsFree && onlyHalfDay(entries)
-  const afternoon = free && (first.startTime ?? '') >= '12:00'
+  // The visits of the day count as one entry (see VisitChip).
+  const halves = visitsAsOne(entries)
+  const free = cell.showsFree && onlyHalfDay(halves)
+  const afternoon = free && (halves[0].startTime ?? '') >= '12:00'
+  const firstVisit = entries.findIndex(isVisit)
+  const visits = visitGroup(entries)
   const freeChip = (
     <span
       className="chip chip-baustelle chip-half-free"
@@ -560,7 +566,18 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
         <span className="cell-full">
           {/* Work in the afternoon only: the free morning comes first. */}
           {free && afternoon && freeChip}
-          {entries.map((entry, index) => (
+          {entries.map((entry, index) =>
+            isVisit(entry) ? (
+              // All visits of the day as one card, where the first of them is: in full colour in every phase, so
+              // that a day of visits is seen at once.
+              index === firstVisit && (
+                <VisitChip
+                  key="visits"
+                  entries={entries.filter(isVisit)}
+                  onSiteClick={cell.marks ? undefined : openSite}
+                />
+              )
+            ) : (
             <Chip
               key={entry.id}
               entry={entry}
@@ -584,13 +601,14 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
                   : undefined
               }
             />
-          ))}
+            ),
+          )}
           {free && !afternoon && freeChip}
         </span>
         {first && (
           <Compact
             entries={entries}
-            text={serviceName(entryName(first)) ?? entryName(first)}
+            text={visits && isVisit(first) ? `Besichtigung · ${customers(visits.visits.length)}` : (serviceName(entryName(first)) ?? entryName(first))}
             dimmed={!cell.dimmed.includes('0')}
             reserved={cell.reserved[0] === '1'}
             onTextClick={cell.marks ? undefined : (event) => first.siteId !== null && openSite(first.siteId, event)}

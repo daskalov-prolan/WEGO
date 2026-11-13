@@ -401,6 +401,57 @@ a:hover {
   color: var(--entry-text, #3d5054);
 }
 
+/* The visits of a day as one card: a band "Besichtigung" in the colour of the activity, below on white. */
+.chip.chip-visit,
+.timeline .chip.chip-visit {
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--entry-strong);
+  background: #fff;
+  color: #14232a;
+}
+
+.chip-visit .visit-band {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  background: var(--entry-strong);
+  color: var(--entry-text, #000);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip-visit .visit-body {
+  display: block;
+  padding: 2px 6px 3px;
+}
+
+.chip-visit .visit-count {
+  display: block;
+  font-weight: 800;
+}
+
+.timeline .chip.chip-visit .time,
+.chip-visit .time,
+.chip-visit .visit-who {
+  display: block;
+  color: #3d5054;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* The names in two lines at most: all of them when pointing at the card. */
+.chip-visit .visit-who {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .chip.dimmed,
 .dimmed {
   opacity: 0.3;
@@ -1012,6 +1063,15 @@ a:hover {
   display: none;
 }
 
+/* The visits keep their band edge to edge and show their time: when they are is what matters. */
+.timeline.zoom-week .chip.chip-visit {
+  padding: 0;
+}
+
+.timeline.zoom-week .chip.chip-visit .time {
+  display: block;
+}
+
 .cell-full {
   display: flex;
   flex-direction: column;
@@ -1231,6 +1291,62 @@ a:hover {
 .my-entry .detail {
   font-size: 0.9rem;
   opacity: 0.85;
+}
+
+/* The visits of a day in Mein Plan: the band on top, each customer below (tapped, the details open). */
+.my-entry.my-visit {
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--entry-strong);
+  background: #fff;
+}
+
+.my-visit .visit-band {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: var(--entry-strong);
+  color: var(--entry-text, #000);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.my-visit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 8px;
+}
+
+.my-visit-customer {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px solid #e3eaed;
+  color: inherit;
+}
+
+.my-visit-customer > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.my-visit-time {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-visit-route {
+  align-self: flex-start;
+  margin-top: 4px;
+  color: var(--wego-teal);
+  font-weight: 700;
 }
 
 /* A site in Mein Plan is a button: tapped, its details open. */
