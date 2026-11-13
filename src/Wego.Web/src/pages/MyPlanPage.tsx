@@ -14,6 +14,8 @@ import { jumpTo } from '../lib/jump'
 import { holidaysByDate, useSwipe } from '../lib/ui'
 import { HOME_EVENT } from '../lib/home'
 import { useWindowEvent } from '@mantine/hooks'
+import { COMPANY_ADDRESS, customers, isVisit, VISIT, visitGroup, visitsAsOne, visitTime } from '../lib/visitGroup'
+import { mapsLink } from '../lib/visitRoute'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
 const FIRST_YEAR = 2026
@@ -95,9 +97,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
    * stored as an entry of its own).
    */
   const withFreeHalf = (entries: Entry[]): Entry[] => {
-    if (!onlyHalfDay(entries)) return entries
-    const morning = entries.every((entry) => (entry.endTime ?? '') <= '12:00')
-    const afternoon = entries.every((entry) => (entry.startTime ?? '') >= '12:00')
+    // The visits of the day count as one entry: the time set aside for them.
+    const halves = visitsAsOne(entries)
+    if (!onlyHalfDay(halves)) return entries
+    const morning = halves.every((entry) => (entry.endTime ?? '').slice(0, 5) <= '12:00')
+    const afternoon = halves.every((entry) => (entry.startTime ?? '') >= '12:00')
     // Work around midday leaves no half free.
     if (!morning && !afternoon) return entries
     const half = morning ? HALF_DAYS[1] : HALF_DAYS[0]
@@ -417,7 +421,53 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
               )}
 
               <Stack gap="xs">
-                {entries.map((entry) => {
+                {entries.map((entry, index) => {
+                  if (isVisit(entry)) {
+                    if (index !== entries.findIndex(isVisit)) return null
+                    const group = visitGroup(entries)!
+                    const time = visitTime(group)
+                    const addresses = group.visits.map((visit) => {
+                      const site = visit.siteId === null ? undefined : siteById.get(visit.siteId)
+                      return site ? formatAddress(site) : null
+                    })
+                    return (
+                      <div className="my-entry my-visit" key="visits" style={entryStyle({ type: 'Baustelle', activity: VISIT })}>
+                        <span className="visit-band">
+                          <ActivityIcon activity={VISIT} size={13} /> Besichtigung
+                        </span>
+                        <div className="my-visit-body">
+                          {time && <span className="when">{time}</span>}
+                          <span className="where">{customers(group.visits.length)}</span>
+                          {/* Who comes along, e.g. to a visit planned before the customer is known. */}
+                          {group.window && colleaguesOf(group.window).length > 0 && (
+                            <span className="detail">mit {colleaguesOf(group.window).join(', ')}</span>
+                          )}
+                          {group.visits.map((visit, i) => {
+                            const site = visit.siteId === null ? undefined : siteById.get(visit.siteId)
+                            const Line = site ? UnstyledButton : 'div'
+                            return (
+                              <Line
+                                key={visit.id}
+                                className="my-visit-customer"
+                                {...(site ? { onClick: () => setDetails(visit), 'aria-label': `${visit.siteName}: Details öffnen` } : {})}
+                              >
+                                <span className="my-visit-time">{visit.startTime?.slice(0, 5)}</span>
+                                <span>
+                                  <strong>{visit.siteName}</strong>
+                                  {addresses[i] && <span className="detail">{addresses[i]}</span>}
+                                </span>
+                              </Line>
+                            )
+                          })}
+                          {addresses.some(Boolean) && (
+                            <a className="my-visit-route" href={mapsLink([COMPANY_ADDRESS, ...addresses, COMPANY_ADDRESS])} target="_blank" rel="noreferrer">
+                              Route in Google Maps
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
                   if (entry.type !== 'Baustelle') {
                     return (
                       <div className="my-entry" key={entry.id} style={entryStyle(entry)}>

@@ -260,7 +260,8 @@ describe('PlanPage', () => {
       sites: [...plan.sites, { id: 14, name: 'Familie Neu', ...offer }],
       entries: [
         ...plan.entries,
-        { ...entry(8, 2, '2026-03-04', 14, 'Familie Neu', null, null), activity: 'Besichtigung' },
+        { ...entry(8, 2, '2026-03-04', 14, 'Familie Neu', null, null), activity: 'Objektauswahl' },
+        { ...entry(9, 2, '2026-03-05', 14, 'Familie Neu', '09:00', '10:00'), activity: 'Besichtigung' },
       ],
     }
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(phases), { status: 200 }))
@@ -268,11 +269,17 @@ describe('PlanPage', () => {
     const { rerender } = renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     await screen.findByText(/KW 10/)
 
-    // Bauphase by default: only who can build, and an offer visit stays visible but pale.
+    // Bauphase by default: only who can build, and work of the offer phase stays visible but pale.
     expect(screen.getByRole('group', { name: 'Tätigkeiten der Bauphase' })).toBeInTheDocument()
     expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd', 'Otto', 'Petra'])
-    const visit = within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
-    expect(visit).toHaveClass('dimmed')
+    const offerWork = within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
+    expect(offerWork).toHaveClass('dimmed')
+    // Visits are the exception: one card "Besichtigung" in full colour, so that they are seen at once.
+    const visit = within(cell(/Bernd, Donnerstag, 05.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
+    expect(visit).toHaveClass('chip-visit')
+    expect(visit).not.toHaveClass('dimmed')
+    expect(within(visit as HTMLElement).getByText('1 Kunde')).toBeInTheDocument()
+    expect(within(visit as HTMLElement).getByText('09:00 – 10:00')).toBeInTheDocument()
     // Only the two phases to choose: no done or cancelled, and the activities are no filters.
     expect(screen.queryByText('Abgeschlossen')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Endmontage' })).not.toBeInTheDocument()

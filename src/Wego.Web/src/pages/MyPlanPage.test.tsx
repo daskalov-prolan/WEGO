@@ -75,6 +75,30 @@ describe('MyPlanPage', () => {
     expect(within(thursday).getByText('mit Bernd')).toBeInTheDocument()
   })
 
+  it('shows the visits of a morning as one card: the customers by time, the route, the afternoon free', async () => {
+    const visit = (id: number, siteId: number | null, siteName: string | null, start: string, end: string): Entry => ({
+      ...entry(id, 1, 'Anna', '2026-03-05', 0, '', start, end),
+      siteId,
+      siteName,
+      activity: 'Besichtigung',
+    })
+    const withVisits: Plan = {
+      ...plan,
+      entries: [...plan.entries, visit(40, null, null, '08:00:00', '12:00:00'), visit(42, 10, 'Familie Schulze', '10:00:00', '11:00:00'), visit(41, 11, 'Herr Kurz', '08:15:00', '09:15:00')],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withVisits), { status: 200 })))
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+
+    const thursday = (await screen.findByText('Donnerstag, 05.03.2026')).closest('article')!
+    const card = thursday.querySelector('.my-visit') as HTMLElement
+    expect(within(card).getByText('Besichtigung')).toBeInTheDocument()
+    expect(within(card).getByText('Vormittag · 08:15 – 11:00')).toBeInTheDocument()
+    expect(within(card).getByText('2 Kunden')).toBeInTheDocument()
+    expect([...card.querySelectorAll('.my-visit-customer strong')].map((name) => name.textContent)).toEqual(['Herr Kurz', 'Familie Schulze'])
+    expect(within(card).getByRole('link', { name: 'Route in Google Maps' })).toHaveAttribute('href', expect.stringContaining('Alt-Karow'))
+    expect(within(thursday).getByText('verfügbar')).toBeInTheDocument()
+  })
+
   it('shows the own notes of a day and the free half of a day as "verfügbar"', async () => {
     const withNotes: Plan = {
       ...plan,
