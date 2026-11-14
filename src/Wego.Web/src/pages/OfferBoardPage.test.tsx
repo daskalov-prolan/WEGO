@@ -18,7 +18,10 @@ const step = (siteId: number, activity: OfferStep['activity'], date: string): Of
 })
 
 const offers: Offers = {
-  sites: [site(1, 'Neu'), site(2, 'Besichtigt'), site(3, 'Geplant'), site(4, 'Übergeben'), { ...site(5, 'Ausgewählt'), clientPhone: '030 123 45' }],
+  sites: [
+    site(1, 'Neu'), site(2, 'Besichtigt'), site(3, 'Geplant'), site(4, 'Übergeben'), { ...site(5, 'Ausgewählt'), clientPhone: '030 123 45' },
+    site(6, 'Früh ausgewählt'),
+  ],
   steps: [
     step(2, 'Besichtigung', '2026-11-05'),
     step(3, 'Besichtigung', '2026-11-20'),
@@ -27,6 +30,9 @@ const offers: Offers = {
     step(4, 'Angebotsuebergabe', '2026-10-20'),
     step(5, 'Besichtigung', '2026-10-01'),
     step(5, 'Objektauswahl', '2026-10-08'),
+    // The Objektauswahl planned already while the visit is still ahead.
+    step(6, 'Besichtigung', '2026-11-19'),
+    step(6, 'Objektauswahl', '2026-11-30'),
   ],
   stepActivities: ['Besichtigung', 'Objektauswahl', 'Angebotsuebergabe'],
   decided: [],
@@ -68,7 +74,7 @@ describe('OfferBoardPage', () => {
     expect(within(column('Objektauswahl')).getByRole('button', { name: 'Objektauswahl planen' })).toBeInTheDocument()
     // Planned ahead: stays with its step, can be moved.
     expect(within(column('Besichtigung')).getByText('Geplant')).toBeInTheDocument()
-    expect(within(column('Besichtigung')).getByRole('button', { name: 'Termin verschieben' })).toBeInTheDocument()
+    expect(within(screen.getByText('Geplant').closest('article')!).getByRole('button', { name: 'Termin verschieben' })).toBeInTheDocument()
     // Handed over: yes or no.
     expect(within(column('Wartet auf Zusage')).getByRole('button', { name: 'Zusage' })).toBeInTheDocument()
   })
@@ -84,6 +90,10 @@ describe('OfferBoardPage', () => {
     // Until the Angebotsübergabe is planned, the Objektauswahl may get another appointment.
     expect(within(card).getByRole('button', { name: '+ weitere Objektauswahl' })).toBeInTheDocument()
     expect(within(column('Wartet auf Zusage')).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
+    // Not before the card has come to the Objektauswahl: the visit is still ahead.
+    const early = screen.getByText('Früh ausgewählt').closest('article')!
+    expect(within(column('Besichtigung')).getByText('Früh ausgewählt')).toBeInTheDocument()
+    expect(within(early).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
     await user.click(within(card).getByText(/^Anfrage .*02.11./))
     expect(await screen.findByText('Anfrage · Ausgewählt')).toBeInTheDocument()
   })

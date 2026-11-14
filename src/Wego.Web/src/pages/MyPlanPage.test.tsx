@@ -95,7 +95,7 @@ describe('MyPlanPage', () => {
     expect(within(card).getByText('Vormittag · 08:15 – 11:00')).toBeInTheDocument()
     expect(within(card).getByText('2 Kunden')).toBeInTheDocument()
     expect([...card.querySelectorAll('.my-visit-customer strong')].map((name) => name.textContent)).toEqual(['Herr Kurz', 'Familie Schulze'])
-    expect(within(card).getByRole('link', { name: 'Route in Google Maps' })).toHaveAttribute('href', expect.stringContaining('Alt-Karow'))
+    expect(within(card).getByRole('link', { name: 'Route in Google Maps ›' })).toHaveAttribute('href', expect.stringContaining('Alt-Karow'))
     expect(within(thursday).getByText('verfügbar')).toBeInTheDocument()
   })
 

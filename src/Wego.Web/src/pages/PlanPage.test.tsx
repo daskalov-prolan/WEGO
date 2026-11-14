@@ -274,12 +274,14 @@ describe('PlanPage', () => {
     expect(screen.getAllByRole('rowheader').map((th) => th.textContent)).toEqual(['Anna', 'Bernd', 'Otto', 'Petra'])
     const offerWork = within(cell(/Bernd, Mittwoch, 04.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
     expect(offerWork).toHaveClass('dimmed')
-    // Visits are the exception: one card "Besichtigung" in full colour, so that they are seen at once.
-    const visit = within(cell(/Bernd, Donnerstag, 05.03.2026/)).getAllByText('Familie Neu')[0].closest('.chip')
-    expect(visit).toHaveClass('chip-visit')
+    // Visits are the exception: one small card "Besichtigung" in full colour with the number of customers,
+    // time and customers in the tooltip.
+    const visit = cell(/Bernd, Donnerstag, 05.03.2026/).querySelector('.chip-visit') as HTMLElement
     expect(visit).not.toHaveClass('dimmed')
-    expect(within(visit as HTMLElement).getByText('1 Kunde')).toBeInTheDocument()
-    expect(within(visit as HTMLElement).getByText('09:00 – 10:00')).toBeInTheDocument()
+    expect(within(visit).getByText('Besichtigung')).toBeInTheDocument()
+    expect(within(visit).getByLabelText('1 Kunde')).toHaveTextContent('1')
+    expect(visit.title).toContain('09:00 – 10:00')
+    expect(visit.title).toContain('Familie Neu')
     // Only the two phases to choose: no done or cancelled, and the activities are no filters.
     expect(screen.queryByText('Abgeschlossen')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Endmontage' })).not.toBeInTheDocument()

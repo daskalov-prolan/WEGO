@@ -401,55 +401,29 @@ a:hover {
   color: var(--entry-text, #3d5054);
 }
 
-/* The visits of a day as one card: a band "Besichtigung" in the colour of the activity, below on white. */
-.chip.chip-visit,
-.timeline .chip.chip-visit {
-  padding: 0;
-  overflow: hidden;
-  border: 2px solid var(--entry-strong);
+/* The visits of a day as one card, as small as the others: the number of customers in a white circle. */
+.chip-visit .visit-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
   background: #fff;
-  color: #14232a;
-}
-
-.chip-visit .visit-band {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 4px;
-  background: var(--entry-strong);
-  color: var(--entry-text, #000);
-  font-size: 0.72rem;
+  color: var(--entry-color);
+  font-size: 0.68rem;
   font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1;
 }
 
-.chip-visit .visit-body {
-  display: block;
-  padding: 2px 6px 3px;
+/* Tighter than other cards, so that "Besichtigung" fits next to the circle. */
+.chip-visit .chip-line {
+  gap: 2px;
 }
 
-.chip-visit .visit-count {
-  display: block;
-  font-weight: 800;
-}
-
-.timeline .chip.chip-visit .time,
-.chip-visit .time,
-.chip-visit .visit-who {
-  display: block;
-  color: #3d5054;
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-
-/* The names in two lines at most: all of them when pointing at the card. */
-.chip-visit .visit-who {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.chip-visit .chip-name .activity-icon {
+  margin-right: -2px;
 }
 
 .chip.dimmed,
@@ -1063,15 +1037,6 @@ a:hover {
   display: none;
 }
 
-/* The visits keep their band edge to edge and show their time: when they are is what matters. */
-.timeline.zoom-week .chip.chip-visit {
-  padding: 0;
-}
-
-.timeline.zoom-week .chip.chip-visit .time {
-  display: block;
-}
-
 .cell-full {
   display: flex;
   flex-direction: column;
@@ -1293,41 +1258,15 @@ a:hover {
   opacity: 0.85;
 }
 
-/* The visits of a day in Mein Plan: the band on top, each customer below (tapped, the details open). */
-.my-entry.my-visit {
-  padding: 0;
-  overflow: hidden;
-  border: 2px solid var(--entry-strong);
-  background: #fff;
-}
-
-.my-visit .visit-band {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  background: var(--entry-strong);
-  color: var(--entry-text, #000);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.my-visit-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 10px 8px;
-}
-
+/* The visits of a day in Mein Plan: each customer with time and address (tapped, the details open). */
 .my-visit-customer {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
-  padding: 5px 0;
-  border-top: 1px solid #e3eaed;
+  width: 100%;
+  padding-top: 4px;
   color: inherit;
+  text-align: left;
 }
 
 .my-visit-customer > span:last-child {
@@ -1338,14 +1277,15 @@ a:hover {
 
 .my-visit-time {
   flex: none;
+  min-width: 2.6em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .my-visit-route {
   align-self: flex-start;
-  margin-top: 4px;
-  color: var(--wego-teal);
+  padding-top: 4px;
+  color: var(--entry-color);
   font-weight: 700;
 }
 
@@ -3214,8 +3154,16 @@ html.plan-full .shell-nav {
   padding: 10px 12px 40px;
 }
 
+/* The row of Übersicht/Kalender and the buttons stays at the top while the enquiries scroll by (also sideways,
+   on a narrow screen, where the whole page scrolls). */
 .offer-intro {
-  margin-bottom: 8px;
+  position: sticky;
+  top: -10px;
+  left: 0;
+  z-index: 5;
+  margin: -10px -12px 8px;
+  padding: 10px 12px 8px;
+  background: var(--surface-muted);
 }
 
 /* A short screen (smartboard, projector): the overview closes up like the plan. */
@@ -3229,7 +3177,9 @@ html.plan-full .shell-nav {
   }
 
   .offer-intro {
-    margin-bottom: 6px;
+    top: -6px;
+    margin: -6px -8px 6px;
+    padding: 6px 8px;
   }
 
   .offer-board .offer-column h3 {
@@ -3237,11 +3187,11 @@ html.plan-full .shell-nav {
   }
 }
 
+/* No scrolling of its own: the page scrolls, so that the heads of the columns can stay at the top. */
 .offer-board {
   display: grid;
   grid-template-columns: repeat(5, minmax(220px, 1fr));
   gap: 10px;
-  overflow-x: auto;
   padding-bottom: 6px;
 }
 
@@ -3255,7 +3205,12 @@ html.plan-full .shell-nav {
   background: #e4ebee;
 }
 
+/* The head of a column stays right below the row at the top (see followIntro), the column around it. */
 .offer-column h3 {
+  position: sticky;
+  top: var(--offer-intro-bottom, 44px);
+  z-index: 4;
+  box-shadow: 0 0 0 8px #e4ebee;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3510,4 +3465,116 @@ html.plan-full .shell-nav {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+
+/* Planning the visits: customers and days as rows to tap, the best day marked in green. */
+.visit-pick {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d5dee2;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+}
+
+.visit-pick:hover:not(:disabled) {
+  border-color: var(--wego-aqua);
+  background: var(--wego-hover);
+}
+
+.visit-pick:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.visit-pick.best {
+  border: 2px solid var(--wego-green);
+}
+
+.visit-enquiry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.visit-extra {
+  color: var(--wego-teal);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.visit-detail {
+  color: #4f6268;
+  font-size: 0.85rem;
+}
+
+.visit-fit {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.85rem;
+}
+
+.visit-fit strong {
+  font-size: 1rem;
+}
+
+.visit-other,
+.visit-confirm,
+.visit-day {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.visit-tour {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .visit-tour {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.visit-route {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+/* The day of visits opened from its card in the plan. */
+.visit-day.focus {
+  outline: 2px solid var(--mantine-color-blue-5);
+  outline-offset: -2px;
+}
+
+/* A customer on the spot: call and enter, beside the customer; below it on the phone. */
+.visit-spot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+@media (max-width: 700px) {
+  .visit-spot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .visit-spot-actions > * {
+    flex: 1;
+  }
+  .visit-tabs .mantine-SegmentedControl-label {
+    padding-inline: 4px;
+    font-size: 0.8rem;
+  }
 }
