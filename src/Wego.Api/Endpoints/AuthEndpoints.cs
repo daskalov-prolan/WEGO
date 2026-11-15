@@ -15,7 +15,7 @@ public static class AuthEndpoints
     public record LoginRequest(string UserName, string Password);
     public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
     public record UserDto(int Id, string Name, string UserName, string Role, bool ShowInPlan,
-        bool MustChangePassword, bool SeesOffers);
+        bool MustChangePassword, bool SeesOffers, bool DoesVisits = false);
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -100,9 +100,11 @@ public static class AuthEndpoints
 
     public static bool IsPlanerG(this ClaimsPrincipal user) => user.IsInRole(Roles.PlanerG);
 
-    // SeesOffers: whether the menu offers the plan of the offer phase (see OfferAccess).
+    // SeesOffers: whether the menu offers the plan of the offer phase (see OfferAccess); DoesVisits: whether they plan
+    // visits (the planners, and the craftsmen given Besichtigung).
     private static async Task<UserDto> ToDtoAsync(Employee e, WegoDbContext db) =>
-        new(e.Id, e.Name, e.UserName ?? "", e.Role, e.ShowInPlan, e.MustChangePassword, await OfferAccess.SeesOffersAsync(e, db));
+        new(e.Id, e.Name, e.UserName ?? "", e.Role, e.ShowInPlan, e.MustChangePassword, await OfferAccess.SeesOffersAsync(e, db),
+            Roles.CanPlan(e.Role) || e.AdditionalActivities.Contains(VisitEndpoints.Activity));
 }
 
 public static class ApiErrors

@@ -79,6 +79,12 @@ public class Employee
     /// <summary>What this employee can do as well. Main and additional activities are what the plan offers for them.</summary>
     public List<string> AdditionalActivities { get; set; } = [];
 
+    /// <summary>
+    /// Planners: the region of their enquiries (see VisitEndpoints.Regions), for planning the visits there in one
+    /// tour; null for no region.
+    /// </summary>
+    public string? Region { get; set; }
+
     // Login. Employees without a user name cannot sign in.
     public string? UserName { get; set; }
     public string? PasswordHash { get; set; }
@@ -141,6 +147,20 @@ public class SiteTask
     public int EstimatedDays { get; set; } = 1;
 
     public bool NotNeeded { get; set; }
+}
+
+/// <summary>
+/// A customer called for a visit and not reached: when and by whom, shown on the card of the enquiry so the planners
+/// can answer when the customer asks.
+/// </summary>
+public class CallAttempt
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public Site Site { get; set; } = null!;
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+    public DateTime At { get; set; }
 }
 
 /// <summary>One change of the status of a site, kept as a log.</summary>
@@ -241,6 +261,21 @@ public class Site
 
     /// <summary>A few words to the reason, needed for "Sonstiges".</summary>
     public string? DeclineNote { get; set; }
+
+    /// <summary>
+    /// Where in the offer the customer said no: Besichtigung (while the visit is agreed), Objektauswahl,
+    /// Angebotsuebergabe, or Wartet (waiting for the yes); only for a declined offer.
+    /// </summary>
+    public string? DeclineStep { get; set; }
+
+    /// <summary>
+    /// A no reported by who visits (on the telephone), with the reason and a few words: it waits for a planner to
+    /// confirm it (then the offer is declined) or to discard it.
+    /// </summary>
+    public string? ReportedDeclineReason { get; set; }
+    public string? ReportedDeclineNote { get; set; }
+    public string? ReportedDeclineBy { get; set; }
+    public DateTime? ReportedDeclineAt { get; set; }
 
     /// <summary>What is done there: kind of conversion, tiles, remarks.</summary>
     public string? Description { get; set; }

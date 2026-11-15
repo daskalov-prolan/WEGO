@@ -17,7 +17,8 @@ public static class EmployeeEndpoints
         bool IsDeleted, string? Birthday, DateOnly? BirthDate = null);
     public record EmployeeDto(int Id, string Name, int SortOrder, bool IsActive, bool ShowInPlan,
         int VacationDaysPerYear, string? UserName, string Role, bool HasPassword, string? MainActivity,
-        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted, DateOnly? BirthDate);
+        IReadOnlyList<string> AdditionalActivities, decimal? HourlyRate, string? Phone, bool IsDeleted, DateOnly? BirthDate,
+        string? Region = null);
 
     /// <summary>Password is only changed when it is not empty.</summary>
     /// <summary>The initial password is returned once and stored only as a hash.</summary>
@@ -25,7 +26,8 @@ public static class EmployeeEndpoints
 
     public record EmployeeInput(string Name, int SortOrder, bool IsActive, bool ShowInPlan, int VacationDaysPerYear,
         string? UserName, string Role, string? Password, string? MainActivity = null,
-        string[]? AdditionalActivities = null, decimal? HourlyRate = null, string? Phone = null, DateOnly? BirthDate = null);
+        string[]? AdditionalActivities = null, decimal? HourlyRate = null, string? Phone = null, DateOnly? BirthDate = null,
+        string? Region = null);
 
     /// <summary>The birthday without the year: "MM-dd".</summary>
     public static string? Birthday(DateOnly? birthDate) => birthDate?.ToString("MM-dd");
@@ -212,6 +214,8 @@ public static class EmployeeEndpoints
         var activities = await db.Activities.OrderBy(a => a.SortOrder).Select(a => a.Key).ToListAsync();
         if (input.MainActivity is { } main && !activities.Contains(main) || additional.Any(a => !activities.Contains(a)))
             return "Unbekannte Tätigkeit.";
+        var region = string.IsNullOrWhiteSpace(input.Region) ? null : input.Region.Trim();
+        if (region is not null && !VisitEndpoints.Regions.Contains(region)) return "Unbekannte Region.";
 
         var userName = AuthEndpoints.NormalizeUserName(input.UserName);
         if (userName?.Length > 100) return "Der Benutzername darf höchstens 100 Zeichen lang sein.";
@@ -243,6 +247,8 @@ public static class EmployeeEndpoints
         employee.UserName = userName;
         employee.Role = input.Role;
         employee.MainActivity = input.MainActivity;
+        // Only planners have enquiries of their own.
+        employee.Region = Roles.CanPlan(input.Role) ? region : null;
         // The main activity is not repeated among the additional ones; the order is that of the job.
         employee.AdditionalActivities = activities.Where(a => additional.Contains(a) && a != input.MainActivity).ToList();
         return null;
@@ -250,5 +256,5 @@ public static class EmployeeEndpoints
 
     private static EmployeeDto ToDto(Employee e) => new(e.Id, e.Name, e.SortOrder, e.IsActive, e.ShowInPlan,
         e.VacationDaysPerYear, e.UserName, e.Role, e.PasswordHash is not null, e.MainActivity, e.AdditionalActivities,
-        e.HourlyRate, e.Phone, e.DeletedAt is not null, e.BirthDate);
+        e.HourlyRate, e.Phone, e.DeletedAt is not null, e.BirthDate, e.Region);
 }

@@ -20,7 +20,7 @@ const step = (siteId: number, activity: OfferStep['activity'], date: string): Of
 const offers: Offers = {
   sites: [
     site(7, 'Später übergeben'), site(1, 'Neu'), site(2, 'Besichtigt'), site(3, 'Geplant'), site(4, 'Übergeben'), { ...site(5, 'Ausgewählt'), clientPhone: '030 123 45' },
-    site(6, 'Früh ausgewählt'),
+    site(6, 'Früh ausgewählt'), site(8, 'Auswahl geplant'),
   ],
   steps: [
     step(2, 'Besichtigung', '2026-11-05'),
@@ -33,6 +33,9 @@ const offers: Offers = {
     // The Objektauswahl planned already while the visit is still ahead.
     step(6, 'Besichtigung', '2026-11-19'),
     step(6, 'Objektauswahl', '2026-11-30'),
+    // Visited, the Objektauswahl ahead: in its column.
+    step(8, 'Besichtigung', '2026-11-04'),
+    step(8, 'Objektauswahl', '2026-11-25'),
     // Listed first, but handed over after Übergeben.
     { ...step(7, 'Besichtigung', '2026-10-02'), entryId: 71 },
     { ...step(7, 'Objektauswahl', '2026-10-09'), entryId: 72 },
@@ -40,6 +43,8 @@ const offers: Offers = {
   ],
   stepActivities: ['Besichtigung', 'Objektauswahl', 'Angebotsuebergabe'],
   decided: [],
+  // Stefan reported on the telephone that this customer says no.
+  reports: [{ siteId: 2, reason: 'Kein Interesse mehr', note: 'baut nicht mehr um', by: 'Stefan', at: '2026-11-10T09:00:00Z' }],
 }
 
 let declined: unknown = null
@@ -52,6 +57,8 @@ beforeEach(() => {
     vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/sites/planners') return new Response(JSON.stringify([{ id: 9, name: 'Marina', isMe: true }]), { status: 200 })
       if (url.startsWith('/api/plan')) return new Response(JSON.stringify({ employees: [], planners: [], entries: [], sites: [], schoolHolidays: [] }), { status: 200 })
+      if (url.endsWith('/decline-reasons'))
+        return new Response(JSON.stringify({ step: 'Objektauswahl', reasons: ['Zu lange gewartet', 'Kein Interesse mehr', 'Sonstiges'] }), { status: 200 })
       if (url.endsWith('/decline')) {
         declined = JSON.parse(String(init?.body))
         return new Response(JSON.stringify({ ...offers, sites: offers.sites.filter((s) => s.id !== 1) }), { status: 200 })
@@ -97,8 +104,12 @@ describe('OfferBoardPage', () => {
     // The planner in charge, changed from the card.
     expect(within(card).getByText('Marina')).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: 'Zuständigen Planer für Ausgewählt ändern' })).toBeInTheDocument()
-    // Until the Angebotsübergabe is planned, the Objektauswahl may get another appointment.
-    expect(within(card).getByRole('button', { name: '+ weitere Objektauswahl' })).toBeInTheDocument()
+    // In the column of the Objektauswahl it may get another appointment; moved on to the Angebotsübergabe no longer.
+    const choosing = screen.getByText('Auswahl geplant').closest('article')!
+    expect(within(column('Objektauswahl')).getByText('Auswahl geplant')).toBeInTheDocument()
+    expect(within(choosing).getByRole('button', { name: '+ weitere Objektauswahl' })).toBeInTheDocument()
+    expect(within(column('Angebotsübergabe')).getByText('Ausgewählt')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
     expect(within(column('Wartet auf Zusage')).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
     // Not before the card has come to the Objektauswahl: the visit is still ahead.
     const early = screen.getByText('Früh ausgewählt').closest('article')!
@@ -106,6 +117,32 @@ describe('OfferBoardPage', () => {
     expect(within(early).queryByRole('button', { name: /weitere/ })).not.toBeInTheDocument()
     await user.click(within(card).getByText(/^Anfrage .*02.11./))
     expect(await screen.findByText('Anfrage · Ausgewählt')).toBeInTheDocument()
+  })
+
+  it('shows a no reported by who visits on the card, for the planner to confirm with its reason', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<OfferBoardPage />)
+    const card = (await screen.findByText('Besichtigt')).closest('article')!
+    expect(card.querySelector('.offer-report')!.textContent).toContain('Absage gemeldet von Stefan: Kein Interesse mehr (baut nicht mehr um)')
+    // Saying no is part of planning an appointment, not of the card.
+    expect(screen.queryByRole('button', { name: 'Kunde sagt ab' })).not.toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: 'Absage bestätigen' }))
+    const dialog = await screen.findByRole('dialog', { name: /Abgelehnt · Besichtigt/ })
+    expect(await within(dialog).findByText(/bei der Objektauswahl/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('radio', { name: 'Kein Interesse mehr' })).toBeChecked()
+    await user.click(within(dialog).getByRole('button', { name: 'Abgelehnt' }))
+    await waitFor(() => expect(declined).toEqual({ reason: 'Kein Interesse mehr', note: 'baut nicht mehr um' }))
+  })
+
+  it('takes the no of the customer while planning an appointment, with the reasons of that step', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<OfferBoardPage />)
+    const card = (await screen.findByText('Geplant')).closest('article')!
+    await user.click(within(card).getByRole('button', { name: 'Termin verschieben' }))
+    await user.click(await screen.findByRole('button', { name: 'Kunde sagt ab' }))
+    const dialog = await screen.findByRole('dialog', { name: /Abgelehnt · Geplant/ })
+    expect(await within(dialog).findByRole('radio', { name: 'Zu lange gewartet' })).toBeInTheDocument()
   })
 
   it('asks the reason when a customer says no', async () => {

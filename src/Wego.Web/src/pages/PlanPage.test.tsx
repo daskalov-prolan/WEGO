@@ -140,7 +140,7 @@ describe('PlanPage', () => {
     expect(table()).toHaveClass('fold-weekends')
     // Under "Ansicht", with the size.
     await userEvent.click(screen.getByRole('button', { name: /^Ansicht/ }))
-    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }, { timeout: 3000 }))
     expect(table()).not.toHaveClass('fold-weekends')
     expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
   })
@@ -280,8 +280,8 @@ describe('PlanPage', () => {
     expect(visit).not.toHaveClass('dimmed')
     expect(within(visit).getByText('Besichtigung')).toBeInTheDocument()
     expect(within(visit).getByLabelText('1 Kunde')).toHaveTextContent('1')
-    expect(visit.title).toContain('09:00 – 10:00')
-    expect(visit.title).toContain('Familie Neu')
+    // The customers with their times, without the span of the whole day.
+    expect(visit.title).toBe('Besichtigung · 1 Kunde\n09:00 Familie Neu')
     // Only the two phases to choose: no done or cancelled, and the activities are no filters.
     expect(screen.queryByText('Abgeschlossen')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Endmontage' })).not.toBeInTheDocument()
@@ -753,7 +753,36 @@ describe('PlanPage', () => {
     ])
   })
 
-  it('in the offer phase plans a visit by dragging it from the legend onto a day, the site still open', async () => {
+  it('in the offer phase opens an appointment as its step and a customer as the enquiry, not the day', async () => {
+    const offer = { id: 14, name: 'Familie Angebot', ...noAddress, status: 'Angebot' as const, requestedOn: '2026-02-20' }
+    const phases: Plan = {
+      ...plan,
+      employees: [...plan.employees, { id: 3, name: 'Clara', mainActivity: null, additionalActivities: [], isPlaner: true, isCraftsman: false }],
+      sites: [...plan.sites, offer],
+      entries: [
+        ...plan.entries,
+        { ...entry(20, 3, '2026-03-02', 14, 'Familie Angebot', '09:00:00', '10:00:00'), employeeName: 'Clara', activity: 'Besichtigung' },
+        { ...entry(21, 3, '2026-03-04', 14, 'Familie Angebot', '09:00:00', '12:00:00'), employeeName: 'Clara', activity: 'Objektauswahl' },
+      ],
+    }
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(phases), { status: 200 }))
+    renderWithProviders(<PlanPage year={2026} phase="Angebot" canEdit />)
+    await screen.findByText(/KW 10/)
+
+    // The appointment (a double click, as for the day): the window of its step, as "Termin verschieben" in the overview.
+    await userEvent.dblClick(cell(/Clara, Mittwoch, 04.03.2026/))
+    const step = await screen.findByRole('dialog', { name: 'Objektauswahl · Familie Angebot' })
+    expect(within(step).getByRole('button', { name: 'Verschieben' })).toBeInTheDocument()
+    fireEvent.click(within(step).getByRole('button', { name: 'Abbrechen' }))
+
+    // The customer (from the right-click menu): the window of the enquiry, not the page of the site.
+    const wednesday = cell(/Clara, Mittwoch, 04.03.2026/)
+    fireEvent.contextMenu(within(wednesday).getAllByText('Familie Angebot')[0].closest('.chip')!)
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Baustelle öffnen: Familie Angebot' }))
+    expect(await screen.findByRole('dialog', { name: 'Anfrage · Familie Angebot' })).toBeInTheDocument()
+  })
+
+  it('in the offer phase sets a day aside for visits by dragging Besichtigung onto a day, and Anfrage opens a new enquiry', async () => {
     const phases: Plan = {
       ...plan,
       employees: [...plan.employees, { id: 3, name: 'Clara', mainActivity: null, additionalActivities: [], isPlaner: true, isCraftsman: false }],
@@ -783,16 +812,18 @@ describe('PlanPage', () => {
     fireEvent.drop(monday)
     fireEvent.dragEnd(visit)
 
-    // The day opens with the visit as a new row: a site can be chosen or created right there, or left open.
-    expect(await screen.findByText('1 · Besichtigung · Baustelle wählen oder neu anlegen')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Neue Baustelle anlegen' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    // Not the day editor: the whole day set aside for visits; the customers are planned under "Besichtigungen planen".
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/visits/days')).toBe(true))
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/visits/days')!
+    expect(JSON.parse(String(call[1].body))).toEqual({ employeeId: 3, date: '2026-03-02' })
 
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(true))
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/plan/batch')!
-    expect(JSON.parse(String(call[1].body))).toEqual([
-      { employeeId: 3, date: '2026-03-02', entries: [expect.objectContaining({ type: 'Baustelle', siteId: null, activity: 'Besichtigung' })] },
-    ])
+    // Anfrage: the same window as "+ Neue Anfrage" in the overview.
+    const enquiry = within(legend).getByText('Anfrage').closest('.flow-step')!
+    fireEvent.dragStart(enquiry)
+    fireEvent.drop(monday)
+    fireEvent.dragEnd(enquiry)
+    expect(await screen.findByRole('dialog', { name: 'Neue Anfrage' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
   })
 
   describe('marking an entry', () => {

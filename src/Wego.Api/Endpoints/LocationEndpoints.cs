@@ -98,10 +98,10 @@ public static class LocationEndpoints
     public static string? AddressKey(Site site) =>
         string.IsNullOrWhiteSpace(site.Street) ? null : $"{site.Street}|{site.HouseNumber}|{site.PostalCode}|{site.City}";
 
-    private static bool NeedsLookUp(Site site) => AddressKey(site) is { } key && key != site.GeocodedFor;
+    internal static bool NeedsLookUp(Site site) => AddressKey(site) is { } key && key != site.GeocodedFor;
 
     /// <returns>false when the service cannot be reached (nothing is kept then).</returns>
-    private static async Task<bool> LookUpAsync(Site site, IGeocoder geocoder)
+    internal static async Task<bool> LookUpAsync(Site site, IGeocoder geocoder)
     {
         var street = string.Join(' ', new[] { site.Street, site.HouseNumber }.Where(s => !string.IsNullOrWhiteSpace(s)));
         (double Latitude, double Longitude)? place;

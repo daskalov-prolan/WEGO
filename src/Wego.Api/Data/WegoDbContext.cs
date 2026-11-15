@@ -16,6 +16,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<ClosureVacation> ClosureVacations => Set<ClosureVacation>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
+    public DbSet<CallAttempt> CallAttempts => Set<CallAttempt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,6 +79,10 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
                         v => v.ToList()))
                 .HasMaxLength(400);
             e.Property(x => x.DeclineReason).HasMaxLength(60);
+            e.Property(x => x.DeclineStep).HasMaxLength(30);
+            e.Property(x => x.ReportedDeclineReason).HasMaxLength(60);
+            e.Property(x => x.ReportedDeclineNote).HasMaxLength(500);
+            e.Property(x => x.ReportedDeclineBy).HasMaxLength(200);
             e.Property(x => x.DeclineNote).HasMaxLength(500);
             // Not unique: one property management can order jobs at several addresses.
             e.HasIndex(x => x.Name);
@@ -140,6 +145,15 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.HasIndex(x => new { x.EmployeeId, x.Date });
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<CallAttempt>(e =>
+        {
+            e.HasIndex(x => x.SiteId);
+            e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Employee>().Property(x => x.Region).HasMaxLength(50);
 
         modelBuilder.Entity<ClosureVacation>(e =>
         {

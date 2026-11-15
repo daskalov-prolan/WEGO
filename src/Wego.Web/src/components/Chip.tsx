@@ -1,6 +1,7 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import type { Activity, Entry } from '../api/types'
-import { activityLabel, serviceName, tentativeName, entryName, entryStyle, entryTitle, isFree } from '../lib/activities'
+import { activityLabel, serviceName, tentativeName, entryName, entryStyle, entryTitle, isFree, isMarkedStep } from '../lib/activities'
+import { ActivityIcon } from './ActivityIcon'
 import { ServiceIcon } from './ServiceIcon'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange, WHOLE_DAY } from '../lib/dates'
@@ -89,6 +90,12 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
       <span className="chip-line">
         {time && <span className="time">{time}</span>}
         <span className="chip-name">
+          {/* The step of the offer as a small sign, so the customer keeps the room. */}
+          {entry.type === 'Baustelle' && isMarkedStep(entry.activity) && (
+            <span className="step-mark" aria-label={activityLabel(entry.activity) ?? undefined}>
+              <ActivityIcon activity={entry.activity} size={11} />
+            </span>
+          )}
           {label !== undefined ? (
             label
           ) : entry.type !== 'Baustelle' ? (

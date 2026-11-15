@@ -81,6 +81,32 @@ namespace Wego.Api.Migrations
                     b.ToTable("CalendarNotes");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.CallAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("CallAttempts");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.ChangeLogEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -187,6 +213,10 @@ namespace Wego.Api.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Region")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
@@ -327,6 +357,10 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<string>("DeclineStep")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -374,6 +408,21 @@ namespace Wego.Api.Migrations
                     b.Property<string>("PostalCode")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("ReportedDeclineAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReportedDeclineBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ReportedDeclineNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReportedDeclineReason")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
 
                     b.Property<DateOnly?>("RequestedOn")
                         .HasColumnType("date");
@@ -502,6 +551,25 @@ namespace Wego.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.CallAttempt", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Site");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.ClosureVacation", b =>

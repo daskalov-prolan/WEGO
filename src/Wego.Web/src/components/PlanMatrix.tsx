@@ -4,7 +4,8 @@ import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
 import { formatDateLong, HALF_DAYS, isoWeek, MONTHS } from '../lib/dates'
 import { BirthdayIcon } from './BirthdayIcon'
-import { serviceName, entryName, entryStyle, entryTitle, isFree, onlyHalfDay } from '../lib/activities'
+import { activityLabel, serviceName, entryName, entryStyle, entryTitle, isFree, isMarkedStep, onlyHalfDay } from '../lib/activities'
+import { ActivityIcon } from './ActivityIcon'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
 import { Chip, NoteMark } from './Chip'
@@ -430,6 +431,11 @@ function Compact({
       {...dragSource({ kind: 'entry', entry: first }, draggable && first.type === 'Baustelle')}
     >
       <span className="compact-name" onClick={onTextClick}>
+        {first.type === 'Baustelle' && isMarkedStep(first.activity) && (
+          <span className="step-mark" aria-label={activityLabel(first.activity) ?? undefined}>
+            <ActivityIcon activity={first.activity} size={11} />
+          </span>
+        )}
         {text}
       </span>
       {entries.length > 1 && <span className="compact-more">+{entries.length - 1}</span>}
