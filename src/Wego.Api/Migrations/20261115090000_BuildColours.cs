@@ -7,7 +7,7 @@ using Wego.Api.Data;
 namespace Wego.Api.Migrations
 {
     /// <summary>
-    /// The construction phase in calmer colours: RenoDeco Orange (as the Angebotsübergabe), Fliesenarbeiten Mauve, Trockenbau a lighter greige, Sanitär and Endmontage
+    /// The construction phase in calmer colours: RenoDeco Orange (as the Angebotsübergabe), Fliesenarbeiten Altrosa-Flieder, Trockenbau a lighter greige, Sanitär and Endmontage
     /// Petrol (Baubeginn keeps the red of the logo). Only colours not changed under Verwaltung.
     /// </summary>
     [DbContext(typeof(WegoDbContext))]
@@ -19,7 +19,7 @@ namespace Wego.Api.Migrations
         {
             migrationBuilder.Sql("""
                 UPDATE "Activities" SET "Color" = '#f07a2a' WHERE "Key" = 'RenoDeco' AND lower("Color") = '#ff9f50';
-                UPDATE "Activities" SET "Color" = '#86698a' WHERE "Key" = 'Fliesen' AND lower("Color") = '#7a3e8e';
+                UPDATE "Activities" SET "Color" = '#c08bc0' WHERE "Key" = 'Fliesen' AND lower("Color") = '#7a3e8e';
                 UPDATE "Activities" SET "Color" = '#e9dccb' WHERE "Key" = 'Trockenbau' AND lower("Color") = '#d6c7bc';
                 UPDATE "Activities" SET "Color" = '#0f6378' WHERE "Key" IN ('Sanitaer', 'Endmontage') AND lower("Color") = '#2a9cad';
                 """);
@@ -31,7 +31,7 @@ namespace Wego.Api.Migrations
             migrationBuilder.Sql("""
                 UPDATE "Activities" SET "Color" = '#2a9cad' WHERE "Key" IN ('Sanitaer', 'Endmontage') AND lower("Color") = '#0f6378';
                 UPDATE "Activities" SET "Color" = '#d6c7bc' WHERE "Key" = 'Trockenbau' AND lower("Color") = '#e9dccb';
-                UPDATE "Activities" SET "Color" = '#7a3e8e' WHERE "Key" = 'Fliesen' AND lower("Color") = '#86698a';
+                UPDATE "Activities" SET "Color" = '#7a3e8e' WHERE "Key" = 'Fliesen' AND lower("Color") = '#c08bc0';
                 UPDATE "Activities" SET "Color" = '#ff9f50' WHERE "Key" = 'RenoDeco' AND lower("Color") = '#f07a2a';
                 """);
         }
