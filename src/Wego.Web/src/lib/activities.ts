@@ -151,7 +151,7 @@ export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', ed
 export const FREE: Colours = { background: '#9fd4a6', tint: '#e2f2e4', edge: '#3f7d52' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
 /** Urlaub and Krank: light yellow with black writing. */
-export const ABSENCE: Colours = { background: '#f4e3a1', tint: '#f4e3a1', edge: '#000000' }
+export const ABSENCE: Colours = { background: '#f7de6e', tint: '#f7de6e', edge: '#000000' }
 /** Feiertage are green, school holidays a lighter green. */
 export const PUBLIC_HOLIDAY: Colours = { background: '#5cc46a', tint: '#d9f2dc', edge: '#2e9e3e' }
 export const SCHOOL_HOLIDAY: Colours = { background: '#d3f0d6', tint: '#eef9ef', edge: '#8fd29a' }
