@@ -755,6 +755,26 @@ a:hover {
   margin-bottom: 160px;
 }
 
+/* Bildschirm ausfüllen (Ansicht): the rows of the employees or sites share the height of the plan; with more rows
+   than fit, the plan scrolls as before. The heads keep their size. */
+.plan-scroll.fill > .timeline {
+  height: 100%;
+  margin-bottom: 0;
+}
+
+/* The field of a day reaches over the whole stretched row: a tap low in the row opens the day as well. */
+.plan-scroll.fill > .timeline tbody td {
+  height: 1px;
+}
+
+.plan-scroll.fill > .timeline tbody td > .cell {
+  height: 100%;
+}
+
+.plan-scroll.fill > .timeline thead tr {
+  height: 1px;
+}
+
 .timeline {
   --name-col: 150px;
   --month-row: 26px;
@@ -3643,4 +3663,12 @@ html.plan-full .shell-nav {
   padding: 6px 8px;
   border-radius: 6px;
   background: #f1f5f6;
+}
+
+/* A big touch screen (a smart board on the wall, read from afar): the enquiries of the overview drawn larger, as
+   the plan starts at 130 % there. */
+@media (any-pointer: coarse) and (min-width: 1800px) {
+  .offer-board {
+    zoom: 1.3;
+  }
 }
