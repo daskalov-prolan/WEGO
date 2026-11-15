@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { User } from '../api/types'
 import { renderWithProviders } from '../test-utils'
@@ -22,6 +23,26 @@ describe('AppShell', () => {
     // The records start the group on the right.
     expect(screen.getByRole('link', { name: 'Baustellen' })).toHaveClass('nav-right')
     expect(screen.getByRole('link', { name: 'Mitarbeiter' })).not.toHaveClass('nav-right')
+  })
+
+  it('on a phone keeps the plans in the bar and puts the records under Mehr when there are many', async () => {
+    const wide = window.matchMedia
+    window.matchMedia = ((query: string) => ({ ...wide(query), matches: query.includes('max-width: 720px') })) as typeof window.matchMedia
+    try {
+      renderWithProviders(
+        <AppShell user={user('PlanerG', true)} page="mitarbeiter" onLogout={() => {}}>
+          <p>Inhalt</p>
+        </AppShell>,
+      )
+      expect(menu()).toEqual(['Mein Plan', 'Angebotsphase', 'Bauphase'])
+      const more = within(screen.getByRole('navigation')).getByRole('button', { name: 'Mehr' })
+      // The page open is among them: Mehr is marked.
+      expect(more).toHaveAttribute('aria-current', 'page')
+      await userEvent.click(more)
+      expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Baustellen', 'Mitarbeiter', 'Verwaltung', 'Mein Bereich'])
+    } finally {
+      window.matchMedia = wide
+    }
   })
 
   it('offers a craftsman no offer phase, but the list of employees', () => {

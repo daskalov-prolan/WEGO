@@ -6,6 +6,7 @@ import type { User } from '../api/types'
 import logo from '../assets/logo.svg'
 import { canPlanRole, roleLabel } from '../lib/roles'
 import { Sheet } from './Sheet'
+import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
   user: User
@@ -28,8 +29,16 @@ const NAV = [
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
+/** On a phone at most this many pages in the bar; with more, the plans stay and the records go under "Mehr". */
+const PHONE_BAR = 4
+
 export function AppShell({ user, page, onLogout, homePage, onHome, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
+  const isPhone = useIsPhone()
+  const shown = NAV.filter((item) => item.visible(user))
+  const folded = isPhone && shown.length > PHONE_BAR
+  const bar = folded ? shown.filter((item) => !item.right) : shown
+  const more = folded ? shown.filter((item) => item.right) : []
 
   return (
     <div className="shell">
@@ -67,13 +76,13 @@ export function AppShell({ user, page, onLogout, homePage, onHome, children }: P
       </header>
 
       <nav className="shell-nav" aria-label="Hauptnavigation">
-        {NAV.filter((item) => item.visible(user)).map((item, index, shown) => (
+        {bar.map((item, index) => (
           <a
             key={item.page}
             href={`#/${item.page}`}
             aria-current={page === item.page ? 'page' : undefined}
             // The first of the records starts the group on the right.
-            className={item.right && !shown[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
+            className={item.right && !bar[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
             aria-label={item.label}
           >
             {/* On a phone the short name, so that all pages fit into the bar. */}
@@ -87,6 +96,29 @@ export function AppShell({ user, page, onLogout, homePage, onHome, children }: P
             )}
           </a>
         ))}
+        {/* Phone with many pages: the records (Baustellen, Mitarbeiter, Verwaltung, Mein Bereich) in a list. */}
+        {more.length > 0 && (
+          <Menu position="top-end" withinPortal>
+            <Menu.Target>
+              <a
+                href="#"
+                role="button"
+                className="nav-more"
+                aria-current={more.some((item) => item.page === page) ? 'page' : undefined}
+                onClick={(event) => event.preventDefault()}
+              >
+                Mehr
+              </a>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {more.map((item) => (
+                <Menu.Item key={item.page} component="a" href={`#/${item.page}`} fw={page === item.page ? 700 : undefined}>
+                  {item.label}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        )}
       </nav>
 
       <main className="shell-main">{children}</main>
