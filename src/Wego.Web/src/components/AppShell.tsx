@@ -21,7 +21,7 @@ interface Props {
 // Left the plans (the own one, and the plan of everybody per phase), right the records.
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
-  { page: 'angebotsphase', label: 'Angebotsphase', short: 'Angebot', visible: (user: User) => user.seesOffers !== false },
+  { page: 'angebotsphase', label: 'Angebotsphase', visible: (user: User) => user.seesOffers !== false },
   { page: 'bauphase', label: 'Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
@@ -29,16 +29,20 @@ const NAV = [
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
-/** On a phone at most this many pages in the bar; with more, the plans stay and the records go under "Mehr". */
-const PHONE_BAR = 4
+/**
+ * On a phone at most this many pages in the bar; with more, the plans and Mein Bereich stay, the other records
+ * (Baustellen, Mitarbeiter, Verwaltung) go under "Mehr".
+ */
+const PHONE_BAR = 5
 
 export function AppShell({ user, page, onLogout, homePage, onHome, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
   const isPhone = useIsPhone()
   const shown = NAV.filter((item) => item.visible(user))
   const folded = isPhone && shown.length > PHONE_BAR
-  const bar = folded ? shown.filter((item) => !item.right) : shown
-  const more = folded ? shown.filter((item) => item.right) : []
+  const stays = (item: (typeof NAV)[number]) => !item.right || item.page === 'mein-bereich'
+  const bar = folded ? shown.filter(stays) : shown
+  const more = folded ? shown.filter((item) => !stays(item)) : []
 
   return (
     <div className="shell">
@@ -85,18 +89,10 @@ export function AppShell({ user, page, onLogout, homePage, onHome, children }: P
             className={item.right && !bar[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
             aria-label={item.label}
           >
-            {/* On a phone the short name, so that all pages fit into the bar. */}
-            {'short' in item ? (
-              <>
-                <span className="nav-long">{item.label}</span>
-                <span className="nav-short">{item.short}</span>
-              </>
-            ) : (
-              item.label
-            )}
+            {item.label}
           </a>
         ))}
-        {/* Phone with many pages: the records (Baustellen, Mitarbeiter, Verwaltung, Mein Bereich) in a list. */}
+        {/* Phone with many pages: the other records (Baustellen, Mitarbeiter, Verwaltung) in a list. */}
         {more.length > 0 && (
           <Menu position="top-end" withinPortal>
             <Menu.Target>

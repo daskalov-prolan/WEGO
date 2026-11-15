@@ -25,7 +25,7 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: 'Mitarbeiter' })).not.toHaveClass('nav-right')
   })
 
-  it('on a phone keeps the plans in the bar and puts the records under Mehr when there are many', async () => {
+  it('on a phone keeps the plans and Mein Bereich in the bar and puts the other records under Mehr when there are many', async () => {
     const wide = window.matchMedia
     window.matchMedia = ((query: string) => ({ ...wide(query), matches: query.includes('max-width: 720px') })) as typeof window.matchMedia
     try {
@@ -34,12 +34,12 @@ describe('AppShell', () => {
           <p>Inhalt</p>
         </AppShell>,
       )
-      expect(menu()).toEqual(['Mein Plan', 'Angebotsphase', 'Bauphase'])
+      expect(menu()).toEqual(['Mein Plan', 'Angebotsphase', 'Bauphase', 'Mein Bereich'])
       const more = within(screen.getByRole('navigation')).getByRole('button', { name: 'Mehr' })
       // The page open is among them: Mehr is marked.
       expect(more).toHaveAttribute('aria-current', 'page')
       await userEvent.click(more)
-      expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Baustellen', 'Mitarbeiter', 'Verwaltung', 'Mein Bereich'])
+      expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Baustellen', 'Mitarbeiter', 'Verwaltung'])
     } finally {
       window.matchMedia = wide
     }
