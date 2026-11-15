@@ -172,13 +172,32 @@ const SCALE_KEY = 'wego.plan.scale'
 /** How big the plan is shown, in per cent: 60 to 150 in steps of 10. */
 const SCALES = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
 
+/** The size first shown: bigger on a big touch screen (a smart board, read from afar), else 100 %. */
+const startScale = () => (window.matchMedia?.('(any-pointer: coarse) and (min-width: 1800px)').matches ? 130 : 100)
+
 function loadScale(): number {
   try {
     const saved = Number(localStorage.getItem(SCALE_KEY))
-    return SCALES.includes(saved) ? saved : 100
+    return SCALES.includes(saved) ? saved : startScale()
   } catch {
-    return 100
+    return startScale()
   }
+}
+
+const FILL_KEY = 'wego.plan.fill'
+
+/**
+ * Whether the rows share the height of the screen rather than standing at the top: on a big touch screen (a smart
+ * board on the wall, read from afar) from the start, elsewhere when switched on under Ansicht; kept per device.
+ */
+function loadFill(): boolean {
+  try {
+    const saved = localStorage.getItem(FILL_KEY)
+    if (saved !== null) return saved === 'true'
+  } catch {
+    // Without storage as on a new device.
+  }
+  return window.matchMedia?.('(any-pointer: coarse) and (min-width: 1200px)').matches ?? false
 }
 
 function loadFoldWeekends(): boolean {
@@ -293,6 +312,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       localStorage.setItem(SCALE_KEY, String(next))
     } catch {
       // Without storage the size holds until the page is left.
+    }
+  }
+  const [fill, setFill] = useState(loadFill)
+  const changeFill = (next: boolean) => {
+    setFill(next)
+    try {
+      localStorage.setItem(FILL_KEY, String(next))
+    } catch {
+      // Without storage the choice holds until the page is left.
     }
   }
   const [perspective, setPerspective] = useState<Perspective>(loadPerspective)
@@ -1545,6 +1573,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                         checked={foldWeekends}
                         onChange={(event) => toggleWeekends(event.currentTarget.checked)}
                       />
+                      <Switch
+                        size="sm"
+                        label="Bildschirm ausfüllen"
+                        description="Die Zeilen teilen sich die ganze Höhe, z. B. am Smartboard"
+                        checked={fill}
+                        onChange={(event) => changeFill(event.currentTarget.checked)}
+                      />
                       <Group gap={6} wrap="nowrap">
                         <Text size="sm">Größe</Text>
                         <Group gap={2} wrap="nowrap" className="plan-scale">
@@ -1652,7 +1687,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       </div>
 
       <div
-        className="plan-scroll"
+        className={fill ? 'plan-scroll fill' : 'plan-scroll'}
         style={scale === 100 ? undefined : { zoom: scale / 100 }}
         ref={scroller}
         onScroll={onScroll}
