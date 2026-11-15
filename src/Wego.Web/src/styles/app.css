@@ -2047,7 +2047,7 @@ body.stretching * {
   gap: 4px 24px;
   margin: -4px 12px 10px;
   padding: 8px 16px;
-  border-left: 4px solid #f4e3a1;
+  border-left: 4px solid #f7de6e;
   border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -3452,7 +3452,7 @@ html.plan-full .shell-nav {
 }
 
 .absence-badge.vacation {
-  background: #f4e3a1;
+  background: #f7de6e;
   color: #000000;
 }
 

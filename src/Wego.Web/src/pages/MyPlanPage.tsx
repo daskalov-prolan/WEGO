@@ -318,11 +318,6 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       <div className="my-plan-head" ref={headRef}>
       <Group justify="space-between" align="center" mb={4} wrap="nowrap">
         <Title order={2}>Mein Plan</Title>
-        {user.doesVisits && (
-          <Button size="compact-md" variant="light" onClick={() => setVisiting(true)}>
-            Besichtigungen planen
-          </Button>
-        )}
         {onYearChange && (
           <YearPicker
             year={shownYear}
@@ -331,6 +326,12 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           />
         )}
       </Group>
+      {/* On a line of its own, so that it is whole on a phone too. */}
+      {user.doesVisits && (
+        <Button fullWidth variant="light" mt={4} onClick={() => setVisiting(true)}>
+          Besichtigungen planen
+        </Button>
+      )}
 
       <Group gap="xs" mt="sm" wrap="nowrap">
         <ActionIcon variant="default" size="lg" onClick={() => go(addDays(shownWeek, -7))} aria-label="Vorherige Woche">
