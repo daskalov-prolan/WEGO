@@ -1,4 +1,5 @@
 import type {
+  VisitPlan,
   Absence,
   AbsenceInput,
   AbsenceRange,
@@ -128,6 +129,9 @@ export const api = {
   acceptOffer: (siteId: number, plannedStart: string) => request<Offers>('POST', `/api/offers/${siteId}/accept`, { plannedStart }),
   declineOffer: (siteId: number, reason: string, note: string | null) =>
     request<Offers>('POST', `/api/offers/${siteId}/decline`, { reason, note }),
+  /** The reasons of saying no at the step where the customer stands. */
+  declineReasons: (siteId: number) => request<{ step: string; reasons: string[] }>('GET', `/api/offers/${siteId}/decline-reasons`),
+  discardDeclineReport: (siteId: number) => request<Offers>('POST', `/api/offers/${siteId}/decline-report/discard`),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
 
   /** One year, or without it the whole time of the site. */
@@ -138,6 +142,14 @@ export const api = {
   myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
   teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
+  visits: (employeeId?: number) => request<VisitPlan>('GET', `/api/visits${employeeId ? `?employeeId=${employeeId}` : ''}`),
+  setVisitDay: (employeeId: number, date: string) => request<VisitPlan>('POST', '/api/visits/days', { employeeId, date }),
+  removeVisitDay: (employeeId: number, date: string) => request<VisitPlan>('POST', '/api/visits/days/remove', { employeeId, date }),
+  planVisit: (input: { employeeId: number; siteId: number; date: string; start: string }) => request<VisitPlan>('POST', '/api/visits', input),
+  /** The customer says no: declined by a planner, reported by who visits (for a planner to confirm). */
+  declineVisit: (employeeId: number, siteId: number, reason: string, note: string | null) =>
+    request<VisitPlan>('POST', '/api/visits/decline', { employeeId, siteId, reason, note }),
+  notReached: (employeeId: number, siteId: number) => request<VisitPlan>('POST', '/api/visits/not-reached', { employeeId, siteId }),
   absences: (year: number) => request<Absence[]>('GET', `/api/absences?year=${year}`),
   saveAbsence: (input: AbsenceInput) => request<{ days: number; removedSites: number }>('POST', '/api/absences', input),
   removeAbsence: (range: AbsenceRange) => request<{ days: number }>('POST', '/api/absences/remove', range),

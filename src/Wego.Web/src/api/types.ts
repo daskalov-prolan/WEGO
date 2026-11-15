@@ -38,6 +38,8 @@ export interface User {
   mustChangePassword: boolean
   /** Planners and whoever does offer work: the menu offers the plan of the offer phase. */
   seesOffers?: boolean
+  /** Planners and the craftsmen given Besichtigung: they plan visits. */
+  doesVisits?: boolean
 }
 
 export interface Access {
@@ -134,6 +136,17 @@ export interface DecidedOffer {
   plannedStart: string | null
   declineReason: string | null
   declineNote: string | null
+  /** Where the customer said no: Besichtigung, Objektauswahl, Angebotsuebergabe or Wartet. */
+  declineStep?: string | null
+}
+
+/** A no reported by who visits (on the telephone), waiting for a planner to confirm it; at: UTC. */
+export interface DeclineReport {
+  siteId: number
+  reason: string
+  note: string | null
+  by: string
+  at: string
 }
 
 /** The offer phase as an overview: the enquiries, their steps (in the order of stepActivities), the decided. */
@@ -142,6 +155,87 @@ export interface Offers {
   steps: OfferStep[]
   stepActivities: Activity[]
   decided: DecidedOffer[]
+  /** Customers called for the visit and not reached: the last call of each enquiry. */
+  calls?: CallAttempt[]
+  /** Noes reported by who visits, for a planner to confirm. */
+  reports?: DeclineReport[]
+}
+
+/** A customer called and not reached: the last time (UTC), by whom, how often in all. */
+export interface CallAttempt {
+  siteId: number
+  at: string
+  by: string
+  count: number
+}
+
+export interface VisitPlace {
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+}
+
+/** A customer planned on a day of visits; from/to "HH:mm:ss". */
+export interface PlannedVisit {
+  entryId: number
+  siteId: number
+  name: string
+  address: string | null
+  phone: string | null
+  latitude: number | null
+  longitude: number | null
+  from: string
+  to: string
+}
+
+/** A day set aside for visits by the planners, with the customers planned on it so far. */
+export interface VisitDay {
+  date: string
+  visits: PlannedVisit[]
+  /** Set aside for visits by the planners; else a day with a customer planned on its own. */
+  reserved?: boolean
+}
+
+/** An enquiry without a visit yet; region: that of its planner. */
+export interface VisitEnquiry {
+  siteId: number
+  name: string
+  address: string | null
+  phone: string | null
+  scope: string[]
+  description: string | null
+  requestedOn: string | null
+  planner: string | null
+  region: string | null
+  latitude: number | null
+  longitude: number | null
+  call: CallAttempt | null
+  /** A no reported, waiting for a planner to confirm it. */
+  report?: DeclineReport | null
+}
+
+/** Something else in the plan of the visitor; without times the whole day. */
+export interface VisitBusy {
+  date: string
+  name: string
+  from: string | null
+  to: string | null
+}
+
+export interface VisitPlan {
+  employeeId: number
+  company: VisitPlace
+  /** Whom a planner may plan for; empty for a craftsman, who plans his own. */
+  visitors: { id: number; name: string }[]
+  regions: string[]
+  days: VisitDay[]
+  enquiries: VisitEnquiry[]
+  busy: VisitBusy[]
+  /** Enquiries whose address is not on the map yet. */
+  pending: number
+  /** Why a customer says no while the visit is agreed. */
+  declineReasons: string[]
 }
 
 export interface StepInput {
@@ -362,6 +456,8 @@ export interface Employee {
   isDeleted?: boolean
   /** Date of birth "YYYY-MM-DD", entered by a Planer G. */
   birthDate?: string | null
+  /** Planners: the region of their enquiries, for the tours of visits. */
+  region?: string | null
 }
 
 /** An employee in the list for everybody: no login, no wage; of the date of birth only day and month. */
@@ -394,4 +490,6 @@ export interface EmployeeInput {
   mainActivity: Activity | null
   /** Craftsmen: activities of the offer phase they do as well, e.g. visits ("Besichtigung"). */
   additionalActivities?: Activity[]
+  /** Planners: the region of their enquiries (Karow, Reinickendorf). */
+  region?: string | null
 }

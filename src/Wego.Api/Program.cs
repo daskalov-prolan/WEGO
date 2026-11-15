@@ -143,6 +143,7 @@ app.MapAuthEndpoints();
 app.MapPlanEndpoints();
 app.MapSiteEndpoints();
 app.MapOfferEndpoints();
+app.MapVisitEndpoints();
 app.MapReportEndpoints();
 app.MapAbsenceEndpoints();
 app.MapEmployeeEndpoints();

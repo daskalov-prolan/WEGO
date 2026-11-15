@@ -27,6 +27,85 @@ public static class OfferEndpoints
 
     public const string Other = "Sonstiges";
 
+    /// <summary>Why a customer says no while the visit is being agreed, and at the Objektauswahl.</summary>
+    public static readonly IReadOnlyDictionary<string, string[]> EarlyDeclineReasons = new Dictionary<string, string[]>
+    {
+        ["Besichtigung"] = ["Zu lange gewartet", "Anderer Anbieter beauftragt", "Vorhaben verschoben", "Kein Interesse mehr",
+            "Mehrfach nicht erreicht", Other],
+        ["Objektauswahl"] = ["Zu lange gewartet", "Anderer Anbieter beauftragt", "Vorhaben verschoben", "Kein Interesse mehr", Other],
+    };
+
+    /// <summary>Where the customer stands, for saying no: the step ahead (planned or not), or Wartet when all are behind.</summary>
+    internal static async Task<string> DeclineStepAsync(WegoDbContext db, int siteId)
+    {
+        var steps = await StepActivitiesAsync(db);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var entries = await db.PlanEntries.Where(e => e.SiteId == siteId && e.Activity != null && steps.Contains(e.Activity)).ToListAsync();
+        foreach (var step in steps)
+        {
+            var own = entries.Where(e => e.Activity == step).ToList();
+            if (own.Count == 0 || own.Any(e => e.Date > today)) return step;
+        }
+        return "Wartet";
+    }
+
+    internal static void ClearReport(Site site)
+    {
+        site.ReportedDeclineReason = null;
+        site.ReportedDeclineNote = null;
+        site.ReportedDeclineBy = null;
+        site.ReportedDeclineAt = null;
+    }
+
+    /// <summary>
+    /// A no reported by who visits: checked like a decline (reason of the step, a few words for "Sonstiges"), kept
+    /// for a planner to confirm.
+    /// </summary>
+    internal static async Task<string?> ReportDeclineAsync(WegoDbContext db, ClaimsPrincipal user, Site site, string reason, string? note)
+    {
+        if (!IsOffer(site)) return "Die Baustelle ist nicht (mehr) im Angebot.";
+        if (!ReasonsAt(await DeclineStepAsync(db, site.Id)).Contains(reason)) return "Bitte einen Grund der Absage wählen.";
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (reason == Other && note is null) return "Bei „Sonstiges“ bitte kurz den Grund angeben.";
+        if (note?.Length > 500) return "Die Bemerkung darf höchstens 500 Zeichen lang sein.";
+        site.ReportedDeclineReason = reason;
+        site.ReportedDeclineNote = note;
+        site.ReportedDeclineBy = (await db.Employees.FindAsync(user.EmployeeId()))?.Name ?? user.Identity?.Name;
+        site.ReportedDeclineAt = DateTime.UtcNow;
+        ChangeLog.Add(db, user, ChangeArea.Baustelle, "Absage gemeldet", site.Id, null, new { reason, note });
+        await db.SaveChangesAsync();
+        return null;
+    }
+
+    /// <summary>The reasons offered for saying no at this step.</summary>
+    public static string[] ReasonsAt(string step) => EarlyDeclineReasons.TryGetValue(step, out var reasons) ? reasons : DeclineReasons;
+
+    /// <summary>
+    /// The customer says no, at any step: declined with the reason of that step; appointments still ahead are taken out.
+    /// </summary>
+    /// <returns>Why it cannot be saved, or null.</returns>
+    internal static async Task<string?> DeclineAsync(WegoDbContext db, ClaimsPrincipal user, Site site, string reason, string? note)
+    {
+        if (!IsOffer(site)) return "Die Baustelle ist nicht (mehr) im Angebot.";
+        var step = await DeclineStepAsync(db, site.Id);
+        if (!ReasonsAt(step).Contains(reason)) return "Bitte einen Grund der Absage wählen.";
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (reason == Other && note is null) return "Bei „Sonstiges“ bitte kurz den Grund angeben.";
+        if (note?.Length > 500) return "Die Bemerkung darf höchstens 500 Zeichen lang sein.";
+
+        var before = SiteEndpoints.ToDto(site);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        db.PlanEntries.RemoveRange(await db.PlanEntries.Where(e => e.SiteId == site.Id && e.Date > today).ToListAsync());
+        site.DeclineReason = reason;
+        site.DeclineNote = note;
+        site.DeclineStep = step;
+        ClearReport(site);
+        ChangeStatus(db, user, site, SiteStatus.Abgelehnt);
+        ChangeLog.Add(db, user, ChangeArea.Baustelle, "Abgelehnt", site.Id, before, SiteEndpoints.ToDto(site));
+        await db.SaveChangesAsync();
+        return null;
+    }
+
     /// <summary>Steps that may need more than one appointment (a second or third Objektauswahl).</summary>
     public static readonly string[] Repeatable = ["Objektauswahl"];
 
@@ -36,14 +115,24 @@ public static class OfferEndpoints
 
     /// <summary>A site decided lately: into the construction phase, or declined.</summary>
     public record DecidedDto(int SiteId, string Name, SiteStatus Status, DateTime DecidedAt, DateOnly? PlannedStart,
-        string? DeclineReason, string? DeclineNote);
+        string? DeclineReason, string? DeclineNote, string? DeclineStep = null);
 
     /// <summary>
     /// <paramref name="StepActivities"/>: the steps after the enquiry, in their order (the offer activities but
     /// Anfrage, by the order kept under Verwaltung).
     /// </summary>
     public record OffersDto(IReadOnlyList<SiteEndpoints.SiteDto> Sites, IReadOnlyList<StepDto> Steps,
-        IReadOnlyList<string> StepActivities, IReadOnlyList<DecidedDto> Decided);
+        IReadOnlyList<string> StepActivities, IReadOnlyList<DecidedDto> Decided, IReadOnlyList<CallDto> Calls,
+        IReadOnlyList<DeclineReportDto> Reports);
+
+    /// <summary>A no reported by who visits, waiting for a planner to confirm it.</summary>
+    public record DeclineReportDto(int SiteId, string Reason, string? Note, string By, DateTime At);
+
+    internal static DeclineReportDto? ReportOf(Site s) =>
+        s.ReportedDeclineReason is { } reason ? new DeclineReportDto(s.Id, reason, s.ReportedDeclineNote, s.ReportedDeclineBy ?? "", s.ReportedDeclineAt ?? DateTime.UtcNow) : null;
+
+    /// <summary>A customer called for the visit and not reached: the last time, by whom, and how often in all.</summary>
+    public record CallDto(int SiteId, DateTime At, string By, int Count);
 
     /// <summary>
     /// <paramref name="Another"/>: one more appointment of a step that may have several (see <see cref="Repeatable"/>);
@@ -67,76 +156,8 @@ public static class OfferEndpoints
         // one after it; planned again, it moves (it is there once, but for an Objektauswahl that needs another).
         group.MapPost("/{siteId:int}/steps", async (int siteId, StepInput input, ClaimsPrincipal user, WegoDbContext db) =>
         {
-            var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == siteId);
-            if (site is null) return Results.NotFound();
-            if (!IsOffer(site)) return ApiErrors.BadRequest("Die Baustelle ist nicht (mehr) im Angebot.");
-
-            var steps = await StepActivitiesAsync(db);
-            var index = steps.IndexOf(input.Activity);
-            if (index < 0) return ApiErrors.BadRequest("Das ist kein Schritt der Angebotsphase.");
-            if (input.StartTime >= input.EndTime) return ApiErrors.BadRequest("Das Ende muss nach dem Beginn liegen.");
-            var employeeIds = (input.EmployeeIds ?? []).Distinct().ToList();
-            if (employeeIds.Count == 0) return ApiErrors.BadRequest("Bitte angeben, wer den Termin macht.");
-
-            var labels = await db.Activities.ToDictionaryAsync(a => a.Key, a => a.Label);
-            var siteEntries = await db.PlanEntries.Where(e => e.SiteId == siteId && e.Activity != null && steps.Contains(e.Activity))
-                .ToListAsync();
-            // The step before has to be there; this one comes after every step before it and before every step after
-            // it (on the same day by the time, e.g. not a visit after the Angebotsübergabe of that morning).
-            if (index > 0 && !siteEntries.Any(e => e.Activity == steps[index - 1]))
-                return ApiErrors.BadRequest($"Erst kommt „{labels[steps[index - 1]]}“, dann „{labels[input.Activity]}“.");
-            if (siteEntries.Where(e => steps.IndexOf(e.Activity!) < index)
-                    .OrderByDescending(e => e.Date).ThenByDescending(e => e.EndTime)
-                    .FirstOrDefault(e => e.Date > input.Date || (e.Date == input.Date && e.EndTime is { } end && end > input.StartTime)) is { } earlier)
-                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht vor „{labels[earlier.Activity!]}“ ({When(earlier)}) liegen.");
-            if (siteEntries.Where(e => steps.IndexOf(e.Activity!) > index)
-                    .OrderBy(e => e.Date).ThenBy(e => e.StartTime)
-                    .FirstOrDefault(e => e.Date < input.Date || (e.Date == input.Date && e.StartTime is { } start && start < input.EndTime)) is { } later)
-                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ kann nicht nach „{labels[later.Activity!]}“ ({When(later)}) liegen.");
-
-            // Who does it: planners all steps, craftsmen those given to them (e.g. Besichtigung).
-            var employees = await db.Employees.Where(e => employeeIds.Contains(e.Id) && e.IsActive).ToListAsync();
-            if (employees.Count != employeeIds.Count) return ApiErrors.BadRequest("Einen der Mitarbeiter gibt es nicht (mehr).");
-            if (employees.FirstOrDefault(e => !Roles.CanPlan(e.Role) && !e.AdditionalActivities.Contains(input.Activity)) is { } cannot)
-                return ApiErrors.BadRequest($"{cannot.Name} macht keine {labels[input.Activity]}.");
-
-            var own = siteEntries.Where(e => e.Activity == input.Activity).ToList();
-            if (input.Another && !Repeatable.Contains(input.Activity))
-                return ApiErrors.BadRequest($"„{labels[input.Activity]}“ gibt es nur einmal, der Termin kann verschoben werden.");
-            if (input.Another && own.Count == 0)
-                return ApiErrors.BadRequest($"Erst den ersten Termin für „{labels[input.Activity]}“ planen.");
-            var moved = input.Another ? [] : input.From is { } from ? own.Where(e => e.Date == from).ToList() : own;
-            if (input.From is not null && !input.Another && moved.Count == 0)
-                return ApiErrors.BadRequest("Den Termin gibt es nicht mehr, bitte die Seite neu laden.");
-            var movedIds = moved.Select(e => e.Id).ToHashSet();
-            var note = moved.Select(e => e.Note).FirstOrDefault(n => n is not null);
             await using var transaction = await db.Database.BeginTransactionAsync();
-            foreach (var employee in employees)
-            {
-                var day = await db.PlanEntries.Include(e => e.Site)
-                    .Where(e => e.EmployeeId == employee.Id && e.Date == input.Date).ToListAsync();
-                day = day.Where(e => !movedIds.Contains(e.Id)).ToList();
-                // Time kept free ("verfügbar") gives way; anything else in the way is said.
-                foreach (var free in day.Where(e => IsFree(e) && Overlaps(e, input)).ToList())
-                {
-                    db.PlanEntries.Remove(free);
-                    day.Remove(free);
-                }
-                if (day.FirstOrDefault(e => Overlaps(e, input)) is { } taken)
-                    return ApiErrors.BadRequest($"{employee.Name} hat am {input.Date:dd.MM.yyyy} schon {Describe(taken, labels)}.");
-                if (day.Count >= PlanEndpoints.MaxEntriesPerDay)
-                    return ApiErrors.BadRequest($"{employee.Name} hat am {input.Date:dd.MM.yyyy} schon {PlanEndpoints.MaxEntriesPerDay} Einträge.");
-                db.PlanEntries.Add(new PlanEntry
-                {
-                    EmployeeId = employee.Id, Date = input.Date, Type = EntryType.Baustelle, SiteId = siteId,
-                    Activity = input.Activity, StartTime = input.StartTime, EndTime = input.EndTime, Note = note,
-                });
-            }
-            db.PlanEntries.RemoveRange(moved);
-            ChangeLog.Add(db, user, ChangeArea.Baustelle, moved.Count > 0 ? "Termin verschoben" : input.Another ? "Weiterer Termin" : "Termin", siteId,
-                moved.Count == 0 ? null : moved.Select(e => new { e.Activity, e.EmployeeId, e.Date, e.StartTime, e.EndTime }).ToList(),
-                employees.Select(e => new { input.Activity, EmployeeId = e.Id, input.Date, input.StartTime, input.EndTime }).ToList());
-            await db.SaveChangesAsync();
+            if (await SaveStepAsync(db, user, siteId, input) is { } error) return ApiErrors.BadRequest(error);
             await transaction.CommitAsync();
             return Results.Ok(await LoadAsync(db));
         });
@@ -154,9 +175,28 @@ public static class OfferEndpoints
             site.GenerateTasks(await db.Activities.ToListAsync());
             site.DeclineReason = null;
             site.DeclineNote = null;
+            site.DeclineStep = null;
             ChangeLog.Add(db, user, ChangeArea.Baustelle, "Zusage", siteId, before, SiteEndpoints.ToDto(site));
             await db.SaveChangesAsync();
             return Results.Ok(await LoadAsync(db));
+        });
+
+        // A no reported by who visits, not confirmed: the enquiry goes on.
+        group.MapPost("/{siteId:int}/decline-report/discard", async (int siteId, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == siteId);
+            if (site is null) return Results.NotFound();
+            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Absage verworfen", siteId, ReportOf(site), null);
+            ClearReport(site);
+            await db.SaveChangesAsync();
+            return Results.Ok(await LoadAsync(db));
+        });
+
+        // The reasons of saying no at the step where the customer stands.
+        group.MapGet("/{siteId:int}/decline-reasons", async (int siteId, WegoDbContext db) =>
+        {
+            var step = await DeclineStepAsync(db, siteId);
+            return Results.Ok(new { step, reasons = ReasonsAt(step) });
         });
 
         // The customer says no, at any step: declined with the reason; appointments still ahead are taken out.
@@ -164,31 +204,98 @@ public static class OfferEndpoints
         {
             var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == siteId);
             if (site is null) return Results.NotFound();
-            if (!IsOffer(site)) return ApiErrors.BadRequest("Die Baustelle ist nicht (mehr) im Angebot.");
-            if (!DeclineReasons.Contains(input.Reason)) return ApiErrors.BadRequest("Bitte einen Grund der Absage wählen.");
-            var note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim();
-            if (input.Reason == Other && note is null) return ApiErrors.BadRequest("Bei „Sonstiges“ bitte kurz den Grund angeben.");
-            if (note?.Length > 500) return ApiErrors.BadRequest("Die Bemerkung darf höchstens 500 Zeichen lang sein.");
-
-            var before = SiteEndpoints.ToDto(site);
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            var ahead = await db.PlanEntries.Where(e => e.SiteId == siteId && e.Date > today).ToListAsync();
-            db.PlanEntries.RemoveRange(ahead);
-            site.DeclineReason = input.Reason;
-            site.DeclineNote = note;
-            ChangeStatus(db, user, site, SiteStatus.Abgelehnt);
-            ChangeLog.Add(db, user, ChangeArea.Baustelle, "Abgelehnt", siteId, before, SiteEndpoints.ToDto(site));
-            await db.SaveChangesAsync();
+            if (await DeclineAsync(db, user, site, input.Reason, input.Note) is { } error) return ApiErrors.BadRequest(error);
             return Results.Ok(await LoadAsync(db));
         });
     }
 
+    /// <summary>
+    /// Plans a step of an enquiry for one or more employees and saves it (in the transaction of the caller): in the
+    /// fixed order, after the step before it and before the one after it; planned again, it moves.
+    /// </summary>
+    /// <returns>Why it cannot be planned, or null when it is saved.</returns>
+    internal static async Task<string?> SaveStepAsync(WegoDbContext db, ClaimsPrincipal user, int siteId, StepInput input)
+    {
+        var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == siteId);
+        if (site is null) return "Die Anfrage gibt es nicht (mehr).";
+        if (!IsOffer(site)) return "Die Baustelle ist nicht (mehr) im Angebot.";
+
+        var steps = await StepActivitiesAsync(db);
+        var index = steps.IndexOf(input.Activity);
+        if (index < 0) return "Das ist kein Schritt der Angebotsphase.";
+        if (input.StartTime >= input.EndTime) return "Das Ende muss nach dem Beginn liegen.";
+        var employeeIds = (input.EmployeeIds ?? []).Distinct().ToList();
+        if (employeeIds.Count == 0) return "Bitte angeben, wer den Termin macht.";
+
+        var labels = await db.Activities.ToDictionaryAsync(a => a.Key, a => a.Label);
+        var siteEntries = await db.PlanEntries.Where(e => e.SiteId == siteId && e.Activity != null && steps.Contains(e.Activity))
+            .ToListAsync();
+        // The step before has to be there; this one comes after every step before it and before every step after it
+        // (on the same day by the time, e.g. not a visit after the Angebotsübergabe of that morning).
+        if (index > 0 && !siteEntries.Any(e => e.Activity == steps[index - 1]))
+            return $"Erst kommt „{labels[steps[index - 1]]}“, dann „{labels[input.Activity]}“.";
+        if (siteEntries.Where(e => steps.IndexOf(e.Activity!) < index)
+                .OrderByDescending(e => e.Date).ThenByDescending(e => e.EndTime)
+                .FirstOrDefault(e => e.Date > input.Date || (e.Date == input.Date && e.EndTime is { } end && end > input.StartTime)) is { } earlier)
+            return $"„{labels[input.Activity]}“ kann nicht vor „{labels[earlier.Activity!]}“ ({When(earlier)}) liegen.";
+        if (siteEntries.Where(e => steps.IndexOf(e.Activity!) > index)
+                .OrderBy(e => e.Date).ThenBy(e => e.StartTime)
+                .FirstOrDefault(e => e.Date < input.Date || (e.Date == input.Date && e.StartTime is { } start && start < input.EndTime)) is { } later)
+            return $"„{labels[input.Activity]}“ kann nicht nach „{labels[later.Activity!]}“ ({When(later)}) liegen.";
+
+        // Who does it: planners all steps, craftsmen those given to them (e.g. Besichtigung).
+        var employees = await db.Employees.Where(e => employeeIds.Contains(e.Id) && e.IsActive).ToListAsync();
+        if (employees.Count != employeeIds.Count) return "Einen der Mitarbeiter gibt es nicht (mehr).";
+        if (employees.FirstOrDefault(e => !Roles.CanPlan(e.Role) && !e.AdditionalActivities.Contains(input.Activity)) is { } cannot)
+            return $"{cannot.Name} macht keine {labels[input.Activity]}.";
+
+        var own = siteEntries.Where(e => e.Activity == input.Activity).ToList();
+        if (input.Another && !Repeatable.Contains(input.Activity))
+            return $"„{labels[input.Activity]}“ gibt es nur einmal, der Termin kann verschoben werden.";
+        if (input.Another && own.Count == 0)
+            return $"Erst den ersten Termin für „{labels[input.Activity]}“ planen.";
+        var moved = input.Another ? [] : input.From is { } from ? own.Where(e => e.Date == from).ToList() : own;
+        if (input.From is not null && !input.Another && moved.Count == 0)
+            return "Den Termin gibt es nicht mehr, bitte die Seite neu laden.";
+        var movedIds = moved.Select(e => e.Id).ToHashSet();
+        var note = moved.Select(e => e.Note).FirstOrDefault(n => n is not null);
+        foreach (var employee in employees)
+        {
+            var day = await db.PlanEntries.Include(e => e.Site)
+                .Where(e => e.EmployeeId == employee.Id && e.Date == input.Date).ToListAsync();
+            day = day.Where(e => !movedIds.Contains(e.Id)).ToList();
+            // A day set aside for this step (e.g. a day of visits) takes the appointment in.
+            day = day.Where(e => !(e.SiteId is null && e.Activity == input.Activity)).ToList();
+            // Time kept free ("verfügbar") gives way; anything else in the way is said.
+            foreach (var free in day.Where(e => IsFree(e) && Overlaps(e, input)).ToList())
+            {
+                db.PlanEntries.Remove(free);
+                day.Remove(free);
+            }
+            if (day.FirstOrDefault(e => Overlaps(e, input)) is { } taken)
+                return $"{employee.Name} hat am {input.Date:dd.MM.yyyy} schon {Describe(taken, labels)}.";
+            if (day.Count >= PlanEndpoints.MaxEntriesPerDay)
+                return $"{employee.Name} hat am {input.Date:dd.MM.yyyy} schon {PlanEndpoints.MaxEntriesPerDay} Einträge.";
+            db.PlanEntries.Add(new PlanEntry
+            {
+                EmployeeId = employee.Id, Date = input.Date, Type = EntryType.Baustelle, SiteId = siteId,
+                Activity = input.Activity, StartTime = input.StartTime, EndTime = input.EndTime, Note = note,
+            });
+        }
+        db.PlanEntries.RemoveRange(moved);
+        ChangeLog.Add(db, user, ChangeArea.Baustelle, moved.Count > 0 ? "Termin verschoben" : input.Another ? "Weiterer Termin" : "Termin", siteId,
+            moved.Count == 0 ? null : moved.Select(e => new { e.Activity, e.EmployeeId, e.Date, e.StartTime, e.EndTime }).ToList(),
+            employees.Select(e => new { input.Activity, EmployeeId = e.Id, input.Date, input.StartTime, input.EndTime }).ToList());
+        await db.SaveChangesAsync();
+        return null;
+    }
+
     /// <summary>An enquiry: a site in the offer, neither a service call nor an appointment not confirmed yet.</summary>
-    private static bool IsOffer(Site site) => site.Status == SiteStatus.Angebot && !site.IsService && !site.IsTentative;
+    internal static bool IsOffer(Site site) => site.Status == SiteStatus.Angebot && !site.IsService && !site.IsTentative;
 
     internal static string When(PlanEntry e) => e.StartTime is { } start ? $"{e.Date:dd.MM.yyyy} {start:HH\\:mm}" : $"{e.Date:dd.MM.yyyy}";
 
-    private static bool IsFree(PlanEntry e) => e.Type == EntryType.Baustelle && e.SiteId is null && e.Activity is null;
+    internal static bool IsFree(PlanEntry e) => e.Type == EntryType.Baustelle && e.SiteId is null && e.Activity is null;
 
     /// <summary>An entry without times takes the whole day.</summary>
     private static bool Overlaps(PlanEntry e, StepInput input) =>
@@ -209,6 +316,13 @@ public static class OfferEndpoints
         });
         site.Status = to;
     }
+
+    /// <summary>The calls of these enquiries that did not reach the customer: the last of each, with the number.</summary>
+    internal static async Task<List<CallDto>> CallsAsync(WegoDbContext db, IReadOnlyCollection<int> siteIds) =>
+        (await db.CallAttempts.AsNoTracking().Include(c => c.Employee).Where(c => siteIds.Contains(c.SiteId)).ToListAsync())
+        .GroupBy(c => c.SiteId)
+        .Select(g => g.OrderByDescending(c => c.At).First() is var last ? new CallDto(g.Key, last.At, last.Employee.Name, g.Count()) : null!)
+        .ToList();
 
     internal static async Task<List<string>> StepActivitiesAsync(WegoDbContext db) =>
         await db.Activities.Where(a => a.Phase == SiteStatus.Angebot && a.Key != "Anfrage")
@@ -234,11 +348,11 @@ public static class OfferEndpoints
             .OrderByDescending(c => c.ChangedAt).ToListAsync();
         var decided = changes.GroupBy(c => c.SiteId).Select(g => g.First())
             .Where(c => c.Site.Status == c.To)
-            .Select(c => new DecidedDto(c.SiteId, c.Site.Name, c.To, c.ChangedAt, c.Site.PlannedStart, c.Site.DeclineReason, c.Site.DeclineNote))
+            .Select(c => new DecidedDto(c.SiteId, c.Site.Name, c.To, c.ChangedAt, c.Site.PlannedStart, c.Site.DeclineReason, c.Site.DeclineNote, c.Site.DeclineStep))
             .ToList();
 
         return new OffersDto(sites.Select(SiteEndpoints.ToDto).ToList(),
             entries.Select(e => new StepDto(e.SiteId!.Value, e.Activity!, e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.StartTime, e.EndTime)).ToList(),
-            steps, decided);
+            steps, decided, await CallsAsync(db, ids), sites.Select(ReportOf).OfType<DeclineReportDto>().ToList());
     }
 }

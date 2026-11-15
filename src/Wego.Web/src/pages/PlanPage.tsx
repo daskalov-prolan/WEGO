@@ -18,18 +18,22 @@ import { HOME_EVENT } from '../lib/home'
 import { notifications } from '@mantine/notifications'
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
+import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, OfferStep, Plan, PlanEmployee, Site, SiteInput, User } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
 import { forgetHandedUndo, handedUndo } from '../lib/undoHandoff'
 import { MonthJump } from '../components/MonthJump'
 import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
-import { toSiteInput } from '../lib/sites'
+import { emptySite, toSiteInput } from '../lib/sites'
+import { isVisit, VISIT } from '../lib/visitGroup'
+import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
+import { VisitPlanner } from '../components/VisitPlanner'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
 import {
   ACTIVITIES,
+  activitiesOfStatus,
   activityLabel,
   allowedActivities,
   defaultActivity,
@@ -300,6 +304,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // The day open in the editor; addActivity: an activity dropped on it, added as a new row.
   // addHalf: a click on the free half of a day, added as a new row with its times.
   // fillFree: a click on "verfügbar": its row gets a site to choose.
+  // Offer phase: an appointment clicked opens its step (as "Termin verschieben" in the overview), a customer the
+  // window of the enquiry, a day of visits the planning of the visits.
+  const [stepDraft, setStepDraft] = useState<StepDraft | null>(null)
+  const [enquiry, setEnquiry] = useState<Site | null>(null)
+  const [declining, setDeclining] = useState<Site | null>(null)
+  const [visitsOf, setVisitsOf] = useState<{ employeeId: number; date: string } | null>(null)
+  // Anfrage dragged onto a day: the window of a new enquiry, as in the overview (that day, that planner).
+  const [newEnquiry, setNewEnquiry] = useState<{ employee: PlanEmployee; date: string } | null>(null)
   const [open, setOpen] = useState<{
     employee: PlanEmployee
     date: string
@@ -859,6 +871,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   if (!plan || plan.year !== year) return null
 
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
+
+  // The steps of the offer after the enquiry, and their appointments in the plan: for the window of a step.
+  const OFFER_STEPS = activitiesOfStatus('Angebot').filter((activity) => activity !== 'Anfrage')
+  const names = new Map(plan.employees.map((e) => [e.id, e.name]))
+  const stepAppointments: OfferStep[] = plan.entries
+      .filter((e) => e.siteId !== null && e.activity !== null && OFFER_STEPS.includes(e.activity))
+      .map((e) => ({ siteId: e.siteId!, activity: e.activity!, entryId: e.id, employeeId: e.employeeId, employeeName: names.get(e.employeeId) ?? '', date: e.date, startTime: e.startTime, endTime: e.endTime }))
   // Work of the other phase stays visible, but pale: the day is not free.
   // "verfügbar" belongs to every phase: always in full colour.
   const siteOf = (entry: Entry) => (entry.siteId === null ? undefined : siteById.get(entry.siteId))
@@ -1193,6 +1212,19 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           save([{ employeeId: employee.id, date, entries: absenceDay(item.type) }], message).catch(fail)
           return
         }
+        // A new enquiry: the same window as "+ Neue Anfrage" in the overview.
+        if (item.kind === 'activity' && item.activity === 'Anfrage') {
+          setNewEnquiry({ employee, date })
+          return
+        }
+        // Besichtigung: the day set aside for visits; the customers are planned under "Besichtigungen planen".
+        if (item.kind === 'activity' && item.activity === VISIT) {
+          api.setVisitDay(employee.id, date).then(async () => {
+            notifications.show({ color: 'green', message: `${employee.name}: ${formatDate(date)} für Besichtigungen reserviert.` })
+            setPlan(await api.plan(year))
+          }, fail)
+          return
+        }
         if (item.kind === 'activity') {
           setOpen({ employee, date, addActivity: item.activity })
           return
@@ -1342,8 +1374,30 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     today,
     isDimmed,
     linkNames: canEdit,
-    onOpen: (employee: PlanEmployee, date: string) => setOpen({ employee, date }),
+    onOpen: (employee: PlanEmployee, date: string) => {
+      if (phase === 'Angebot' && canEdit) {
+        const entries = entriesOf(employee.id, date)
+        const step = entries.find((e) => e.siteId !== null && e.activity && OFFER_STEPS.includes(e.activity) && !isVisit(e))
+        const site = step ? siteById.get(step.siteId!) : undefined
+        if (step && site && site.status === 'Angebot') {
+          const current = stepAppointments.filter((s) => s.siteId === site.id && s.activity === step.activity && s.date === date)
+          setStepDraft({ site, activity: step.activity!, current })
+          return
+        }
+        if (entries.some(isVisit)) {
+          setVisitsOf({ employeeId: employee.id, date })
+          return
+        }
+      }
+      setOpen({ employee, date })
+    },
     onOpenSite: (siteId: number) => {
+      // Offer phase: the window of the enquiry, as in the overview.
+      const enquirySite = phase === 'Angebot' && canEdit ? siteById.get(siteId) : undefined
+      if (enquirySite && enquirySite.status === 'Angebot' && !enquirySite.isService && !enquirySite.isTentative) {
+        setEnquiry(enquirySite)
+        return
+      }
       // Planners go straight to the page of the site; employees (who have no such page) see its record here.
       if (canEdit) {
         try {
@@ -1834,6 +1888,76 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           />
         ))}
 
+      {stepDraft && plan && (
+        <StepDialog
+          draft={stepDraft}
+          steps={stepAppointments}
+          order={OFFER_STEPS}
+          people={plan.employees}
+          onClose={() => setStepDraft(null)}
+          onDecline={() => {
+            setDeclining(stepDraft.site)
+            setStepDraft(null)
+          }}
+          onSave={async (input) => {
+            await api.planOfferStep(stepDraft.site.id, input)
+            notifications.show({
+              message: `${activityLabel(input.activity)} für ${stepDraft.site.name} am ${formatDate(input.date)} eingetragen.`,
+              color: 'green',
+            })
+            setStepDraft(null)
+            setPlan(await api.plan(year))
+          }}
+        />
+      )}
+      {declining && (
+        <DeclineDialog
+          site={declining}
+          onClose={() => setDeclining(null)}
+          onSave={async (reason, note) => {
+            await api.declineOffer(declining.id, reason, note)
+            notifications.show({ color: 'green', message: `${declining.name}: abgelehnt.` })
+            setDeclining(null)
+            setPlan(await api.plan(year))
+          }}
+        />
+      )}
+      {enquiry && (
+        <SiteForm
+          title={`Anfrage · ${enquiry.name}`}
+          initial={toSiteInput(enquiry)}
+          enquiry
+          onClose={() => setEnquiry(null)}
+          onSave={async (input) => {
+            await updateSite(enquiry.id, input)
+            setEnquiry(null)
+            notifications.show({ message: 'Anfrage gespeichert.', color: 'green' })
+          }}
+        />
+      )}
+      {visitsOf !== null && (
+        <VisitPlanner employeeId={visitsOf.employeeId} date={visitsOf.date} onClose={() => setVisitsOf(null)} onChanged={() => api.plan(year).then(setPlan, fail)} />
+      )}
+      {newEnquiry && (
+        <SiteForm
+          title="Neue Anfrage"
+          initial={{
+            ...emptySite,
+            status: 'Angebot',
+            scope: [],
+            // The day it came in: not later than today.
+            requestedOn: newEnquiry.date < todayIso() ? newEnquiry.date : todayIso(),
+            responsiblePlannerId: newEnquiry.employee.isPlaner ? newEnquiry.employee.id : null,
+          }}
+          enquiry
+          onClose={() => setNewEnquiry(null)}
+          onSave={async (input) => {
+            const site = await createSite({ ...input, status: 'Angebot', isService: false, isTentative: false })
+            setNewEnquiry(null)
+            notifications.show({ message: `Anfrage „${site.name}“ angelegt.`, color: 'green' })
+          }}
+        />
+      )}
       {shownSite &&
         (shownSite.editing ? (
           <SiteForm

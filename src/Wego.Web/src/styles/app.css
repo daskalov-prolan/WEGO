@@ -100,6 +100,7 @@ a:hover {
   height: 30px;
   border-radius: 50%;
   background: var(--wego-red);
+  color: #fff;
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -2046,7 +2047,7 @@ body.stretching * {
   gap: 4px 24px;
   margin: -4px 12px 10px;
   padding: 8px 16px;
-  border-left: 4px solid #ffc61a;
+  border-left: 4px solid #f4e3a1;
   border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -3451,13 +3452,13 @@ html.plan-full .shell-nav {
 }
 
 .absence-badge.vacation {
-  background: #fff3c4;
-  color: #8a6a00;
+  background: #f4e3a1;
+  color: #000000;
 }
 
 .absence-badge.sick {
-  background: #fde2e2;
-  color: #a32525;
+  background: #f8d2d4;
+  color: var(--wego-red);
 }
 
 /* The dots of the steps on a card, side by side. */
@@ -3577,4 +3578,69 @@ html.plan-full .shell-nav {
     padding-inline: 4px;
     font-size: 0.8rem;
   }
+}
+
+/* The step of the offer in front of the customer: a small sign in the colour of the text. */
+.step-mark {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-right: 3px;
+}
+
+/* A customer called for the visit and not reached, on the card of the enquiry. */
+.offer-call {
+  font-size: 12px;
+  color: var(--wego-red);
+  margin: 2px 0;
+}
+
+/* The planning of visits: each customer a card, the lunch break as a band. */
+.visit-customer {
+  border: 1px solid #d9e3e6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.visit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.visit-row.agreed,
+.visit-row.gone {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #e7f5ec;
+}
+.visit-row.gone {
+  background: #f1f3f5;
+}
+.visit-lunch {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #fff4d6;
+  font-size: 13px;
+  font-weight: 600;
+}
+.visit-agreed {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #e7f5ec;
+}
+
+/* A no reported by who visits, on the card of the enquiry: for a planner to confirm. */
+.offer-report {
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f8d2d4;
+  color: #4a0d10;
+  font-size: 12px;
+}
+
+/* What the visitor has on the day chosen, below day and time. */
+.visit-that-day {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f1f5f6;
 }

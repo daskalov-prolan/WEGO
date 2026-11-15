@@ -16,6 +16,7 @@ import { HOME_EVENT } from '../lib/home'
 import { useWindowEvent } from '@mantine/hooks'
 import { COMPANY_ADDRESS, customers, isVisit, VISIT, visitGroup, visitsAsOne, visitTime } from '../lib/visitGroup'
 import { mapsLink } from '../lib/visitRoute'
+import { VisitPlanner } from '../components/VisitPlanner'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
 const FIRST_YEAR = 2026
@@ -61,6 +62,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   const headRef = useRef<HTMLDivElement>(null)
   // The site tapped: its details open over the week.
   const [details, setDetails] = useState<Entry | null>(null)
+  // Whoever goes out to visits plans them from here.
+  const [visiting, setVisiting] = useState(false)
 
   // Every year of the list, each loaded once.
   useEffect(() => {
@@ -315,6 +318,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       <div className="my-plan-head" ref={headRef}>
       <Group justify="space-between" align="center" mb={4} wrap="nowrap">
         <Title order={2}>Mein Plan</Title>
+        {user.doesVisits && (
+          <Button size="compact-md" variant="light" onClick={() => setVisiting(true)}>
+            Besichtigungen planen
+          </Button>
+        )}
         {onYearChange && (
           <YearPicker
             year={shownYear}
@@ -345,6 +353,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
         )}
       </Group>
       </div>
+
+      {visiting && (
+        <VisitPlanner employeeId={user.id} onClose={() => setVisiting(false)} onChanged={() => setPlans(new Map())} />
+      )}
 
       <div ref={listRef}>
       {weeks.map((monday) => (

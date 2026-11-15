@@ -8,8 +8,8 @@ export function BirthdayIcon({ size = 16 }: { size?: number }) {
         stroke="#8a6400"
         strokeWidth="1"
       />
-      <rect x="3.5" y="7" width="17" height="4.5" rx="1" fill="#e30613" stroke="#7a0008" strokeWidth="1" />
-      <rect x="5" y="11.5" width="14" height="9.5" rx="1" fill="#e30613" stroke="#7a0008" strokeWidth="1" />
+      <rect x="3.5" y="7" width="17" height="4.5" rx="1" fill="#d71f27" stroke="#7a0008" strokeWidth="1" />
+      <rect x="5" y="11.5" width="14" height="9.5" rx="1" fill="#d71f27" stroke="#7a0008" strokeWidth="1" />
       <path d="M12 7V21" stroke="#f2b705" strokeWidth="2.6" />
     </svg>
   )

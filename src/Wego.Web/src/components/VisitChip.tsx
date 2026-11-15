@@ -22,8 +22,9 @@ export function VisitChip({
   const group = visitGroup(entries)
   if (!group) return null
   const time = visitTime(group)
+  // Pointing at it: the customers with their times (the span of the whole day is not needed there).
   const title = [
-    `Besichtigung · ${customers(group.visits.length)}${time ? ` · ${time}` : ''}`,
+    `Besichtigung · ${customers(group.visits.length)}`,
     ...group.visits.map((visit) => `${hm(visit.startTime)} ${visit.siteName ?? ''}`),
   ].join('\n')
   const only = group.visits.length === 1 ? group.visits[0] : undefined

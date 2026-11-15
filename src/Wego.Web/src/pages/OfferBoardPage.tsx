@@ -3,9 +3,10 @@ import { DateInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { api, messageOf } from '../api/client'
-import type { Activity, Entry, Offers, OfferStep, PlanEmployee, Planner, Site, StepInput } from '../api/types'
+import type { Activity, DeclineReport, Entry, Offers, OfferStep, PlanEmployee, Planner, Site, StepInput } from '../api/types'
 import { OfferSteps } from '../components/OfferSteps'
 import { Sheet } from '../components/Sheet'
+import { callLine, VisitPlanner } from '../components/VisitPlanner'
 import { SiteForm } from '../components/SiteForm'
 import { TimeSelect } from '../components/TimeSelect'
 import { activityInfo, activityLabel, DECLINE_REASONS, textOfActivity } from '../lib/activities'
@@ -23,6 +24,8 @@ interface Stage {
 }
 
 const WAITING = 'Wartet'
+/** Waiting for the yes: slate, calm (the customer's turn), with white writing. */
+const WAITING_COLOUR = '#5b6f77'
 
 /** "2026-11-19" -> "Do 19.11." */
 const shortDate = (iso: string) => formatDate(iso).slice(0, -4)
@@ -39,6 +42,18 @@ function stageOf(site: Site, steps: OfferStep[], order: Activity[], today: strin
   }
   return { column: WAITING, next: null, planned: null }
 }
+
+/** Sorts a card by its next appointment (date and time); cards without one go last ("~" sorts after digits). */
+const appointmentKey = (stage: Stage) =>
+  stage.planned ? `${stage.planned[0].date} ${stage.planned[0].startTime ?? ''}` : '~'
+
+/** Sorts a waiting card by when its offer was handed over (the last Angebotsübergabe). */
+const handedOverKey = (site: Site, steps: OfferStep[]) =>
+  steps
+    .filter((step) => step.siteId === site.id && step.activity === 'Angebotsuebergabe')
+    .map((step) => `${step.date} ${step.startTime ?? ''}`)
+    .sort()
+    .at(-1) ?? '~'
 
 /** Steps that may need more than one appointment (as on the server). */
 const REPEATABLE: Activity[] = ['Objektauswahl']
@@ -57,7 +72,7 @@ function appointmentsOf(own: OfferStep[], order: Activity[]) {
 }
 
 /** The step dialog: which step, for whom, when. */
-interface StepDraft {
+export interface StepDraft {
   site: Site
   activity: Activity
   /** The appointment it replaces (moved), if planned before. */
@@ -100,11 +115,14 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
   const [planners, setPlanners] = useState<Planner[]>([])
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
+  const [visiting, setVisiting] = useState(false)
   const [editing, setEditing] = useState<Site | null>(null)
   const { full, toggle: toggleFull } = useFullView()
   const [step, setStep] = useState<StepDraft | null>(null)
   const [accepting, setAccepting] = useState<Site | null>(null)
   const [declining, setDeclining] = useState<Site | null>(null)
+  // A reported no being confirmed: its reason preset.
+  const [confirming, setConfirming] = useState<DeclineReport | null>(null)
   const today = todayIso()
 
   const load = useCallback(() => {
@@ -153,19 +171,20 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
   const card = (site: Site) => {
     const stage = stageOf(site, offers.steps, order, today)
     const own = offers.steps.filter((s) => s.siteId === site.id)
+    const call = offers.calls?.find((c) => c.siteId === site.id)
+    const report = offers.reports?.find((r) => r.siteId === site.id)
     // The dots and the waiting days, worked out as in the calendar.
     const lib = offerSteps(site, own as unknown as Entry[], today)
     const waiting = stage.column === WAITING ? null : waitingDays(lib, today)
     const address = formatAddress(site)
     const appointments = appointmentsOf(own, order)
     const columnActivity = columns.find((c) => c.key === stage.column)?.activity
-    const colour = (columnActivity ? activityInfo(columnActivity)?.background : undefined) ?? '#d9e3e6'
-    // One more appointment of a step that may have several: once the card has come to its column (the steps
-    // before it done, e.g. not while the visit is still ahead), until the step after it is planned.
+    const colour = (columnActivity ? activityInfo(columnActivity)?.background : undefined) ?? WAITING_COLOUR
+    // One more appointment of a step that may have several: only while the card is in its column (the steps
+    // before it done, e.g. not while the visit is still ahead); moved on to the next step, it is no longer offered.
     const repeat = REPEATABLE.find((activity) => {
       const after = order[order.indexOf(activity) + 1]
-      return order.indexOf(stage.column as Activity) >= order.indexOf(activity)
-        && own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
+      return stage.column === activity && own.some((s) => s.activity === activity) && !own.some((s) => s.activity === after)
     })
     const labelOf = (activity: Activity, date: string) => {
       const ofStep = appointments.filter((a) => a.activity === activity)
@@ -220,6 +239,28 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
             <b>{labelOf(activity, date)}</b> {shortDate(date)} {hm(entries[0].startTime)} · {entries.map((e) => e.employeeName).join(', ')}
           </button>
         ))}
+        {/* A no reported by who visits: a planner confirms it (the reason preset) or discards it. */}
+        {report && (
+          <div className="offer-report">
+            <span>
+              <b>Absage gemeldet</b> von {report.by}: {report.reason}
+              {report.note ? ` (${report.note})` : ''}
+            </span>
+            <Group gap={6} mt={4}>
+              <Button size="compact-xs" color="red" onClick={() => {
+                setConfirming(report)
+                setDeclining(site)
+              }}>
+                Absage bestätigen
+              </Button>
+              <Button size="compact-xs" variant="default" onClick={() => api.discardDeclineReport(site.id).then(setOffers, (e) => notifications.show({ color: 'red', message: messageOf(e) }))}>
+                Verwerfen
+              </Button>
+            </Group>
+          </div>
+        )}
+        {/* Called for the visit and not reached: the planners can answer when the customer asks. */}
+        {call && !own.some((s) => s.activity === 'Besichtigung') && <div className="offer-call">{callLine(call)}</div>}
         <div className="offer-meta offer-meta-row">
           <span>
             Planer: <b>{plannerName(site.responsiblePlannerId) ?? '–'}</b>
@@ -263,7 +304,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
           )}
           {stage.column === WAITING && (
             <>
-              <Button size="compact-xs" color="green" onClick={() => setAccepting(site)}>
+              <Button size="compact-xs" onClick={() => setAccepting(site)}>
                 Zusage
               </Button>
               <Button size="compact-xs" color="red" onClick={() => setDeclining(site)}>
@@ -285,6 +326,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
       <Group justify="space-between" gap="sm" className="offer-intro" ref={followIntro}>
         {head ?? <span />}
         <Group gap="sm">
+          <Button variant="light" onClick={() => setVisiting(true)}>Besichtigungen planen</Button>
           <Button onClick={() => setCreating(true)}>+ Neue Anfrage</Button>
           <FullViewButton full={full} onToggle={toggleFull} what="die Übersicht" />
         </Group>
@@ -292,14 +334,24 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
 
       <div className="offer-board">
         {columns.map((column) => {
-          const list = offers.sites.filter((site) => stageOf(site, offers.steps, order, today).column === column.key)
+          const list = offers.sites
+            .map((site) => ({ site, stage: stageOf(site, offers.steps, order, today) }))
+            .filter(({ stage }) => stage.column === column.key)
+            // The next appointment on top, enquiries still to plan after them in the order they came in; waiting for
+            // the yes, the offer handed over longest ago on top.
+            .sort((a, b) =>
+              column.key === WAITING
+                ? handedOverKey(a.site, offers.steps).localeCompare(handedOverKey(b.site, offers.steps))
+                : appointmentKey(a.stage).localeCompare(appointmentKey(b.stage)),
+            )
+            .map(({ site }) => site)
           const info = column.activity ? activityInfo(column.activity) : null
           return (
             <section key={column.key} className="offer-column" aria-label={column.label}>
               <h3
                 style={{
-                  background: info?.background ?? '#d9e3e6',
-                  color: column.activity ? textOfActivity(column.activity) : '#102a33',
+                  background: info?.background ?? WAITING_COLOUR,
+                  color: column.activity ? textOfActivity(column.activity) : '#ffffff',
                 }}
               >
                 {column.label}
@@ -337,6 +389,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
                 <li key={d.siteId}>
                   {d.name}: {d.declineReason}
                   {d.declineNote ? ` (${d.declineNote})` : ''}
+                  {d.declineStep && DECLINE_STEPS[d.declineStep] ? <Text span size="xs" c="dimmed"> · {DECLINE_STEPS[d.declineStep]}</Text> : null}
                 </li>
               ))}
             </ul>
@@ -344,6 +397,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
         </section>
       </div>
 
+      {visiting && <VisitPlanner onClose={() => setVisiting(false)} onChanged={load} />}
       {creating && (
         <SiteForm
           title="Neue Anfrage"
@@ -391,6 +445,10 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
           order={order}
           people={people}
           onClose={() => setStep(null)}
+          onDecline={() => {
+            setDeclining(step.site)
+            setStep(null)
+          }}
           onSave={async (input) => {
             setOffers(await api.planOfferStep(step.site.id, input))
             setStep(null)
@@ -414,10 +472,15 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
       {declining && (
         <DeclineDialog
           site={declining}
-          onClose={() => setDeclining(null)}
+          preset={confirming?.siteId === declining.id ? confirming : undefined}
+          onClose={() => {
+            setDeclining(null)
+            setConfirming(null)
+          }}
           onSave={async (reason, note) => {
             await decide(api.declineOffer(declining.id, reason, note), `${declining.name}: abgelehnt.`)
             setDeclining(null)
+            setConfirming(null)
           }}
         />
       )}
@@ -425,19 +488,24 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
   )
 }
 
-/** Adds an hour to "HH:MM": an appointment of the offer phase takes about an hour on site. */
-const plusHour = (time: string) => {
+/** How long an appointment of a step takes: the Objektauswahl three hours, the others an hour. */
+const durationOf = (activity: Activity) => (activity === 'Objektauswahl' ? 180 : 60)
+
+/** "HH:MM" that many minutes later (at most 23:59). */
+const plusMinutes = (time: string, minutes: number) => {
   const [h, m] = time.split(':').map(Number)
-  return `${String(Math.min(h + 1, 23)).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-function StepDialog({
+export function StepDialog({
   draft,
   steps,
   order,
   people,
   onClose,
   onSave,
+  onDecline,
 }: {
   draft: StepDraft
   steps: OfferStep[]
@@ -445,6 +513,8 @@ function StepDialog({
   people: PlanEmployee[]
   onClose: () => void
   onSave: (input: StepInput) => Promise<void>
+  /** The customer says no on the telephone instead: the window of the reason. */
+  onDecline?: () => void
 }) {
   const { site, activity, current, another = false } = draft
   const index = order.indexOf(activity)
@@ -465,9 +535,12 @@ function StepDialog({
           ? [String(site.responsiblePlannerId)]
           : []
   const [who, setWho] = useState<string[]>(preset)
+  // The list of who closes once someone is picked, so the buttons below can be reached.
+  const [choosing, setChoosing] = useState(false)
   const [date, setDate] = useState<string | null>(current[0]?.date ?? (earliest > todayIso() ? earliest : addDays(todayIso(), 1)))
   const [start, setStart] = useState(hm(current[0]?.startTime ?? null) || '09:00')
-  const [end, setEnd] = useState(hm(current[0]?.endTime ?? null) || '10:00')
+  const later = (time: string) => plusMinutes(time, durationOf(activity))
+  const [end, setEnd] = useState(hm(current[0]?.endTime ?? null) || later('09:00'))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -510,9 +583,9 @@ function StepDialog({
             value={start}
             onChange={(value) => {
               setStart(value)
-              // An hour on site, unless the end was set later already.
-              if (value && (!end || end <= value)) setEnd(plusHour(value))
-              else if (value && end === plusHour(start)) setEnd(plusHour(value))
+              // The usual length of the step, unless the end was set otherwise already.
+              if (value && (!end || end <= value)) setEnd(later(value))
+              else if (value && end === later(start)) setEnd(later(value))
             }}
           />
           <TimeSelect label="bis" value={end} onChange={setEnd} after={start} />
@@ -521,7 +594,13 @@ function StepDialog({
           label="Wer"
           data={able.map((person) => ({ value: String(person.id), label: person.isPlaner ? `${person.name} (Planer)` : person.name }))}
           value={who}
-          onChange={setWho}
+          onChange={(value) => {
+            setWho(value)
+            setChoosing(false)
+          }}
+          dropdownOpened={choosing}
+          onDropdownOpen={() => setChoosing(true)}
+          onDropdownClose={() => setChoosing(false)}
           comboboxProps={{ withinPortal: true }}
         />
         <Text size="xs" c="dimmed">
@@ -535,6 +614,11 @@ function StepDialog({
         </Text>
         {error && <Alert color="red" variant="light">{error}</Alert>}
         <Group justify="flex-end">
+          {onDecline && (
+            <Button color="red" mr="auto" onClick={onDecline}>
+              Kunde sagt ab
+            </Button>
+          )}
           <Button variant="default" onClick={onClose}>
             Abbrechen
           </Button>
@@ -562,7 +646,6 @@ function AcceptDialog({ site, onClose, onSave }: { site: Site; onClose: () => vo
             Abbrechen
           </Button>
           <Button
-            color="green"
             loading={busy}
             disabled={!start}
             onClick={() => {
@@ -581,27 +664,47 @@ function AcceptDialog({ site, onClose, onSave }: { site: Site; onClose: () => vo
   )
 }
 
-function DeclineDialog({
+/** Where the customer said no, in words. */
+export const DECLINE_STEPS: Record<string, string> = {
+  Besichtigung: 'bei der Terminvereinbarung zur Besichtigung',
+  Objektauswahl: 'bei der Objektauswahl',
+  Angebotsuebergabe: 'bei der Angebotsübergabe',
+  Wartet: 'nach der Angebotsübergabe',
+}
+
+export function DeclineDialog({
   site,
+  preset,
   onClose,
   onSave,
 }: {
   site: Site
+  /** A no reported by who visits: its reason and words, to confirm. */
+  preset?: { reason: string; note: string | null }
   onClose: () => void
   onSave: (reason: string, note: string | null) => Promise<void>
 }) {
-  const [reason, setReason] = useState<string | null>(null)
-  const [note, setNote] = useState('')
+  const [reason, setReason] = useState<string | null>(preset?.reason ?? null)
+  const [note, setNote] = useState(preset?.note ?? '')
+  // The reasons of the step where the customer stands (the list of the offer until they are there).
+  const [step, setStep] = useState<{ step: string; reasons: string[] } | null>(null)
+  useEffect(() => {
+    api.declineReasons(site.id).then(setStep, () => setStep({ step: 'Wartet', reasons: DECLINE_REASONS }))
+  }, [site.id])
+  const reasons = step?.reasons ?? DECLINE_REASONS
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const needsNote = reason === 'Sonstiges' && !note.trim()
   return (
     <Sheet title={`Abgelehnt · ${site.name}`} onClose={onClose} size="sm">
       <Stack gap="sm">
-        <Text size="sm">Der Kunde hat abgesagt. Die Anfrage verschwindet aus der Übersicht, Termine, die noch kommen, werden aus dem Kalender genommen.</Text>
+        <Text size="sm">
+          Der Kunde hat abgesagt{step && DECLINE_STEPS[step.step] ? ` ${DECLINE_STEPS[step.step]}` : ''}. Die Anfrage verschwindet aus
+          der Übersicht, Termine, die noch kommen, werden aus dem Kalender genommen.
+        </Text>
         <Radio.Group label="Grund der Absage" value={reason} onChange={setReason} required>
           <Stack gap={6} mt={4}>
-            {DECLINE_REASONS.map((r) => (
+            {reasons.map((r) => (
               <Radio key={r} value={r} label={r} />
             ))}
           </Stack>

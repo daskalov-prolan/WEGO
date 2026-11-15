@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { Activity, ActivityDef, Entry, SiteStatus } from '../api/types'
+import { formatTimeRange } from './dates'
 
 export interface Colours {
   /** The full colour, as in the Excel sheet: legend, colour bar, year view. */
@@ -48,9 +49,16 @@ export function textOn(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#14232a' : '#ffffff'
 }
 
-/** Writing on the full colour of an activity: black (the planners' choice), only Fliesenarbeiten and Objektauswahl white. */
+/** Dark writing in the hue of a light colour (on Helltürkis, Bernstein, Greige). */
+const DARK_ON: Record<string, string> = { Objektauswahl: '#06323d', Angebotsuebergabe: '#3a2200', Trockenbau: '#000000' }
+
+/** Writing on the full colour of an activity: white on a dark one (always on the red of the logo), dark on a light one. */
 export function textOfActivity(activity: string | null | undefined): string {
-  return activity === 'Fliesen' || activity === 'Objektauswahl' ? '#ffffff' : '#000000'
+  const info = activity ? BY_VALUE.get(activity) : undefined
+  if (!info) return '#14232a'
+  if (info.background === '#d71f27') return '#ffffff'
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(info.background.slice(i, i + 2), 16) / 255)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5 ? (DARK_ON[info.value] ?? '#14232a') : '#ffffff'
 }
 
 /** The three colours of an activity from its one colour: tuned by hand for the known ones, mixed for others. */
@@ -67,16 +75,16 @@ const toInfo = (def: ActivityDef): ActivityInfo => ({ value: def.key, label: def
  */
 export let ACTIVITIES: ActivityInfo[] = (
   [
-    ['Anfrage', 'Anfrage', 'Angebot', '#b8a47a'],
-    ['Besichtigung', 'Besichtigung', 'Angebot', '#3aa6c0'],
-    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#0f6378'],
-    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#c77f6b'],
+    ['Anfrage', 'Anfrage', 'Angebot', '#0b4a5e'],
+    ['Besichtigung', 'Besichtigung', 'Angebot', '#0f6378'],
+    ['Objektauswahl', 'Objektauswahl', 'Angebot', '#5fb3c6'],
+    ['Angebotsuebergabe', 'Angebotsübergabe', 'Angebot', '#f07a2a'],
     ['Abriss', 'Abriss / Baubeginn', 'Bauphase', '#d71f27'],
-    ['Trockenbau', 'Trockenbau', 'Bauphase', '#d6c7bc'],
-    ['Sanitaer', 'Sanitär', 'Bauphase', '#2a9cad'],
-    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#ff9f50'],
-    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#7a3e8e'],
-    ['Endmontage', 'Endmontage', 'Bauphase', '#2a9cad'],
+    ['Trockenbau', 'Trockenbau', 'Bauphase', '#e9dccb'],
+    ['Sanitaer', 'Sanitär', 'Bauphase', '#0f6378'],
+    ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#f07a2a'],
+    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#ad8fb0'],
+    ['Endmontage', 'Endmontage', 'Bauphase', '#0f6378'],
   ] as const
 ).map(([key, label, phase, color], index) => toInfo({ key, label, phase, color, sortOrder: index + 1 }))
 
@@ -139,9 +147,11 @@ export function activitiesOfStatus(status: SiteStatus): Activity[] {
 
 export const NO_ACTIVITY: Colours = { background: '#b8c6ca', tint: '#e9eff1', edge: '#8fa3a8' }
 /** Free ("verfügbar"): sage green, filled in the calendar like the sites. */
-export const FREE: Colours = { background: '#6fa56c', tint: '#d4e6d3', edge: '#4a7a48' }
+/** verfügbar: light green with black writing. */
+export const FREE: Colours = { background: '#9fd4a6', tint: '#e2f2e4', edge: '#3f7d52' }
 /** Urlaub and Krank are yellow, as in the Excel sheet. */
-export const ABSENCE: Colours = { background: '#ffc61a', tint: '#ffe27a', edge: '#e0a000' }
+/** Urlaub and Krank: light yellow with black writing. */
+export const ABSENCE: Colours = { background: '#f4e3a1', tint: '#f4e3a1', edge: '#000000' }
 /** Feiertage are green, school holidays a lighter green. */
 export const PUBLIC_HOLIDAY: Colours = { background: '#5cc46a', tint: '#d9f2dc', edge: '#2e9e3e' }
 export const SCHOOL_HOLIDAY: Colours = { background: '#d3f0d6', tint: '#eef9ef', edge: '#8fd29a' }
@@ -194,7 +204,7 @@ function colours(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, '
 /**
  * Inline style that hands the colours of an entry to the CSS (see .chip, .cell-compact, .my-entry).
  * An activity also gets --entry-fill and --entry-text: in the calendar its field is filled with the full colour,
- * written in black (the planners' choice), only Fliesenarbeiten in white on its dark blackberry.
+ * written so it can be read (see textOfActivity); Urlaub and Krank, and verfügbar, in black.
  */
 export function entryStyle(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pick<Entry, 'siteName'>>): CSSProperties {
   const found = colours(entry)
@@ -205,7 +215,8 @@ export function entryStyle(entry: Pick<Entry, 'type' | 'activity'> & Partial<Pic
     '--entry-bg': tint,
     '--entry-strong': background,
     '--entry-color': edge,
-    ...(filled ? { '--entry-fill': background, '--entry-text': textOfActivity(entry.activity) } : {}),
+    ...(filled ? { '--entry-fill': background, '--entry-text': found === FREE ? '#000000' : textOfActivity(entry.activity) } : {}),
+    ...(found === ABSENCE ? { '--entry-text': ABSENCE.edge } : {}),
   } as CSSProperties
 }
 
@@ -221,13 +232,21 @@ export function isReservation(
 }
 
 /** Tooltip text: customer and activity, or Urlaub / Krank. */
-export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'>): string {
+export function entryTitle(entry: Pick<Entry, 'type' | 'activity' | 'siteName'> & Partial<Pick<Entry, 'startTime' | 'endTime'>>): string {
   if (entry.type !== 'Baustelle') return entry.type
   if (isFree(entry)) return 'verfügbar: noch keine Baustelle'
   const activity = activityLabel(entry.activity)
   if (!entry.siteName) return activity ? `${activity} (Baustelle noch offen)` : ''
+  // An appointment of the offer: the step first, then the customer and the time.
+  if (activity && isMarkedStep(entry.activity)) {
+    const time = formatTimeRange({ startTime: entry.startTime ?? null, endTime: entry.endTime ?? null })
+    return [activity, entry.siteName, time].filter(Boolean).join(' · ')
+  }
   return activity ? `${entry.siteName} – ${activity}` : entry.siteName
 }
+
+/** The steps of the offer that show their sign in front of the customer in the calendar (the visits have their own card). */
+export const isMarkedStep = (activity: Activity | null | undefined) => activity === 'Objektauswahl' || activity === 'Angebotsuebergabe'
 
 /** A craftsman unless said otherwise; a planner when said so. */
 type Skilled = { isPlaner?: boolean; isCraftsman?: boolean; mainActivity?: Activity | null; additionalActivities?: Activity[] }

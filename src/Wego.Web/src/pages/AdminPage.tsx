@@ -77,6 +77,9 @@ export function AdminPage({ year, employeeId = null, onActivitiesChanged, tab = 
   )
 }
 
+/** The regions of the tours of visits (as on the server, VisitEndpoints.Regions). */
+const VISIT_REGIONS = ['Karow', 'Reinickendorf']
+
 const newEmployee: EmployeeInput = {
   name: '',
   sortOrder: 0,
@@ -478,6 +481,19 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                     const others = (editing.input.additionalActivities ?? []).filter((activity) => activity !== 'Besichtigung')
                     change({ additionalActivities: e.currentTarget.checked ? [...others, 'Besichtigung'] : others })
                   }}
+                />
+              )}
+              {/* Planners: their enquiries are visited in one tour through the region. */}
+              {canPlanRole(editing.input.role) && (
+                <Select
+                  label="Region der Anfragen"
+                  description="Für die Besichtigungstouren: die Anfragen dieses Planers gehören zu dieser Region."
+                  placeholder="keine"
+                  clearable
+                  maw={320}
+                  data={VISIT_REGIONS}
+                  value={editing.input.region ?? null}
+                  onChange={(value) => change({ region: value })}
                 />
               )}
               <Checkbox
