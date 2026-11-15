@@ -142,10 +142,13 @@ function ModeChoice({ plan, onChoose }: { plan: VisitPlan; onChoose: (mode: Mode
 }
 
 /**
- * The customer with what is needed for the call: address, telephone, map, planner, how long waiting, calls not
- * reached; and when the customer says no, the reason (reported by who visits, entered at once by a planner).
+ * The customer with what is needed for the call: address, telephone, planner, how long waiting, calls not reached.
+ * Below: calling and not reached; the appointment (actions) with the map; what opens for it (children); at the
+ * bottom, when the customer says no, the reason (reported by who visits, entered at once by a planner).
  */
-function Customer({ enquiry, plan, run, children }: { enquiry: VisitEnquiry; plan: VisitPlan; run: Run; children?: React.ReactNode }) {
+function Customer({ enquiry, plan, run, actions, children }: {
+  enquiry: VisitEnquiry; plan: VisitPlan; run: Run; actions?: React.ReactNode; children?: React.ReactNode
+}) {
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState<string | null>(null)
   const [note, setNote] = useState('')
@@ -181,19 +184,24 @@ function Customer({ enquiry, plan, run, children }: { enquiry: VisitEnquiry; pla
         <Button size="compact-sm" variant="default" onClick={() => run(api.notReached(plan.employeeId, enquiry.siteId))}>
           Nicht erreicht
         </Button>
-        {!enquiry.report && (
-          <Button size="compact-sm" color="red" onClick={() => setDeclining(!declining)}>
-            Kunde sagt ab
-          </Button>
-        )}
-        {/* The map last: the call and its outcome belong together. */}
-        {enquiry.address && (
-          <Button component="a" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enquiry.address)}`}
-            target="_blank" rel="noreferrer" size="compact-sm" variant="default">
-            Karte
-          </Button>
-        )}
       </Group>
+      {(actions || enquiry.address) && (
+        <Group gap={6} mt={6}>
+          {actions}
+          {enquiry.address && (
+            <Button component="a" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enquiry.address)}`}
+              target="_blank" rel="noreferrer" size="compact-sm" variant="default">
+              Karte
+            </Button>
+          )}
+        </Group>
+      )}
+      {children}
+      {!enquiry.report && (
+        <Button size="compact-sm" color="red" mt={6} onClick={() => setDeclining(!declining)}>
+          Kunde sagt ab
+        </Button>
+      )}
       {declining && (
         <Stack gap={6} mt={8} className="visit-form">
           <Radio.Group label="Grund der Absage" value={reason} onChange={setReason} required>
@@ -216,7 +224,6 @@ function Customer({ enquiry, plan, run, children }: { enquiry: VisitEnquiry; pla
           </Group>
         </Stack>
       )}
-      {children}
     </div>
   )
 }
@@ -235,12 +242,11 @@ function SingleVisits({ plan, run }: { plan: VisitPlan; run: Run }) {
   return (
     <Stack gap="xs">
       {plan.enquiries.map((enquiry) => (
-        <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}>
-          {open === enquiry.siteId ? (
+        <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}
+          actions={open !== enquiry.siteId && <Button size="compact-sm" onClick={() => setOpen(enquiry.siteId)}>Termin eintragen</Button>}>
+          {open === enquiry.siteId && (
             <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={addDays(todayIso(), 1)} initialTime={SINGLE_TIME}
               run={run} onDone={() => setOpen(null)} />
-          ) : (
-            <Button size="compact-sm" mt={6} onClick={() => setOpen(enquiry.siteId)}>Termin eintragen</Button>
           )}
         </Customer>
       ))}
@@ -395,14 +401,15 @@ function RegionDay({ plan, region, date, run }: { plan: VisitPlan; region: strin
       {others.map((enquiry) => {
         const at = freeAt(enquiry)
         return (
-          <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}>
-            {open === enquiry.siteId ? (
-              <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={date} initialTime={at ?? SINGLE_TIME} fixedDate
-                run={run} onDone={() => setOpen(null)} />
-            ) : (
-              <Button size="compact-sm" mt={6} onClick={() => setOpen(enquiry.siteId)}>
+          <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}
+            actions={open !== enquiry.siteId && (
+              <Button size="compact-sm" onClick={() => setOpen(enquiry.siteId)}>
                 {at ? `Termin eintragen (frei ab ${at})` : 'Termin eintragen'}
               </Button>
+            )}>
+            {open === enquiry.siteId && (
+              <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={date} initialTime={at ?? SINGLE_TIME} fixedDate
+                run={run} onDone={() => setOpen(null)} />
             )}
           </Customer>
         )
@@ -421,14 +428,15 @@ function TourRow({ plan, enquiry, date, start, drive, run }: {
   return (
     <div className="visit-row">
       <Text size="sm" fw={700} className="visit-time">{start} <Text span size="xs" c="dimmed" fw={400}>· {drive} Min. Fahrt</Text></Text>
-      <Customer enquiry={enquiry} plan={plan} run={run}>
-        <Group gap={6} mt={6}>
+      <Customer enquiry={enquiry} plan={plan} run={run} actions={
+        <>
           <Button size="compact-sm" onClick={() => run(api.planVisit({ employeeId: plan.employeeId, siteId: enquiry.siteId, date, start }))}>
             Termin angenommen
           </Button>
           <Button size="compact-sm" variant="default" onClick={() => setChoice(choice === 'time' ? null : 'time')}>Andere Uhrzeit</Button>
           <Button size="compact-sm" variant="default" onClick={() => setChoice(choice === 'day' ? null : 'day')}>Kann an diesem Tag nicht</Button>
-        </Group>
+        </>
+      }>
         {choice === 'time' && (
           <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={date} initialTime={start} fixedDate run={run} onDone={() => setChoice(null)} />
         )}

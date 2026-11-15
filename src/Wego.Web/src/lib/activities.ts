@@ -83,7 +83,7 @@ export let ACTIVITIES: ActivityInfo[] = (
     ['Trockenbau', 'Trockenbau', 'Bauphase', '#e9dccb'],
     ['Sanitaer', 'Sanitär', 'Bauphase', '#0f6378'],
     ['RenoDeco', 'RenoDeco-Platten', 'Bauphase', '#f07a2a'],
-    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#c08bc0'],
+    ['Fliesen', 'Fliesenarbeiten', 'Bauphase', '#ad8fb0'],
     ['Endmontage', 'Endmontage', 'Bauphase', '#0f6378'],
   ] as const
 ).map(([key, label, phase, color], index) => toInfo({ key, label, phase, color, sortOrder: index + 1 }))
