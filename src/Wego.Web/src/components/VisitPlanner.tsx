@@ -158,9 +158,10 @@ function Customer({ enquiry, plan, run, children }: { enquiry: VisitEnquiry; pla
           <Text fw={700}>{enquiry.name}</Text>
           {enquiry.address && <Text size="sm">{enquiry.address}</Text>}
           <Text size="xs" c="dimmed">
-            {[enquiry.scope.join(', '), enquiry.planner && `Planer: ${enquiry.planner}`,
-              enquiry.requestedOn && waiting(enquiry.requestedOn)].filter(Boolean).join(' · ')}
+            {[enquiry.scope.join(', '), enquiry.planner && `Planer: ${enquiry.planner}`].filter(Boolean).join(' · ')}
           </Text>
+          {/* How long the customer has been waiting: on a line of its own, in red. */}
+          {enquiry.requestedOn && <Text size="xs" c="red" fw={600}>{waiting(enquiry.requestedOn)}</Text>}
           {enquiry.description && <Text size="xs" fs="italic">{enquiry.description}</Text>}
           {enquiry.call && <Text size="xs" c="red">{callLine(enquiry.call)}</Text>}
           {!onMap(enquiry) && <Text size="xs" c="dimmed">Adresse nicht auf der Karte: Fahrzeit geschätzt.</Text>}
@@ -177,18 +178,19 @@ function Customer({ enquiry, plan, run, children }: { enquiry: VisitEnquiry; pla
             Anrufen {enquiry.phone}
           </Button>
         )}
-        {enquiry.address && (
-          <Button component="a" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enquiry.address)}`}
-            target="_blank" rel="noreferrer" size="compact-sm" variant="default">
-            Karte
-          </Button>
-        )}
         <Button size="compact-sm" variant="default" onClick={() => run(api.notReached(plan.employeeId, enquiry.siteId))}>
           Nicht erreicht
         </Button>
         {!enquiry.report && (
           <Button size="compact-sm" color="red" onClick={() => setDeclining(!declining)}>
             Kunde sagt ab
+          </Button>
+        )}
+        {/* The map last: the call and its outcome belong together. */}
+        {enquiry.address && (
+          <Button component="a" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enquiry.address)}`}
+            target="_blank" rel="noreferrer" size="compact-sm" variant="default">
+            Karte
           </Button>
         )}
       </Group>
@@ -421,7 +423,7 @@ function TourRow({ plan, enquiry, date, start, drive, run }: {
       <Text size="sm" fw={700} className="visit-time">{start} <Text span size="xs" c="dimmed" fw={400}>· {drive} Min. Fahrt</Text></Text>
       <Customer enquiry={enquiry} plan={plan} run={run}>
         <Group gap={6} mt={6}>
-          <Button size="compact-sm" color="green" onClick={() => run(api.planVisit({ employeeId: plan.employeeId, siteId: enquiry.siteId, date, start }))}>
+          <Button size="compact-sm" onClick={() => run(api.planVisit({ employeeId: plan.employeeId, siteId: enquiry.siteId, date, start }))}>
             Termin angenommen
           </Button>
           <Button size="compact-sm" variant="default" onClick={() => setChoice(choice === 'time' ? null : 'time')}>Andere Uhrzeit</Button>
