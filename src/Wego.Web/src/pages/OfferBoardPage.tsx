@@ -40,6 +40,18 @@ function stageOf(site: Site, steps: OfferStep[], order: Activity[], today: strin
   return { column: WAITING, next: null, planned: null }
 }
 
+/** Sorts a card by its next appointment (date and time); cards without one go last ("~" sorts after digits). */
+const appointmentKey = (stage: Stage) =>
+  stage.planned ? `${stage.planned[0].date} ${stage.planned[0].startTime ?? ''}` : '~'
+
+/** Sorts a waiting card by when its offer was handed over (the last Angebotsübergabe). */
+const handedOverKey = (site: Site, steps: OfferStep[]) =>
+  steps
+    .filter((step) => step.siteId === site.id && step.activity === 'Angebotsuebergabe')
+    .map((step) => `${step.date} ${step.startTime ?? ''}`)
+    .sort()
+    .at(-1) ?? '~'
+
 /** Steps that may need more than one appointment (as on the server). */
 const REPEATABLE: Activity[] = ['Objektauswahl']
 
@@ -292,7 +304,17 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
 
       <div className="offer-board">
         {columns.map((column) => {
-          const list = offers.sites.filter((site) => stageOf(site, offers.steps, order, today).column === column.key)
+          const list = offers.sites
+            .map((site) => ({ site, stage: stageOf(site, offers.steps, order, today) }))
+            .filter(({ stage }) => stage.column === column.key)
+            // The next appointment on top, enquiries still to plan after them in the order they came in; waiting for
+            // the yes, the offer handed over longest ago on top.
+            .sort((a, b) =>
+              column.key === WAITING
+                ? handedOverKey(a.site, offers.steps).localeCompare(handedOverKey(b.site, offers.steps))
+                : appointmentKey(a.stage).localeCompare(appointmentKey(b.stage)),
+            )
+            .map(({ site }) => site)
           const info = column.activity ? activityInfo(column.activity) : null
           return (
             <section key={column.key} className="offer-column" aria-label={column.label}>

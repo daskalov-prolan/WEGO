@@ -19,7 +19,7 @@ const step = (siteId: number, activity: OfferStep['activity'], date: string): Of
 
 const offers: Offers = {
   sites: [
-    site(1, 'Neu'), site(2, 'Besichtigt'), site(3, 'Geplant'), site(4, 'Übergeben'), { ...site(5, 'Ausgewählt'), clientPhone: '030 123 45' },
+    site(7, 'Später übergeben'), site(1, 'Neu'), site(2, 'Besichtigt'), site(3, 'Geplant'), site(4, 'Übergeben'), { ...site(5, 'Ausgewählt'), clientPhone: '030 123 45' },
     site(6, 'Früh ausgewählt'),
   ],
   steps: [
@@ -33,6 +33,10 @@ const offers: Offers = {
     // The Objektauswahl planned already while the visit is still ahead.
     step(6, 'Besichtigung', '2026-11-19'),
     step(6, 'Objektauswahl', '2026-11-30'),
+    // Listed first, but handed over after Übergeben.
+    { ...step(7, 'Besichtigung', '2026-10-02'), entryId: 71 },
+    { ...step(7, 'Objektauswahl', '2026-10-09'), entryId: 72 },
+    { ...step(7, 'Angebotsuebergabe', '2026-10-25'), entryId: 73 },
   ],
   stepActivities: ['Besichtigung', 'Objektauswahl', 'Angebotsuebergabe'],
   decided: [],
@@ -75,8 +79,14 @@ describe('OfferBoardPage', () => {
     // Planned ahead: stays with its step, can be moved.
     expect(within(column('Besichtigung')).getByText('Geplant')).toBeInTheDocument()
     expect(within(screen.getByText('Geplant').closest('article')!).getByRole('button', { name: 'Termin verschieben' })).toBeInTheDocument()
+    // The next visit on top, whatever the date of the enquiry: Früh ausgewählt (19.11.) before Geplant (20.11.).
+    const names = within(column('Besichtigung')).getAllByRole('article').map((card) => card.textContent ?? '')
+    expect(names.findIndex((text) => text.includes('Früh ausgewählt'))).toBeLessThan(names.findIndex((text) => text.includes('Geplant')))
+    // Waiting for the yes: the offer handed over longest ago on top.
+    const waiting = within(column('Wartet auf Zusage')).getAllByRole('article').map((card) => card.textContent ?? '')
+    expect(waiting.findIndex((text) => text.includes('Übergeben'))).toBeLessThan(waiting.findIndex((text) => text.includes('Später übergeben')))
     // Handed over: yes or no.
-    expect(within(column('Wartet auf Zusage')).getByRole('button', { name: 'Zusage' })).toBeInTheDocument()
+    expect(within(column('Wartet auf Zusage')).getAllByRole('button', { name: 'Zusage' })).toHaveLength(2)
   })
 
   it('opens the enquiry from its card, calls the customer, and plans a second Objektauswahl', async () => {
