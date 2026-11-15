@@ -33,6 +33,29 @@ if (viewport) {
   mark()
 }
 
+// A page opened before a new version went live asks for files that are gone (e.g. the offer phase, loaded when
+// first opened): it loads itself anew, once, rather than showing an error. Loaded fine, it may do so again later.
+const RELOADED = 'wego.reloadedForUpdate'
+window.addEventListener('vite:preloadError', (event) => {
+  try {
+    if (sessionStorage.getItem(RELOADED)) return
+    sessionStorage.setItem(RELOADED, '1')
+  } catch {
+    // Without storage it reloads all the same.
+  }
+  event.preventDefault()
+  window.location.reload()
+})
+window.addEventListener('load', () => {
+  window.setTimeout(() => {
+    try {
+      sessionStorage.removeItem(RELOADED)
+    } catch {
+      // Nothing to clear.
+    }
+  }, 10_000)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="light">

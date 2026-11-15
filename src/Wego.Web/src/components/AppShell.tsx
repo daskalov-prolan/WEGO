@@ -6,6 +6,7 @@ import type { User } from '../api/types'
 import logo from '../assets/logo.svg'
 import { canPlanRole, roleLabel } from '../lib/roles'
 import { Sheet } from './Sheet'
+import { useIsPhone } from '../lib/useIsPhone'
 
 interface Props {
   user: User
@@ -20,7 +21,7 @@ interface Props {
 // Left the plans (the own one, and the plan of everybody per phase), right the records.
 const NAV = [
   { page: 'mein-plan', label: 'Mein Plan', visible: (user: User) => user.showInPlan },
-  { page: 'angebotsphase', label: 'Angebotsphase', short: 'Angebot', visible: (user: User) => user.seesOffers !== false },
+  { page: 'angebotsphase', label: 'Angebotsphase', visible: (user: User) => user.seesOffers !== false },
   { page: 'bauphase', label: 'Bauphase', visible: () => true },
   { page: 'baustellen', label: 'Baustellen', visible: (user: User) => canPlanRole(user.role), right: true },
   { page: 'mitarbeiter', label: 'Mitarbeiter', visible: () => true, right: true },
@@ -28,8 +29,20 @@ const NAV = [
   { page: 'mein-bereich', label: 'Mein Bereich', visible: () => true, right: true },
 ]
 
+/**
+ * On a phone at most this many pages in the bar; with more, the plans and Mein Bereich stay, the other records
+ * (Baustellen, Mitarbeiter, Verwaltung) go under "Mehr".
+ */
+const PHONE_BAR = 5
+
 export function AppShell({ user, page, onLogout, homePage, onHome, children }: Props) {
   const [changingPassword, setChangingPassword] = useState(false)
+  const isPhone = useIsPhone()
+  const shown = NAV.filter((item) => item.visible(user))
+  const folded = isPhone && shown.length > PHONE_BAR
+  const stays = (item: (typeof NAV)[number]) => !item.right || item.page === 'mein-bereich'
+  const bar = folded ? shown.filter(stays) : shown
+  const more = folded ? shown.filter((item) => !stays(item)) : []
 
   return (
     <div className="shell">
@@ -67,26 +80,41 @@ export function AppShell({ user, page, onLogout, homePage, onHome, children }: P
       </header>
 
       <nav className="shell-nav" aria-label="Hauptnavigation">
-        {NAV.filter((item) => item.visible(user)).map((item, index, shown) => (
+        {bar.map((item, index) => (
           <a
             key={item.page}
             href={`#/${item.page}`}
             aria-current={page === item.page ? 'page' : undefined}
             // The first of the records starts the group on the right.
-            className={item.right && !shown[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
+            className={item.right && !bar[index - 1]?.right ? `nav-${item.page} nav-right` : `nav-${item.page}`}
             aria-label={item.label}
           >
-            {/* On a phone the short name, so that all pages fit into the bar. */}
-            {'short' in item ? (
-              <>
-                <span className="nav-long">{item.label}</span>
-                <span className="nav-short">{item.short}</span>
-              </>
-            ) : (
-              item.label
-            )}
+            {item.label}
           </a>
         ))}
+        {/* Phone with many pages: the other records (Baustellen, Mitarbeiter, Verwaltung) in a list. */}
+        {more.length > 0 && (
+          <Menu position="top-end" withinPortal>
+            <Menu.Target>
+              <a
+                href="#"
+                role="button"
+                className="nav-more"
+                aria-current={more.some((item) => item.page === page) ? 'page' : undefined}
+                onClick={(event) => event.preventDefault()}
+              >
+                Mehr
+              </a>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {more.map((item) => (
+                <Menu.Item key={item.page} component="a" href={`#/${item.page}`} fw={page === item.page ? 700 : undefined}>
+                  {item.label}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        )}
       </nav>
 
       <main className="shell-main">{children}</main>
