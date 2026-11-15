@@ -7,16 +7,18 @@ interface Props {
   onClose: () => void
   children: ReactNode
   size?: string
+  /** On phones the whole height of the screen, whatever its content (e.g. the planning of visits). */
+  full?: boolean
 }
 
 /**
  * A dialog: on phones a panel that slides up from the bottom, elsewhere a centred window; titled in the
  * colours of the header of the page (see .sheet in app.css).
  */
-export function Sheet({ title, onClose, children, size = 'lg' }: Props) {
+export function Sheet({ title, onClose, children, size = 'lg', full = false }: Props) {
   const isPhone = useIsPhone()
   return isPhone ? (
-    <Drawer opened onClose={onClose} title={title} position="bottom" size="auto" padding="md" radius="md" className="sheet">
+    <Drawer opened onClose={onClose} title={title} position="bottom" size={full ? '100%' : 'auto'} padding="md" radius={full ? 0 : 'md'} className="sheet">
       <div className="sheet-body">{children}</div>
     </Drawer>
   ) : (

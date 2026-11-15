@@ -78,7 +78,7 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
       : `Besichtigungen${mode.region ? ` Region ${mode.region}` : ''}${mode.date ? ` · ${formatDate(mode.date)}` : ''}`
 
   return (
-    <Sheet title={title} onClose={close} size="xl">
+    <Sheet title={title} onClose={close} size="xl" full>
       {!plan ? (
         error ? <Alert color="red" variant="light">{error}</Alert> : <Loader />
       ) : (
