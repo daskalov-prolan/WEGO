@@ -1,5 +1,5 @@
 import { Select } from '@mantine/core'
-import { HALF_HOURS } from '../lib/dates'
+import { HALF_HOURS, QUARTER_HOURS } from '../lib/dates'
 
 interface Props {
   label: string
@@ -8,11 +8,16 @@ interface Props {
   onChange: (value: string) => void
   /** For the end of a time window: only times after the start are offered. */
   after?: string
+  /** Every quarter hour (appointments), else the full and half hours (sites). */
+  quarter?: boolean
+  /** Without the cross to empty it (a time is needed). */
+  required?: boolean
 }
 
-/** A time chosen from the full and half hours. */
-export function TimeSelect({ label, value, onChange, after }: Props) {
-  const offered = after ? HALF_HOURS.filter((time) => time > after) : HALF_HOURS
+/** A time chosen from the full and half hours, or from every quarter hour. */
+export function TimeSelect({ label, value, onChange, after, quarter = false, required = false }: Props) {
+  const times = quarter ? QUARTER_HOURS : HALF_HOURS
+  const offered = after ? times.filter((time) => time > after) : times
   // A time from before (e.g. 08:15) stays visible and selected.
   const data = value && !offered.includes(value) ? [...offered, value].sort() : offered
   return (
@@ -22,7 +27,7 @@ export function TimeSelect({ label, value, onChange, after }: Props) {
       data={data}
       value={value || null}
       onChange={(next) => onChange(next ?? '')}
-      clearable
+      clearable={!required}
       searchable
       comboboxProps={{ withinPortal: true }}
     />

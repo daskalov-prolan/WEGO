@@ -134,6 +134,12 @@ export const HALF_HOURS = Array.from(
   (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`,
 )
 
+/** Every quarter hour from "06:00" to "20:00": for appointments (visits, offer steps, meetings). */
+export const QUARTER_HOURS = Array.from(
+  { length: 57 },
+  (_, i) => `${String(6 + Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`,
+)
+
 /** Two sites of four hours each on one day: the first in the morning, the second after the break. */
 /** A whole working day, e.g. for widening half a day (the costing counts its hours). */
 export const WHOLE_DAY = { start: '07:00', end: '16:00' }

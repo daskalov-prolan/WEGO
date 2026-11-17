@@ -55,6 +55,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** The field of the time (a choice of the quarter hours). */
+const timeInput = () => screen.getAllByLabelText('Uhrzeit').find((element) => element instanceof HTMLInputElement) as HTMLInputElement
+
 describe('VisitPlanner', () => {
   it('asks what to plan, then one customer at 16:00 by default with a warning of an overlap', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -85,7 +88,7 @@ describe('VisitPlanner', () => {
     )
 
     await user.click(within(cards[0] as HTMLElement).getByRole('button', { name: 'Termin eintragen' }))
-    expect(screen.getByLabelText('Uhrzeit')).toHaveValue('16:00')
+    expect(timeInput()).toHaveValue('16:00')
     expect(screen.getByText(/Achtung: am .* ist schon Baustelle Müller \(15:30–16:30\)/)).toBeInTheDocument()
     // What else is planned that day, below.
     expect(screen.getByText('An diesem Tag schon geplant:')).toBeInTheDocument()
@@ -155,10 +158,15 @@ describe('VisitPlanner', () => {
     renderWithProviders(<VisitPlanner onClose={() => {}} />)
     await user.click(await screen.findByRole('button', { name: /Fr 20\.11\.\s*Stefan Buder\s*1 Kunde/ }))
     await user.click(screen.getByRole('button', { name: /09:00\s*Herr Fest/ }))
-    expect(screen.getByLabelText('Uhrzeit')).toHaveValue('09:00')
+    expect(timeInput()).toHaveValue('09:00')
     expect(screen.queryByText(/Achtung/)).not.toBeInTheDocument()
-    await user.clear(screen.getByLabelText('Uhrzeit'))
-    await user.type(screen.getByLabelText('Uhrzeit'), '11:00')
+    // The time chosen from the quarter hours.
+    await user.click(timeInput())
+    const list = await waitFor(() => document.getElementById(timeInput().getAttribute('aria-controls')!)!)
+    const options = within(list).getAllByRole('option', { hidden: true })
+    // Every quarter hour.
+    expect(options.slice(0, 3).map((option) => option.textContent)).toEqual(['06:00', '06:15', '06:30'])
+    await user.click(options.find((option) => option.textContent === '11:00')!)
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
     await waitFor(() =>
       expect(posted).toContainEqual({ url: '/api/visits', body: { employeeId: 4, siteId: 7, date: '2026-11-20', start: '11:00' } }),

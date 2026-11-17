@@ -30,7 +30,9 @@ import { isVisit, VISIT } from '../lib/visitGroup'
 import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
 import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
-import type { MeetingWeek } from '../api/types'
+import type { MeetingWeek, OwnBusy } from '../api/types'
+import { busyTime, clashes } from '../lib/busy'
+import { Sheet } from '../components/Sheet'
 import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
@@ -435,6 +437,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       }
     return result
   }, [plan])
+  // Busy after the own calendars (e.g. Apple's): only the times.
+  const busyByCell = useMemo(() => {
+    const result = new Map<string, OwnBusy[]>()
+    for (const b of plan?.busy ?? []) {
+      const key = cellKey(b.employeeId, b.date)
+      result.set(key, [...(result.get(key) ?? []), b])
+    }
+    return result
+  }, [plan])
+  const [clashesOpen, setClashesOpen] = useState(false)
   const [meetingWeek, setMeetingWeek] = useState<MeetingWeek | null>(null)
   const [meetingsOpen, setMeetingsOpen] = useState(false)
   // For a planner of group G: how many asked to be let off a week (they decide).
@@ -445,6 +457,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   )
   const noteProps = {
     meetingsOf: (employeeId: number, date: string) => meetingsByCell.get(cellKey(employeeId, date)) ?? [],
+    busyOf: (employeeId: number, date: string) => busyByCell.get(cellKey(employeeId, date)) ?? [],
     onOpenMeeting: (week: MeetingWeek) => setMeetingWeek(week),
     notesOf: (employeeId: number, date: string) => notesByCell.get(cellKey(employeeId, date)) ?? [],
     onNoteMenu: canEdit ? (note: CalendarNote, at: { x: number; y: number }) => setNoteMenu({ note, ...at }) : undefined,
@@ -924,6 +937,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   if (!plan || plan.year !== year) return null
 
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
+  // From today on: where the plan has something while somebody is busy after his own calendar.
+  const clashList = canEdit
+    ? (plan?.busy ?? []).filter((b) => b.date >= today).flatMap((b) => {
+        const names = clashes(b, entriesOf(b.employeeId, b.date), meetingsByCell.get(cellKey(b.employeeId, b.date)) ?? [])
+        if (names.length === 0) return []
+        const who = [...(plan?.employees ?? []), ...(plan?.planners ?? [])].find((e) => e.id === b.employeeId)?.name ?? '?'
+        return [{ busy: b, who, names }]
+      })
+    : []
 
   // The steps of the offer after the enquiry, and their appointments in the plan: for the window of a step.
   const OFFER_STEPS = activitiesOfStatus('Angebot').filter((activity) => activity !== 'Anfrage')
@@ -1691,6 +1713,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               ⟳ Wiederholungstermine
             </Button>
           )}
+          {/* Something planned while somebody is busy after his own calendar: in red, with the number. */}
+          {clashList.length > 0 && (
+            <Button size="sm" variant="outline" color="red" onClick={() => setClashesOpen(true)}
+              rightSection={<span className="visit-count">{clashList.length}</span>}>
+              ⚠ Überschneidungen
+            </Button>
+          )}
         </div>
         {canEdit && perspective === 'sites' && !isPhone && phaseEmployees.length > 0 && (
           <div className="employee-palette" role="group" aria-label="Mitarbeiter zum Einplanen">
@@ -2001,6 +2030,19 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             notifications.show({ message: 'Anfrage gespeichert.', color: 'green' })
           }}
         />
+      )}
+      {clashesOpen && (
+        <Sheet title="Überschneidungen mit privaten Terminen" onClose={() => setClashesOpen(false)} size="lg">
+          <Stack gap="xs">
+            <Text size="sm" c="dimmed">Eingeplant, während der Mitarbeiter laut eigenem Kalender belegt ist (nur die Zeit ist bekannt).</Text>
+            {clashList.map(({ busy, who, names }, i) => (
+              <div key={i} className="clash-row">
+                <Text size="sm" fw={700}>{who} · {formatDate(busy.date)}</Text>
+                <Text size="sm">privat belegt {busyTime(busy)} ↔ {names.join(', ')}</Text>
+              </div>
+            ))}
+          </Stack>
+        </Sheet>
       )}
       {meetingsOpen && (
         <MeetingsDialog people={people} decides={user?.role === 'PlanerG'} onClose={() => setMeetingsOpen(false)}

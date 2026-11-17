@@ -7,6 +7,7 @@ import { addDays, formatDate, isoWeek, todayIso } from '../lib/dates'
 import { callLine, shortDate, waiting } from '../lib/visitText'
 import { useIsPhone } from '../lib/useIsPhone'
 import { Sheet } from './Sheet'
+import { TimeSelect } from './TimeSelect'
 import { VisitMap } from './VisitMap'
 
 /**
@@ -31,8 +32,13 @@ const toMin = (time: string) => {
 }
 const dayKey = (day: Pick<VisitDay, 'employeeId' | 'date'>) => `${day.employeeId}|${day.date}`
 
-/** date: opened from a visit in the calendar, the first page shows that day of the visitor open. */
-export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employeeId?: number; date?: string; onClose: () => void; onChanged?: () => void }) {
+/**
+ * date: opened from a visit in the calendar, the first page shows that day of the visitor open; change: the
+ * appointment (entry) to change, open on it (from Mein Plan).
+ */
+export function VisitPlanner({ employeeId, date, change, onClose, onChanged }: {
+  employeeId?: number; date?: string; change?: number; onClose: () => void; onChanged?: () => void
+}) {
   const [plan, setPlan] = useState<VisitPlan | null>(null)
   const [mode, setMode] = useState<Mode | null>(null)
   // The customer whose appointment is being entered (also from the map).
@@ -112,7 +118,7 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
             <>
               <ModeChoice plan={plan} who={who} onChoose={(region) => setMode({ region, map: false })}
                 onMap={() => setMode({ region: null, map: true, fromStart: true })} />
-              <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} onVisitor={load} run={run} />
+              <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} onVisitor={load} run={run} change={change} />
             </>
           ) : (
             <>
@@ -184,12 +190,16 @@ function ModeChoice({ plan, who, onChoose, onMap }: {
  * on a customer opens the appointment to change it (a planner's for whoever visits, a visitor's his own). A day
  * set aside without customers can be released (by a planner, or by who visits on his own day).
  */
-function PlannedDays({ plan, expanded, onExpand, onVisitor, run }: {
-  plan: VisitPlan; expanded: string | null; onExpand: (key: string | null) => void; onVisitor: (id: number) => void; run: Run
+function PlannedDays({ plan, expanded, onExpand, onVisitor, run, change }: {
+  plan: VisitPlan; expanded: string | null; onExpand: (key: string | null) => void; onVisitor: (id: number) => void; run: Run; change?: number
 }) {
   const planner = plan.visitors.length > 0
   // The visit being changed.
-  const [changing, setChanging] = useState<number | null>(null)
+  const [changing, setChanging] = useState<number | null>(change ?? null)
+  // Opened to change one: it is scrolled into view.
+  useEffect(() => {
+    if (change) document.querySelector(`[data-visit-entry="${change}"]`)?.scrollIntoView({ block: "center" })
+  }, [change])
   return (
     <Stack gap={6} mt="sm">
       <Text fw={700} size="lg">Geplante Besichtigungstage</Text>
@@ -226,7 +236,7 @@ function PlannedDays({ plan, expanded, onExpand, onVisitor, run }: {
                   {day.visits.map((v) => {
                     const mine = planner || day.employeeId === plan.employeeId
                     return (
-                      <div key={v.entryId}>
+                      <div key={v.entryId} data-visit-entry={v.entryId}>
                         <button type="button" className="visit-day-visit" disabled={!mine}
                           onClick={() => {
                             // The appointment in the plan of whoever visits that day (a planner switches to him).
@@ -390,7 +400,7 @@ function AppointmentForm({ plan, siteId, initialDate, initialTime, except, run, 
       <Group grow align="flex-end">
         <DatePickerInput label="Tag" valueFormat="DD.MM.YYYY" minDate={new Date(todayIso())} value={date} onChange={setDate}
           dropdownType={isPhone ? 'modal' : 'popover'} />
-        <TextInput label="Uhrzeit" type="time" step={900} value={time} onChange={(e) => setTime(e.currentTarget.value)} />
+        <TimeSelect label="Uhrzeit" quarter required value={time} onChange={setTime} />
       </Group>
       {date && (
         <div className="visit-that-day">

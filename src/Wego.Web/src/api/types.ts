@@ -396,6 +396,25 @@ export interface Plan {
   birthdays?: { employeeId: number; name: string; birthday: string }[]
   /** The weeks of the meetings that come back every week (e.g. the Bauberatung). */
   meetings?: MeetingWeek[]
+  /** Times busy after the own calendars of the employees (e.g. Apple's), without what they are. */
+  busy?: OwnBusy[]
+}
+
+/** A time busy after an own calendar; without times the whole day. */
+export interface OwnBusy {
+  employeeId: number
+  date: string
+  startTime: string | null
+  endTime: string | null
+}
+
+/** Mein Bereich: the link to the own appointments, and the own calendar shared with the plan. */
+export interface MyCalendar {
+  link: string | null
+  externalUrl: string | null
+  syncedAt: string | null
+  error: string | null
+  busy: number
 }
 
 /**

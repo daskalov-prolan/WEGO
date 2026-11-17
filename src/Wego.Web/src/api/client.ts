@@ -1,4 +1,5 @@
 import type {
+  MyCalendar,
   Meeting,
   MeetingInput,
   MeetingRequest,
@@ -146,6 +147,11 @@ export const api = {
   teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
   /** Whether something changed: the version, the last changes with who made them, and who asks. */
+  myCalendar: () => request<MyCalendar>('GET', '/api/me/calendar'),
+  /** The link to the own appointments (made anew: the old one no longer works). */
+  makeCalendarLink: (renew = false) => request<MyCalendar>('POST', `/api/me/calendar/link${renew ? '?renew=true' : ''}`),
+  /** The own calendar shared with the plan; null: no longer. */
+  setOwnCalendar: (url: string | null) => request<MyCalendar>('PUT', '/api/me/calendar/external', { url }),
   meetings: () => request<Meeting[]>('GET', '/api/meetings'),
   createMeeting: (input: MeetingInput) => request<Meeting>('POST', '/api/meetings', input),
   updateMeeting: (id: number, input: MeetingInput) => request<Meeting>('PUT', `/api/meetings/${id}`, input),

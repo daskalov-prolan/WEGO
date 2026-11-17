@@ -584,6 +584,7 @@ export function StepDialog({
         <Group grow>
           <TimeSelect
             label="von"
+            quarter
             value={start}
             onChange={(value) => {
               setStart(value)
@@ -592,7 +593,7 @@ export function StepDialog({
               else if (value && end === later(start)) setEnd(later(value))
             }}
           />
-          <TimeSelect label="bis" value={end} onChange={setEnd} after={start} />
+          <TimeSelect label="bis" quarter value={end} onChange={setEnd} after={start} />
         </Group>
         <MultiSelect
           label="Wer"

@@ -5,6 +5,8 @@ import { api, messageOf } from '../api/client'
 import type { EmployeeVacation, MyVacation, User, VacationBlock } from '../api/types'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { Stat } from '../components/Stat'
+import { MyCalendars } from '../components/MyCalendars'
+import { OwnAbsence } from '../components/OwnAbsence'
 import { CURRENT_YEAR, formatDate, PLAN_YEARS, todayIso } from '../lib/dates'
 
 /** Days with halves: 24 and 31 December count half a day each. */
@@ -14,8 +16,8 @@ const days = (count: number) => (count === 0.5 ? '½' : count < 0 ? `−${(-coun
 const COUNTED_FROM = 2027
 
 /**
- * "Mein Bereich": what every employee sees about themselves. For now their vacation: how many days they
- * have, how many are used, how many are left, and when they take them, as stretches of days.
+ * "Mein Bereich": what every employee sees about themselves: their vacation (how many days they have, used and
+ * left, and when they take them, as stretches of days), and their calendars (the plan in their own, theirs in the plan).
  */
 export function MyAreaPage({ user }: { user: User }) {
   const first = Math.max(COUNTED_FROM, CURRENT_YEAR)
@@ -25,6 +27,8 @@ export function MyAreaPage({ user }: { user: User }) {
   const [vacation, setVacation] = useState<MyVacation | null>(null)
   const [error, setError] = useState('')
 
+  // Saved anew (e.g. his own vacation entered): loaded again.
+  const [loads, setLoads] = useState(0)
   useEffect(() => {
     api.myVacation(year).then(
       (result) => {
@@ -33,7 +37,7 @@ export function MyAreaPage({ user }: { user: User }) {
       },
       (e) => setError(messageOf(e)),
     )
-  }, [year])
+  }, [year, loads])
 
   return (
     // The same on the desktop as on a phone: one narrow column.
@@ -59,6 +63,9 @@ export function MyAreaPage({ user }: { user: User }) {
         </Alert>
       )}
 
+      {/* Planer G enters his own vacation (he is not in the list under Verwaltung). */}
+      {user.role === 'PlanerG' && <OwnAbsence employeeId={user.id} onSaved={() => setLoads((n) => n + 1)} />}
+
       {vacation && (
         <>
           <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="lg">
@@ -80,6 +87,7 @@ export function MyAreaPage({ user }: { user: User }) {
 
       {/* Planer G sees how everybody's vacation is planned. */}
       {user.role === 'PlanerG' && <TeamVacation year={year} />}
+      <MyCalendars />
     </div>
   )
 }

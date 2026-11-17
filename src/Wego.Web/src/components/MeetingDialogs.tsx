@@ -8,6 +8,7 @@ import { formatDateLong, todayIso } from '../lib/dates'
 import { useIsPhone } from '../lib/useIsPhone'
 import { shortDate } from '../lib/visitText'
 import { Sheet } from './Sheet'
+import { TimeSelect } from './TimeSelect'
 
 /**
  * Meetings that come back every week (e.g. the Bauberatung on Wednesdays 9:00-10:30): the list of them for the
@@ -161,8 +162,8 @@ export function MeetingEditor({ meeting, people, onClose, onSaved }: {
         <Group grow align="flex-end">
           <Select label="Jeden" data={WEEKDAYS.map((day, i) => ({ value: String(i + 1), label: day }))} value={String(input.weekday)}
             allowDeselect={false} onChange={(value) => value && change({ weekday: Number(value) })} comboboxProps={{ withinPortal: true }} />
-          <TextInput label="Von" type="time" step={900} value={input.startTime} onChange={(e) => change({ startTime: e.currentTarget.value })} />
-          <TextInput label="Bis" type="time" step={900} value={input.endTime} onChange={(e) => change({ endTime: e.currentTarget.value })} />
+          <TimeSelect label="Von" quarter required value={input.startTime} onChange={(value) => change({ startTime: value })} />
+          <TimeSelect label="Bis" quarter required value={input.endTime} after={input.startTime} onChange={(value) => change({ endTime: value })} />
         </Group>
         <MultiSelect label="Teilnehmer" placeholder="Wer ist dabei?" data={people.map((p) => ({ value: String(p.id), label: p.name }))}
           value={input.participantIds.map(String)} onChange={(values) => change({ participantIds: values.map(Number) })}
@@ -258,8 +259,8 @@ export function MeetingWeekDialog({ week, people, me, plans, decides, onClose, o
               <Stack gap={6} className="visit-form">
                 <Group grow align="flex-end">
                   <DayPicker label="Tag" value={date} onChange={setDate} />
-                  <TextInput label="Von" type="time" step={900} value={start} onChange={(e) => setStart(e.currentTarget.value)} />
-                  <TextInput label="Bis" type="time" step={900} value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+                  <TimeSelect label="Von" quarter required value={start} onChange={setStart} />
+                  <TimeSelect label="Bis" quarter required value={end} after={start} onChange={setEnd} />
                 </Group>
                 <Group gap={6}>
                   <Button disabled={!date} onClick={() => run(api.changeMeetingWeek(week.meetingId,
