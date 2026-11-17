@@ -95,6 +95,10 @@ export function MyCalendars() {
           iPhone: Kalender-App → unten „Kalender“ → beim gewünschten Kalender auf ⓘ → „Öffentlicher Kalender“ einschalten
           → „Link teilen“ → kopieren und hier einfügen.
         </Text>
+        <Text size="xs" c="orange.8" mb="xs">
+          Es erscheinen nur Termine aus genau diesem einen Kalender. Termine in anderen Kalendern (z. B. „Arbeit“, „Privat“,
+          Google oder Exchange) bitte in den freigegebenen Kalender legen oder diesen Kalender zusätzlich freigeben.
+        </Text>
         <Stack gap="xs">
           <TextInput placeholder="webcal://p…-caldav.icloud.com/published/…" value={url} onChange={(e) => setUrl(e.currentTarget.value)} />
           <Group gap="xs">
@@ -103,7 +107,10 @@ export function MyCalendars() {
               Verbinden
             </Button>
             {calendar.externalUrl && (
-              <Button variant="default" onClick={() => run(api.setOwnCalendar(null), 'Kalender getrennt.')}>Trennen</Button>
+              <>
+                <Button variant="default" onClick={() => run(api.syncOwnCalendar(), 'Kalender abgeglichen.')}>Jetzt abgleichen</Button>
+                <Button variant="default" onClick={() => run(api.setOwnCalendar(null), 'Kalender getrennt.')}>Trennen</Button>
+              </>
             )}
           </Group>
           {calendar.externalUrl && !calendar.error && calendar.syncedAt && (

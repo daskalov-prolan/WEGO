@@ -76,6 +76,15 @@ public static class CalendarEndpoints
             return Results.Ok(await DtoAsync(db, employee, request));
         });
 
+        // Read at once (after a change in his calendar), not only every 15 minutes.
+        me.MapPost("/sync", async (ClaimsPrincipal user, HttpRequest request, WegoDbContext db, IHttpClientFactory http) =>
+        {
+            var employee = await db.Employees.FirstOrDefaultAsync(e => e.Id == user.EmployeeId());
+            if (employee is null) return Results.NotFound();
+            await SyncAsync(db, http, employee);
+            return Results.Ok(await DtoAsync(db, employee, request));
+        });
+
         // His own calendar shared with the plan (or no longer: url empty); read at once.
         me.MapPut("/external", async (ExternalInput input, ClaimsPrincipal user, HttpRequest request, WegoDbContext db, IHttpClientFactory http) =>
         {
@@ -187,7 +196,8 @@ public static class CalendarEndpoints
                 if (e > s) result.Add((d, s, e));
             }
         }
-        return result;
+        // The same time twice (e.g. a moved appointment kept by the calendar as well) counts once.
+        return result.Distinct().ToList();
     }
 
     // ---- The link: his appointments as iCalendar ----

@@ -743,7 +743,8 @@ describe('PlanPage', () => {
     // An activity dragged onto it: first the Baubeginn.
     fireEvent.dragStart(screen.getAllByText('Fliesenarbeiten')[0].closest('[draggable="true"]')!)
     fireEvent.drop(chip)
-    expect(await screen.findByText(/erst den Baubeginn eintragen/)).toBeInTheDocument()
+    // The hint can take a while on a slow machine (the build server).
+    expect(await screen.findByText(/erst den Baubeginn eintragen/, undefined, { timeout: 3000 })).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/plan/batch')).toBe(false)
   })
 

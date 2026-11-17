@@ -53,6 +53,52 @@ public class CalendarTests
         ], busy.OrderBy(b => b.Date).ToList());
     }
 
+    /// <summary>As Apple writes it: an endless series first, appointments far ahead before near ones, a moved one.</summary>
+    private const string Mixed = """
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Apple Inc.//macOS//EN
+        BEGIN:VEVENT
+        UID:far
+        DTSTART;TZID=Europe/Berlin:20270310T100000
+        DTEND;TZID=Europe/Berlin:20270310T110000
+        SUMMARY:weit weg
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:endless
+        DTSTART;TZID=Europe/Berlin:20250106T070000
+        DTEND;TZID=Europe/Berlin:20250106T073000
+        RRULE:FREQ=WEEKLY;BYDAY=MO
+        SUMMARY:jede Woche
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:endless
+        RECURRENCE-ID;TZID=Europe/Berlin:20261207T070000
+        DTSTART;TZID=Europe/Berlin:20261207T090000
+        DTEND;TZID=Europe/Berlin:20261207T093000
+        SUMMARY:jede Woche, verschoben
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:near
+        DTSTART;TZID=Europe/Berlin:20261203T150000
+        DTEND;TZID=Europe/Berlin:20261203T160000
+        SUMMARY:bald
+        END:VEVENT
+        END:VCALENDAR
+        """;
+
+    [Fact]
+    public void Reads_every_appointment_in_the_range_whatever_the_order()
+    {
+        var busy = CalendarEndpoints.Parse(Mixed, new DateOnly(2026, 12, 1), new DateOnly(2026, 12, 14)).OrderBy(b => b.Date).ThenBy(b => b.Start).ToList();
+        Assert.Equal(
+        [
+            (new DateOnly(2026, 12, 3), (TimeOnly?)new TimeOnly(15, 0), (TimeOnly?)new TimeOnly(16, 0)),
+            (new DateOnly(2026, 12, 7), new TimeOnly(9, 0), new TimeOnly(9, 30)),
+            (new DateOnly(2026, 12, 14), new TimeOnly(7, 0), new TimeOnly(7, 30)),
+        ], busy);
+    }
+
     [Theory]
     [InlineData("webcal://p52-caldav.icloud.com/published/2/abc", "https://p52-caldav.icloud.com/published/2/abc")]
     [InlineData("https://calendar.google.com/calendar/ical/x/basic.ics", "https://calendar.google.com/calendar/ical/x/basic.ics")]

@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, MeetingWeek, NamedItem, OwnBusy, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { BusyChip } from './BusyChip'
 import { clashes } from '../lib/busy'
@@ -559,6 +559,25 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
     (now().handlers(employeeIndex, dayIndex) as unknown as Record<string, Handler>)[name](event)
   const openSite = (siteId: number, event: MouseEvent) => now().openSite(siteId, event)
   const marked = cell.marked
+  // Meetings and busy times among the work of the day by their time (a busy whole day first); each placed before
+  // the first entry that begins later, the rest after the last.
+  const extras = [
+    ...meetings.map((week) => ({
+      start: week.startTime,
+      node: (
+        <MeetingChip key={`${week.meetingId}|${week.originalDate}`} week={week} employeeId={employee.id}
+          onOpen={cell.opensMeetings ? (w) => props().onOpenMeeting?.(w) : undefined} />
+      ),
+    })),
+    ...busy.map((b, i) => ({ start: b.startTime ?? '00:00', node: <BusyChip key={`busy${i}`} busy={b} clashes={clashes(b, entries, meetings)} /> })),
+  ].sort((a, b) => a.start.localeCompare(b.start))
+  let placed = 0
+  const extrasBefore = (start: string) => {
+    const nodes = []
+    while (placed < extras.length && extras[placed].start < start) nodes.push(extras[placed++].node)
+    return nodes
+  }
+  const extrasLeft = () => extras.slice(placed).map((extra) => extra.node)
   return (
     <td
       className={dayClass(day, cell.holiday, cell.today)}
@@ -586,20 +605,21 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
         <span className="cell-full">
           {/* Work in the afternoon only: the free morning comes first. */}
           {free && afternoon && freeChip}
-          {entries.map((entry, index) =>
-            isVisit(entry) ? (
+          {entries.map((entry, index) => (
+            <Fragment key={entry.id}>
+            {/* Without times an entry takes the whole day: what has a time comes after it. */}
+            {extrasBefore(entry.startTime ?? '00:00')}
+            {isVisit(entry) ? (
               // All visits of the day as one card, where the first of them is: in full colour in every phase, so
               // that a day of visits is seen at once.
               index === firstVisit && (
                 <VisitChip
-                  key="visits"
                   entries={entries.filter(isVisit)}
                   onSiteClick={cell.marks ? undefined : openSite}
                 />
               )
             ) : (
             <Chip
-              key={entry.id}
               entry={entry}
               dimmed={cell.dimmed[index] === '1'}
               reserved={cell.reserved[index] === '1'}
@@ -621,8 +641,10 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
                   : undefined
               }
             />
-            ),
-          )}
+            )}
+            </Fragment>
+          ))}
+          {extrasLeft()}
           {free && !afternoon && freeChip}
         </span>
         {first && (
@@ -635,7 +657,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
             draggable={cell.draggable}
           />
         )}
-        {/* The meetings of the week (e.g. the Bauberatung), below the work of the day. */}
+        {/* The month: the meetings and busy times as signs below the short form of the day. */}
         {(meetings.length > 0 || busy.length > 0) && (
           <span className="cell-meetings">
             {meetings.map((week) => (

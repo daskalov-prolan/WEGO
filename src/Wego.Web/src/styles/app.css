@@ -3979,3 +3979,8 @@ html.plan-full .shell-nav {
   border-left-color: #d71f27;
   background: #ffe3e3;
 }
+
+/* In the week the meetings and busy times stand among the work of the day (by time); the signs below are the month's. */
+.timeline:not(.zoom-month) .cell-meetings {
+  display: none;
+}
