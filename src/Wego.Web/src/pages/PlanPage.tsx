@@ -22,6 +22,7 @@ import type { Activity, CalendarNote, DayEntryInput, Entry, EntryType, OfferStep
 import { SiteForm } from '../components/SiteForm'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
 import { forgetHandedUndo, handedUndo } from '../lib/undoHandoff'
+import { keepHistory, keptHistory, MAX_STEPS } from '../lib/planHistory'
 import { MonthJump } from '../components/MonthJump'
 import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
@@ -361,13 +362,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // An entry marked by a click: with the days that follow on at the same site it is one stretch.
   const [marked, setMarked] = useState<number | null>(null)
   const startStretch = useStretch()
-  // The changes made since the plan was opened: taken back (undo) and done again (redo), newest last.
+  // The changes made since the page was loaded: taken back (undo) and done again (redo), newest last; up to
+  // MAX_STEPS, kept when the plan is opened again (the other phase, another page and back, another year).
   // A change made elsewhere (the standard flow entered on the page of a site) can be taken back here, too.
   const [history, setHistory] = useState<{ undo: Step[]; redo: Step[] }>(() => {
+    const kept = keptHistory()
     const handed = handedUndo()
-    return { undo: handed ? [handed] : [], redo: [] }
+    return handed ? { undo: [...kept.undo, handed].slice(-MAX_STEPS), redo: [] } : kept
   })
   useEffect(forgetHandedUndo, [])
+  useEffect(() => keepHistory(history), [history])
   // A Baubeginn just entered: asked whether the standard flow goes into the plan.
   const [flowSite, setFlowSite] = useState<Site | null>(null)
   const [busy, setBusy] = useState(false)
@@ -994,7 +998,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     }))
     merge(changes, await api.saveDays(changes))
     // A new change ends what could be done again.
-    setHistory((current) => ({ undo: [...current.undo, { label: message, before: previous, after: changes }], redo: [] }))
+    setHistory((current) => ({ undo: [...current.undo, { label: message, before: previous, after: changes }].slice(-MAX_STEPS), redo: [] }))
     notifications.show({ id: `saved-${++notificationCount.current}`, autoClose: 4000, message })
   }
 
@@ -2219,7 +2223,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           onClose={() => setFlowSite(null)}
           onEntered={(step, saved) => {
             merge(step.after, saved)
-            setHistory((current) => ({ undo: [...current.undo, step], redo: [] }))
+            setHistory((current) => ({ undo: [...current.undo, step].slice(-MAX_STEPS), redo: [] }))
           }}
         />
       )}

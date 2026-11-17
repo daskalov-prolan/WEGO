@@ -1,8 +1,11 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
+import { forgetHistory } from './lib/planHistory'
 
 afterEach(cleanup)
+// Each test a page loaded anew: no changes of another test to take back.
+afterEach(forgetHistory)
 
 // Browser APIs that Mantine uses and jsdom does not provide.
 Object.defineProperty(window, 'matchMedia', {
