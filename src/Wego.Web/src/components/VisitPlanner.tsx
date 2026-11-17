@@ -17,7 +17,8 @@ import { VisitMap } from './VisitMap'
  */
 
 /** The customers: all (region null) or those of a region; as a list or on the map. */
-type Mode = { region: string | null; map: boolean }
+/** fromStart: the map opened from the first page (back leads there). */
+type Mode = { region: string | null; map: boolean; fromStart?: boolean }
 
 const SINGLE_TIME = '16:00'
 /** An hour on site. */
@@ -46,7 +47,8 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
   }
   // The X (and Esc): one step back, from the map to the list, from the list to the first page; there it closes.
   const back = () => {
-    if (mode?.map) setMode({ ...mode, map: false })
+    if (mode?.map && mode.fromStart) setMode(null)
+    else if (mode?.map) setMode({ ...mode, map: false })
     else if (mode) setMode(null)
     else close()
   }
@@ -108,15 +110,16 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
 
           {mode === null ? (
             <>
-              <ModeChoice plan={plan} who={who} onChoose={(region) => setMode({ region, map: false })} />
+              <ModeChoice plan={plan} who={who} onChoose={(region) => setMode({ region, map: false })}
+                onMap={() => setMode({ region: null, map: true, fromStart: true })} />
               <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} onVisitor={load} run={run} />
             </>
           ) : (
             <>
               <Group gap="xs" justify="space-between">
                 <Group gap="xs">
-                  <Button className="visit-back" variant="default" onClick={() => setMode(mode.map ? { ...mode, map: false } : null)}>
-                    ‹ {mode.map ? 'zurück zur Liste' : 'zurück'}
+                  <Button className="visit-back" variant="default" onClick={back}>
+                    ‹ {mode.map && !mode.fromStart ? 'zurück zur Liste' : 'zurück'}
                   </Button>
                   {visitorName && !mode.map && <Text size="sm" c="dimmed">für {visitorName}</Text>}
                 </Group>
@@ -150,11 +153,17 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
 type Run = (change: Promise<VisitPlan>) => Promise<boolean>
 
 /** "Was möchten Sie planen?": all customers waiting, or those of a region; the number in red. */
-function ModeChoice({ plan, who, onChoose }: { plan: VisitPlan; who: React.ReactNode; onChoose: (region: string | null) => void }) {
+function ModeChoice({ plan, who, onChoose, onMap }: {
+  plan: VisitPlan; who: React.ReactNode; onChoose: (region: string | null) => void; onMap: () => void
+}) {
   const count = (n: number) => <span className="visit-count">{n}</span>
   return (
     <Stack gap="xs">
-      <Text fw={700} size="lg">Was möchten Sie planen?</Text>
+      <Group justify="space-between" wrap="nowrap">
+        <Text fw={700} size="lg">Was möchten Sie planen?</Text>
+        {/* All customers waiting on the map, as from Alle Besichtigungen. */}
+        <Button variant="outline" color="red" onClick={onMap}>Auf Karte anzeigen</Button>
+      </Group>
       <Button variant="light" size="md" justify="space-between" onClick={() => onChoose(null)} rightSection={count(plan.enquiries.length)}>
         Alle Besichtigungen
       </Button>

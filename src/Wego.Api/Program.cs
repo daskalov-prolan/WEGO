@@ -155,6 +155,7 @@ app.MapCalendarNoteEndpoints();
 app.MapMyEndpoints();
 app.MapLocationEndpoints();
 app.MapChangeEndpoints();
+app.MapMeetingEndpoints();
 
 app.Run();
 

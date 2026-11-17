@@ -242,6 +242,10 @@ public static class VisitEndpoints
                     : e.Activity is { } a && labels.TryGetValue(a, out var label) ? label : "Eintrag",
                 e.StartTime, e.EndTime))
             .ToList();
+        // The meetings of every week (e.g. the Bauberatung) are in the way as well.
+        busy.AddRange((await MeetingEndpoints.OccurrencesAsync(db, today, until, employeeId))
+            .Select(o => new BusyDto(o.Date, o.Title, o.StartTime, o.EndTime)));
+        busy = busy.OrderBy(b => b.Date).ThenBy(b => b.From).ToList();
 
         var calls = (await OfferEndpoints.CallsAsync(db, open.Select(s => s.Id).ToList())).ToDictionary(c => c.SiteId);
         var enquiries = open.OrderBy(s => s.RequestedOn ?? DateOnly.MaxValue).ThenBy(s => s.Id)

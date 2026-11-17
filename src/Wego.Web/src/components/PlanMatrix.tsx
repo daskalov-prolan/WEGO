@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
-import type { CalendarNote, Entry, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import type { CalendarNote, Entry, MeetingWeek, NamedItem, PlanEmployee, SchoolHoliday, Site } from '../api/types'
+import { MeetingChip } from './MeetingDialogs'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
 import { formatDateLong, HALF_DAYS, isoWeek, MONTHS } from '../lib/dates'
@@ -24,6 +25,10 @@ export interface MatrixProps {
   onNoteMenu?: (note: CalendarNote, at: { x: number; y: number }) => void
   /** Planners: a click on a note opens it to change it. */
   onOpenNote?: (note: CalendarNote) => void
+  /** The weeks of meetings (e.g. the Bauberatung) of an employee on a day. */
+  meetingsOf?: (employeeId: number, date: string) => MeetingWeek[]
+  /** A click on a meeting opens that week. */
+  onOpenMeeting?: (week: MeetingWeek) => void
   days: Day[]
   employees: PlanEmployee[]
   entriesOf: (employeeId: number, date: string) => Entry[]
@@ -458,6 +463,7 @@ function liveSpan(days: Day[], live: { from: string; to: string } | undefined) {
 // No entries, no notes: one array for all such fields, so that they count as unchanged (see EmployeeCell).
 const NO_ENTRIES: Entry[] = []
 const NO_NOTES: CalendarNote[] = []
+const NO_MEETINGS: MeetingWeek[] = []
 
 type Handler = (event: unknown) => void
 
@@ -485,6 +491,8 @@ interface EmployeeCellProps {
   dayIndex: number
   entries: Entry[]
   notes: CalendarNote[]
+  meetings: MeetingWeek[]
+  opensMeetings: boolean
   holiday: SchoolHoliday | undefined
   today: string
   selected: boolean
@@ -508,7 +516,7 @@ interface EmployeeCellProps {
  * that paging and wiping (and every change elsewhere in the plan) do not draw all the fields again.
  */
 const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
-  const { context, employee, employeeIndex, day, dayIndex, entries, notes } = cell
+  const { context, employee, employeeIndex, day, dayIndex, entries, notes, meetings } = cell
   const now = () => context.current!
   const props = () => now().props
   const first = entries[0]
@@ -621,6 +629,15 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
             draggable={cell.draggable}
           />
         )}
+        {/* The meetings of the week (e.g. the Bauberatung), below the work of the day. */}
+        {meetings.length > 0 && (
+          <span className="cell-meetings">
+            {meetings.map((week) => (
+              <MeetingChip key={`${week.meetingId}|${week.originalDate}`} week={week} employeeId={employee.id}
+                onOpen={cell.opensMeetings ? (w) => props().onOpenMeeting?.(w) : undefined} />
+            ))}
+          </span>
+        )}
         {notes.length > 0 && (
           <CellNotes
             notes={notes}
@@ -685,6 +702,7 @@ export function TimelineMatrix(props: MatrixProps) {
             const listed = props.showsFree === false && all.some(isFree) ? all.filter((entry) => !isFree(entry)) : all
             const entries = listed.length > 0 ? listed : NO_ENTRIES
             const noted = props.notesOf?.(employee.id, day.iso) ?? NO_NOTES
+            const meeting = props.meetingsOf?.(employee.id, day.iso) ?? NO_MEETINGS
             return (
               <EmployeeCell
                 key={day.iso}
@@ -695,6 +713,8 @@ export function TimelineMatrix(props: MatrixProps) {
                 dayIndex={liveStart + index}
                 entries={entries}
                 notes={noted.length > 0 ? noted : NO_NOTES}
+                meetings={meeting.length > 0 ? meeting : NO_MEETINGS}
+                opensMeetings={!!props.onOpenMeeting}
                 holiday={holidayByDate.get(day.iso)}
                 today={today}
                 selected={selected.has(cellKey(employee.id, day.iso))}

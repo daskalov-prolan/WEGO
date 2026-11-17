@@ -29,6 +29,8 @@ import { emptySite, toSiteInput } from '../lib/sites'
 import { isVisit, VISIT } from '../lib/visitGroup'
 import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
+import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
+import type { MeetingWeek } from '../api/types'
 import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
@@ -423,7 +425,27 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     )
   const dropNote = (id: number) =>
     setPlan((current) => current && { ...current, notes: (current.notes ?? []).filter((note) => note.id !== id) })
+  // The meetings of every week (e.g. the Bauberatung), in the fields of their participants.
+  const meetingsByCell = useMemo(() => {
+    const result = new Map<string, MeetingWeek[]>()
+    for (const week of plan?.meetings ?? [])
+      for (const id of week.employeeIds) {
+        const key = cellKey(id, week.date)
+        result.set(key, [...(result.get(key) ?? []), week])
+      }
+    return result
+  }, [plan])
+  const [meetingWeek, setMeetingWeek] = useState<MeetingWeek | null>(null)
+  const [meetingsOpen, setMeetingsOpen] = useState(false)
+  // For a planner of group G: how many asked to be let off a week (they decide).
+  const meetingRequests = user?.role === 'PlanerG' ? (plan?.meetings ?? []).reduce((n, week) => n + week.requested.length, 0) : 0
+  const people = useMemo(
+    () => [...(plan?.employees ?? []), ...(plan?.planners ?? [])].map((e) => ({ id: e.id, name: e.name })),
+    [plan],
+  )
   const noteProps = {
+    meetingsOf: (employeeId: number, date: string) => meetingsByCell.get(cellKey(employeeId, date)) ?? [],
+    onOpenMeeting: (week: MeetingWeek) => setMeetingWeek(week),
     notesOf: (employeeId: number, date: string) => notesByCell.get(cellKey(employeeId, date)) ?? [],
     onNoteMenu: canEdit ? (note: CalendarNote, at: { x: number; y: number }) => setNoteMenu({ note, ...at }) : undefined,
     // A tap on a note opens it: to change it, or else to read it.
@@ -1662,6 +1684,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           {/* The search right after the activities. */}
           <div className="plan-search">{search}</div>
+          {/* Meetings every week (e.g. the Bauberatung); for Planer G with the number of requests to be let off. */}
+          {canEdit && (
+            <Button size="sm" variant="default" className="meetings-button" onClick={() => setMeetingsOpen(true)}
+              rightSection={meetingRequests > 0 ? <span className="visit-count">{meetingRequests}</span> : undefined}>
+              ⟳ Wiederholungstermine
+            </Button>
+          )}
         </div>
         {canEdit && perspective === 'sites' && !isPhone && phaseEmployees.length > 0 && (
           <div className="employee-palette" role="group" aria-label="Mitarbeiter zum Einplanen">
@@ -1972,6 +2001,14 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             notifications.show({ message: 'Anfrage gespeichert.', color: 'green' })
           }}
         />
+      )}
+      {meetingsOpen && (
+        <MeetingsDialog people={people} decides={user?.role === 'PlanerG'} onClose={() => setMeetingsOpen(false)}
+          onChanged={() => api.plan(year).then(setPlan, fail)} />
+      )}
+      {meetingWeek && (
+        <MeetingWeekDialog week={meetingWeek} people={people} me={user?.id ?? 0} plans={canEdit} decides={user?.role === 'PlanerG'}
+          onClose={() => setMeetingWeek(null)} onChanged={() => api.plan(year).then(setPlan, fail)} />
       )}
       {visitsOf !== null && (
         <VisitPlanner employeeId={visitsOf.employeeId} date={visitsOf.date} onClose={() => setVisitsOf(null)} onChanged={() => api.plan(year).then(setPlan, fail)} />
