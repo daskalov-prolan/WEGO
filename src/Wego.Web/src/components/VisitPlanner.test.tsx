@@ -164,4 +164,12 @@ describe('VisitPlanner', () => {
       expect(posted).toContainEqual({ url: '/api/visits', body: { employeeId: 4, siteId: 7, date: '2026-11-20', start: '11:00' } }),
     )
   })
+  it('shows all customers on the map from the first page, and goes back there', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<VisitPlanner onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Auf Karte anzeigen' }))
+    expect(screen.getByText('offen (3)')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '‹ zurück' }))
+    expect(screen.getByText('Geplante Besichtigungstage')).toBeInTheDocument()
+  })
 })

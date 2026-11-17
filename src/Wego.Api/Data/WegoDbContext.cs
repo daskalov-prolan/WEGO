@@ -13,6 +13,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
+    public DbSet<Meeting> Meetings => Set<Meeting>();
     public DbSet<ClosureVacation> ClosureVacations => Set<ClosureVacation>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
@@ -143,6 +144,34 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Title).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxTitle);
             e.Property(x => x.Text).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxText);
             e.HasIndex(x => new { x.EmployeeId, x.Date });
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Meeting>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(Endpoints.MeetingEndpoints.MaxTitle);
+        });
+
+        modelBuilder.Entity<MeetingParticipant>(e =>
+        {
+            e.HasKey(x => new { x.MeetingId, x.EmployeeId });
+            e.HasOne(x => x.Meeting).WithMany(x => x.Participants).HasForeignKey(x => x.MeetingId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MeetingChange>(e =>
+        {
+            e.HasIndex(x => new { x.MeetingId, x.Date }).IsUnique();
+            e.HasOne(x => x.Meeting).WithMany(x => x.Changes).HasForeignKey(x => x.MeetingId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MeetingAbsence>(e =>
+        {
+            e.Property(x => x.Reason).HasMaxLength(Endpoints.MeetingEndpoints.MaxReason);
+            e.Property(x => x.DecidedBy).HasMaxLength(200);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => new { x.MeetingId, x.Date, x.EmployeeId }).IsUnique();
+            e.HasOne(x => x.Meeting).WithMany(x => x.Absences).HasForeignKey(x => x.MeetingId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 

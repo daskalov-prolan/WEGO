@@ -1,4 +1,7 @@
 import type {
+  Meeting,
+  MeetingInput,
+  MeetingRequest,
   VisitPlan,
   Absence,
   AbsenceInput,
@@ -143,6 +146,20 @@ export const api = {
   teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
   /** Whether something changed: the version, the last changes with who made them, and who asks. */
+  meetings: () => request<Meeting[]>('GET', '/api/meetings'),
+  createMeeting: (input: MeetingInput) => request<Meeting>('POST', '/api/meetings', input),
+  updateMeeting: (id: number, input: MeetingInput) => request<Meeting>('PUT', `/api/meetings/${id}`, input),
+  deleteMeeting: (id: number) => request<void>('DELETE', `/api/meetings/${id}`),
+  /** One week otherwise: cancelled, or moved (new day and times). */
+  changeMeetingWeek: (id: number, change: { date: string; cancelled: boolean; newDate?: string; newStartTime?: string; newEndTime?: string }) =>
+    request<Meeting>('POST', `/api/meetings/${id}/changes`, change),
+  restoreMeetingWeek: (id: number, date: string) => request<Meeting>('DELETE', `/api/meetings/${id}/changes?date=${date}`),
+  /** A participant cannot come that week: he asks to be let off (a planner of group G decides). */
+  askMeetingOff: (id: number, date: string, reason: string | null) => request<Meeting>('POST', `/api/meetings/${id}/absences`, { date, reason }),
+  withdrawMeetingOff: (id: number, date: string) => request<Meeting>('DELETE', `/api/meetings/${id}/absences?date=${date}`),
+  meetingRequests: () => request<MeetingRequest[]>('GET', '/api/meetings/requests'),
+  decideMeetingOff: (id: number, date: string, employeeId: number, approve: boolean) =>
+    request<Meeting>('POST', `/api/meetings/${id}/absences/decide`, { date, employeeId, approve }),
   changes: () => request<{ version: number; recent: { version: number; byId: number; by: string | null }[]; you: number }>('GET', '/api/changes'),
   visits: (employeeId?: number) => request<VisitPlan>('GET', `/api/visits${employeeId ? `?employeeId=${employeeId}` : ''}`),
   setVisitDay: (employeeId: number, date: string) => request<VisitPlan>('POST', '/api/visits/days', { employeeId, date }),

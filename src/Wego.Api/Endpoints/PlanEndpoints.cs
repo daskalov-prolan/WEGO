@@ -29,7 +29,7 @@ public static class PlanEndpoints
     public record PlanDto(int Year, IReadOnlyList<PlanEmployeeDto> Employees, IReadOnlyList<EntryDto> Entries,
         IReadOnlyList<SchoolHolidayDto> SchoolHolidays, IReadOnlyList<SiteEndpoints.SiteDto> Sites,
         IReadOnlyList<PlanEmployeeDto> Planners, bool OfferPhase, IReadOnlyList<CalendarNoteEndpoints.CalendarNoteDto> Notes,
-        IReadOnlyList<BirthdayDto>? Birthdays = null);
+        IReadOnlyList<BirthdayDto>? Birthdays = null, IReadOnlyList<MeetingEndpoints.OccurrenceDto>? Meetings = null);
 
     /// <summary>The birthday of an employee, "MM-dd": of everybody active, planners as well, seen by everybody.</summary>
     public record BirthdayDto(int EmployeeId, string Name, string Birthday);
@@ -108,8 +108,11 @@ public static class PlanEndpoints
                 .Select(e => new BirthdayDto(e.Id, e.Name, EmployeeEndpoints.Birthday(e.BirthDate)!))
                 .ToList();
 
+            // The meetings of every week (e.g. the Bauberatung), in the plans of their participants.
+            var meetings = await MeetingEndpoints.OccurrencesAsync(db, from, to);
+
             return new PlanDto(year, employees, Sort(entries.Select(ToDto)), holidays, sites, planners, access.SeesOffers, notes,
-                birthdays);
+                birthdays, meetings);
         });
 
         // Replaces all entries of one employee on one day, so a split day is always saved as a whole.

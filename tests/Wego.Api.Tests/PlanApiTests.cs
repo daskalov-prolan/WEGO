@@ -7,6 +7,8 @@ using Wego.Api.Data;
 
 namespace Wego.Api.Tests;
 
+// One test database for all: the classes run one after the other.
+[Collection("Database")]
 public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory>
 {
     private const int Year = 2026;

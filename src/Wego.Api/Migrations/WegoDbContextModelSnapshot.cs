@@ -248,6 +248,131 @@ namespace Wego.Api.Migrations
                     b.ToTable("Employees");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.Meeting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Weekday")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Meetings");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.MeetingAbsence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MeetingId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("MeetingId", "Date", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("MeetingAbsence");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.MeetingChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Cancelled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("MeetingId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("NewDate")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly?>("NewEndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("NewStartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MeetingId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("MeetingChange");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.MeetingParticipant", b =>
+                {
+                    b.Property<int>("MeetingId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("MeetingId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("MeetingParticipant");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -599,6 +724,55 @@ namespace Wego.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.MeetingAbsence", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.Meeting", "Meeting")
+                        .WithMany("Absences")
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Meeting");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.MeetingChange", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Meeting", "Meeting")
+                        .WithMany("Changes")
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Meeting");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.MeetingParticipant", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.Meeting", "Meeting")
+                        .WithMany("Participants")
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Meeting");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
                     b.HasOne("Wego.Api.Data.ActivityType", null)
@@ -682,6 +856,15 @@ namespace Wego.Api.Migrations
             modelBuilder.Entity("Wego.Api.Data.Employee", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.Meeting", b =>
+                {
+                    b.Navigation("Absences");
+
+                    b.Navigation("Changes");
+
+                    b.Navigation("Participants");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.Site", b =>

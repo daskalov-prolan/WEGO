@@ -3778,3 +3778,130 @@ html.plan-full .shell-nav {
     zoom: 1.3;
   }
 }
+
+/* Meetings every week (e.g. the Bauberatung): grey cards with a ⟳, marked in orange while a participant asked to be
+   let off; in the month only the sign, in the year nothing. */
+.cell-meetings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.meeting-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  min-width: 0;
+  padding: 1px 6px;
+  border-left: 4px solid #5b6f77;
+  border-radius: 4px;
+  background: #e4e9eb;
+  color: #14232a;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.meeting-chip[data-clickable] {
+  cursor: pointer;
+}
+
+.meeting-chip.asked {
+  border: 1px dashed #e8590c;
+  border-left: 4px solid #e8590c;
+  background: #fff4e6;
+}
+
+.meeting-chip-icon {
+  flex: none;
+}
+
+.meeting-chip-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The time on a line of its own: the name has the room. */
+.meeting-chip-time {
+  flex: 1 0 100%;
+  font-weight: 400;
+  font-size: 0.68rem;
+}
+
+.timeline.zoom-month .meeting-chip {
+  justify-content: center;
+  padding: 0;
+}
+
+.timeline.zoom-month .meeting-chip-name,
+.timeline.zoom-month .meeting-chip-time,
+.timeline.zoom-year .cell-meetings {
+  display: none;
+}
+
+.my-entry.my-meeting {
+  position: relative;
+  border-left-color: #5b6f77;
+  background: #e4e9eb;
+  text-align: left;
+}
+
+.my-entry.my-meeting.asked {
+  border-left-color: #e8590c;
+  background: #fff4e6;
+}
+
+/* The list of the meetings, and the requests to be let off for Planer G. */
+.meeting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dde5e8;
+  border-left: 4px solid #5b6f77;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.meeting-row-title {
+  font-weight: 700;
+}
+
+.meeting-row-when {
+  color: var(--wego-teal);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.meeting-row-who {
+  color: #6b7a80;
+  font-size: 0.8rem;
+}
+
+.meeting-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #ffd8a8;
+  border-radius: 8px;
+  background: #fff4e6;
+}
+
+.meeting-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}

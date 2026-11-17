@@ -4,7 +4,9 @@ import { SiteName } from '../components/Chip'
 import { BirthdayIcon } from '../components/BirthdayIcon'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { CalendarNote, Entry, Plan, User } from '../api/types'
+import type { CalendarNote, Entry, MeetingWeek, Plan, User } from '../api/types'
+import { meetingTime, MeetingWeekDialog } from '../components/MeetingDialogs'
+import { canPlanRole } from '../lib/roles'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
@@ -98,6 +100,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       employees: unique(all.flatMap(([, p]) => p.employees)),
       planners: unique(all.flatMap(([, p]) => p.planners ?? [])),
       notes: unique(all.flatMap(([, p]) => p.notes ?? [])),
+      meetings: all.flatMap(([y, p]) => (p.meetings ?? []).filter((week) => week.date.startsWith(`${y}-`))),
     }
   }, [loaded, plans, year])
 
@@ -129,6 +132,17 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   }
 
   // The own calendar notes by day, as in the fields of the plan.
+  // The meetings of every week he takes part in (e.g. the Bauberatung).
+  const meetingsByDate = useMemo(() => {
+    const map = new Map<string, MeetingWeek[]>()
+    for (const week of plan?.meetings ?? []) {
+      if (!week.employeeIds.includes(user.id)) continue
+      map.set(week.date, [...(map.get(week.date) ?? []), week])
+    }
+    return map
+  }, [plan, user.id])
+  const [meetingWeek, setMeetingWeek] = useState<MeetingWeek | null>(null)
+
   const notesByDate = useMemo(() => {
     const map = new Map<string, CalendarNote[]>()
     for (const note of plan?.notes ?? []) {
@@ -364,6 +378,14 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       {visiting && (
         <VisitPlanner employeeId={user.id} onClose={() => setVisiting(false)} onChanged={() => setPlans(new Map())} />
       )}
+      {meetingWeek && plan && (
+        <MeetingWeekDialog week={meetingWeek} me={user.id} plans={canPlanRole(user.role)} decides={user.role === 'PlanerG'}
+          people={[...plan.employees, ...(plan.planners ?? [])].map((e) => ({ id: e.id, name: e.name }))}
+          onClose={() => setMeetingWeek(null)}
+          onChanged={() => {
+            for (const y of plans.keys()) api.plan(y).then((fresh) => setPlans((current) => new Map(current).set(y, fresh)), () => {})
+          }} />
+      )}
 
       <div ref={listRef}>
       {weeks.map((monday) => (
@@ -379,8 +401,9 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           const entries = withFreeHalf((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub')))
           const born = birthdays.get(day.iso.slice(5))
           const notes = notesByDate.get(day.iso) ?? []
+          const meetings = meetingsByDate.get(day.iso) ?? []
           // Empty weekends only take up space; today always shows, it is where the list begins.
-          if (day.isWeekend && entries.length === 0 && notes.length === 0 && day.iso !== today && !born) return null
+          if (day.isWeekend && entries.length === 0 && notes.length === 0 && meetings.length === 0 && day.iso !== today && !born) return null
 
           return (
             <Paper
@@ -433,13 +456,26 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                 </div>
               ))}
 
-              {entries.length === 0 && notes.length === 0 && (
+              {entries.length === 0 && notes.length === 0 && meetings.length === 0 && (
                 <Text size="sm" c={publicHoliday ? 'green.8' : 'dimmed'} fw={publicHoliday ? 700 : undefined}>
                   {publicHoliday ? 'Gesetzlicher Feiertag' : 'nicht eingeplant'}
                 </Text>
               )}
 
               <Stack gap="xs">
+                {/* The meetings of the week: a tap opens it (a craftsman asks to be let off there). */}
+                {meetings.map((week) => {
+                  const asked = week.requested.includes(user.id)
+                  return (
+                    <UnstyledButton key={`${week.meetingId}|${week.originalDate}`} className={asked ? 'my-entry my-meeting asked' : 'my-entry my-meeting'}
+                      onClick={() => setMeetingWeek(week)} aria-label={`${week.title}: öffnen`}>
+                      <span className="my-entry-more" aria-hidden>›</span>
+                      <span className="when">{meetingTime(week.startTime, week.endTime)}</span>
+                      <span className="where">{asked ? '? ' : '⟳ '}{week.title}</span>
+                      {asked && <span className="what">Absage beantragt</span>}
+                    </UnstyledButton>
+                  )
+                })}
                 {entries.map((entry, index) => {
                   if (isVisit(entry)) {
                     if (index !== entries.findIndex(isVisit)) return null

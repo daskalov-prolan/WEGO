@@ -358,6 +358,75 @@ public class CalendarNote
 }
 
 /// <summary>
+/// A meeting that comes back every week on the same day and time (e.g. the Bauberatung on Wednesdays 9:00-10:30),
+/// with its participants. It is not kept as entries: each week it is in the plans of its participants, but not on a
+/// public holiday, in a company closure, or for a participant on vacation or sick.
+/// </summary>
+public class Meeting
+{
+    public int Id { get; set; }
+    public required string Title { get; set; }
+    /// <summary>1 Monday to 7 Sunday.</summary>
+    public int Weekday { get; set; }
+    public TimeOnly StartTime { get; set; }
+    public TimeOnly EndTime { get; set; }
+    public DateOnly StartsOn { get; set; }
+    /// <summary>The last day it may come on; null while it goes on.</summary>
+    public DateOnly? EndsOn { get; set; }
+    public List<MeetingParticipant> Participants { get; set; } = [];
+    public List<MeetingChange> Changes { get; set; } = [];
+    public List<MeetingAbsence> Absences { get; set; } = [];
+}
+
+public class MeetingParticipant
+{
+    public int MeetingId { get; set; }
+    public Meeting Meeting { get; set; } = null!;
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+}
+
+public enum AbsenceStatus
+{
+    Beantragt,
+    Freigegeben,
+    Abgelehnt,
+}
+
+/// <summary>
+/// A craftsman cannot take part in one week of a meeting: he asks, a planner of group G lets him off (then the week
+/// is not in his plan) or not. Planners cancel or move a week themselves.
+/// </summary>
+public class MeetingAbsence
+{
+    public int Id { get; set; }
+    public int MeetingId { get; set; }
+    public Meeting Meeting { get; set; } = null!;
+    /// <summary>The day of the series (as in <see cref="MeetingChange.Date"/>).</summary>
+    public DateOnly Date { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+    public string? Reason { get; set; }
+    public AbsenceStatus Status { get; set; }
+    public DateTime RequestedAt { get; set; }
+    public string? DecidedBy { get; set; }
+}
+
+/// <summary>One week of a meeting otherwise: cancelled, or on another day or at another time.</summary>
+public class MeetingChange
+{
+    public int Id { get; set; }
+    public int MeetingId { get; set; }
+    public Meeting Meeting { get; set; } = null!;
+    /// <summary>The day it would have been on.</summary>
+    public DateOnly Date { get; set; }
+    public bool Cancelled { get; set; }
+    public DateOnly? NewDate { get; set; }
+    public TimeOnly? NewStartTime { get; set; }
+    public TimeOnly? NewEndTime { get; set; }
+}
+
+/// <summary>
 /// The vacation of a company closure was entered for this craftsman (once: when a planner takes a day of it
 /// back, it does not come again).
 /// </summary>

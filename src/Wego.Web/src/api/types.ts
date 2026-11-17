@@ -394,6 +394,61 @@ export interface Plan {
   notes?: CalendarNote[]
   /** The birthdays of everybody active, planners as well ("MM-DD"). */
   birthdays?: { employeeId: number; name: string; birthday: string }[]
+  /** The weeks of the meetings that come back every week (e.g. the Bauberatung). */
+  meetings?: MeetingWeek[]
+}
+
+/**
+ * One week of a meeting: date the day it is on, originalDate the day of the series (another when moved);
+ * employeeIds those there that day, requested those of them who asked to be let off.
+ */
+export interface MeetingWeek {
+  meetingId: number
+  title: string
+  date: string
+  originalDate: string
+  startTime: string
+  endTime: string
+  employeeIds: number[]
+  moved: boolean
+  requested: number[]
+  /** The names of the participants by id (also for a craftsman who does not see the planners). */
+  names: Record<number, string>
+}
+
+/** A meeting every week; weekday 1 Monday to 7 Sunday. */
+export interface Meeting {
+  id: number
+  title: string
+  weekday: number
+  startTime: string
+  endTime: string
+  startsOn: string
+  endsOn: string | null
+  participantIds: number[]
+  changes: { date: string; cancelled: boolean; newDate: string | null; newStartTime: string | null; newEndTime: string | null }[]
+  absences: { date: string; employeeId: number; reason: string | null; status: 'Beantragt' | 'Freigegeben' | 'Abgelehnt'; requestedAt: string }[]
+}
+
+export interface MeetingInput {
+  title: string
+  weekday: number
+  startTime: string
+  endTime: string
+  startsOn: string
+  endsOn: string | null
+  participantIds: number[]
+}
+
+/** A request to be let off one week, for a planner of group G. */
+export interface MeetingRequest {
+  meetingId: number
+  title: string
+  date: string
+  employeeId: number
+  employee: string
+  reason: string | null
+  requestedAt: string
 }
 
 export interface DayEntryInput {
