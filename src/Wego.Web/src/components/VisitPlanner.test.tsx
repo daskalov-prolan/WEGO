@@ -135,4 +135,33 @@ describe('VisitPlanner', () => {
     await user.click(screen.getByRole('button', { name: /zurück/ }))
     expect(screen.getByText('Was möchten Sie planen?')).toBeInTheDocument()
   })
+
+  it('closes step by step: from the map to the list, to the first page, then the window', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const closed = vi.fn()
+    renderWithProviders(<VisitPlanner onClose={closed} />)
+    await user.click(await screen.findByRole('button', { name: /Besichtigungen Karow/ }))
+    await user.click(screen.getByRole('button', { name: 'Auf Karte anzeigen' }))
+    await user.keyboard('{Escape}')
+    expect(screen.getByText('Frau Alt')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.getByText('Was möchten Sie planen?')).toBeInTheDocument()
+    expect(closed).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(closed).toHaveBeenCalled()
+  })
+  it('opens an appointment of a day to change it, not in the way of itself', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<VisitPlanner onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: /Fr 20\.11\.\s*Stefan Buder\s*1 Kunde/ }))
+    await user.click(screen.getByRole('button', { name: /09:00\s*Herr Fest/ }))
+    expect(screen.getByLabelText('Uhrzeit')).toHaveValue('09:00')
+    expect(screen.queryByText(/Achtung/)).not.toBeInTheDocument()
+    await user.clear(screen.getByLabelText('Uhrzeit'))
+    await user.type(screen.getByLabelText('Uhrzeit'), '11:00')
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    await waitFor(() =>
+      expect(posted).toContainEqual({ url: '/api/visits', body: { employeeId: 4, siteId: 7, date: '2026-11-20', start: '11:00' } }),
+    )
+  })
 })

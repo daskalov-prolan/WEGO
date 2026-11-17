@@ -3524,6 +3524,11 @@ html.plan-full .shell-nav {
   font-weight: 700;
 }
 
+/* Who visits: on the first page between the choice and the days planned. */
+.visit-who {
+  margin-top: 12px;
+}
+
 /* Back: plainly to be seen. */
 .visit-back {
   border: 2px solid var(--wego-teal);
@@ -3534,7 +3539,7 @@ html.plan-full .shell-nav {
 /* The days of visits of everybody, by week; a tap opens the customers of a day. */
 .visit-week {
   margin: 8px 0 4px;
-  color: #6b7a80;
+  color: #d71f27;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -3606,6 +3611,27 @@ html.plan-full .shell-nav {
   padding: 8px 12px 10px 96px;
   border-top: 1px solid #dde5e8;
   background: #f4f8f9;
+}
+
+/* A customer of the day: a tap opens the appointment to change it. */
+.visit-day-visit {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.visit-day-visit:disabled {
+  cursor: default;
+}
+
+.visit-day-visit:hover:not(:disabled) .visit-time {
+  text-decoration: underline;
 }
 
 .visit-day-visits .visit-time {
