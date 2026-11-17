@@ -24,7 +24,20 @@ public static class CalendarEndpoints
     /// <summary>Calendars read only from these hosts (and only by https): no other address is asked by the server.</summary>
     private static readonly string[] Hosts = ["icloud.com", "calendar.google.com", "outlook.office365.com", "outlook.live.com"];
 
-    private static readonly TimeZoneInfo Berlin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+    private static readonly TimeZoneInfo Berlin = BerlinZone();
+
+    /// <summary>Berlin; without the time zones on the server its own zone (the app starts all the same).</summary>
+    private static TimeZoneInfo BerlinZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.Local;
+        }
+    }
 
     public record MyCalendarDto(string? Link, string? ExternalUrl, DateTime? SyncedAt, string? Error, int Busy);
     public record ExternalInput(string? Url);
