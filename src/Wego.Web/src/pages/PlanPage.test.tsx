@@ -600,6 +600,34 @@ describe('PlanPage', () => {
     expect(batches()[2]).toEqual(batches()[0])
   })
 
+  it('takes back several changes one after the other, also when the plan was opened again', async () => {
+    const user = userEvent.setup()
+    const first = renderWithProviders(<PlanPage year={2026} canEdit canAbsence />)
+    await screen.findByText(/KW 10/)
+    const batches = () => fetchMock.mock.calls.filter(([url]) => url === '/api/plan/batch').map(([, init]) => JSON.parse(String(init.body)))
+    // Two changes: one day emptied, then another.
+    for (const [day, count] of [[/Bernd, Mittwoch, 04.03.2026/, 1], [/Bernd, Donnerstag, 05.03.2026/, 2]] as const) {
+      await user.keyboard('{Control>}')
+      await user.click(cell(day))
+      await user.keyboard('{/Control}')
+      await user.click(screen.getByRole('button', { name: 'Leeren' }))
+      await waitFor(() => expect(batches()).toHaveLength(count))
+    }
+
+    // The plan opened anew (e.g. the other phase and back): both can still be taken back, the newest first.
+    first.unmount()
+    renderWithProviders(<PlanPage year={2026} canEdit canAbsence />)
+    await screen.findByText(/KW 10/)
+    await user.click(screen.getByRole('button', { name: /Rückgängig/ }))
+    await waitFor(() => expect(batches()).toHaveLength(3))
+    expect(batches()[2][0].date).toBe('2026-03-05')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rückgängig/ })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: /Rückgängig/ }))
+    await waitFor(() => expect(batches()).toHaveLength(4))
+    expect(batches()[3][0].date).toBe('2026-03-04')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rückgängig/ })).toBeDisabled())
+  })
+
   it('splits a day into two halves of four hours, with times in full and half hours only', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit />)
