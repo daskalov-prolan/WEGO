@@ -137,6 +137,7 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseChangeVersion();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuthEndpoints();
@@ -153,6 +154,7 @@ app.MapPostalCodeEndpoints();
 app.MapCalendarNoteEndpoints();
 app.MapMyEndpoints();
 app.MapLocationEndpoints();
+app.MapChangeEndpoints();
 
 app.Run();
 

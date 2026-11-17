@@ -6,7 +6,7 @@ namespace Wego.Api.Endpoints;
 
 /// <summary>
 /// Planning the visits (Besichtigungen) of the enquiries, by those who go out to them (Stefan, Tsonyo) or a planner
-/// for them: one customer at a time on any day, or a tour through a region on a day set aside for visits. A day of
+/// for them: customer by customer, all or those of a region, on any day; they set their tours themselves. A day of
 /// visits is set aside by the planners in the calendar of the offer phase: an entry with the activity Besichtigung
 /// and no site over the day; each customer is an hour on site, an entry of the step Besichtigung of the enquiry.
 /// </summary>
@@ -14,13 +14,17 @@ public static class VisitEndpoints
 {
     public const string Activity = "Besichtigung";
 
-    /// <summary>The regions of the planners: their enquiries are visited in one tour.</summary>
+    /// <summary>The regions of the planners: their enquiries are listed (and shown on the map) together.</summary>
     public static readonly string[] Regions = ["Karow", "Reinickendorf"];
 
-    /// <summary>The company: where a tour starts (Alt-Karow 53, 13125 Berlin).</summary>
-    public static readonly PlaceDto Company = new("Betrieb", "Alt-Karow 53, 13125 Berlin", 52.6157, 13.4790);
+    /// <summary>The branches of WEGO, as stars on the map of the visits.</summary>
+    public static readonly PlaceDto[] Branches =
+    [
+        new("WEGO Karow", "Alt-Karow 53, 13125 Berlin", 52.6114701, 13.4824105),
+        new("WEGO Waidmannslust", "Oraniendamm 14, 13469 Berlin", 52.6085806, 13.3229231),
+    ];
 
-    /// <summary>A day of visits: from leaving the company until the last customer is done.</summary>
+    /// <summary>A day set aside for visits: the working day.</summary>
     public static readonly TimeOnly DayFrom = new(7, 30), DayTo = new(16, 0);
 
     /// <summary>An hour on site.</summary>
@@ -30,14 +34,15 @@ public static class VisitEndpoints
 
     public record VisitorDto(int Id, string Name);
 
+    /// <summary>A customer agreed; <paramref name="Region"/> that of the planner of the enquiry.</summary>
     public record VisitDto(int EntryId, int SiteId, string Name, string? Address, string? Phone, double? Latitude, double? Longitude,
-        TimeOnly From, TimeOnly To);
+        TimeOnly From, TimeOnly To, string? Region = null);
 
     /// <summary>
-    /// A day with visits: set aside for them by the planners (<paramref name="Reserved"/>), or with a customer planned
-    /// on its own; with the customers planned on it so far.
+    /// A day with visits of one who goes out: set aside for them by the planners (<paramref name="Reserved"/>), or
+    /// with a customer planned on its own; with the customers planned on it so far.
     /// </summary>
-    public record DayDto(DateOnly Date, IReadOnlyList<VisitDto> Visits, bool Reserved = true);
+    public record DayDto(DateOnly Date, IReadOnlyList<VisitDto> Visits, bool Reserved = true, int EmployeeId = 0, string Employee = "");
 
     /// <summary>An enquiry without a visit yet; <paramref name="Region"/> that of its planner.</summary>
     public record EnquiryDto(int SiteId, string Name, string? Address, string? Phone, IReadOnlyList<string> Scope,
@@ -49,9 +54,11 @@ public static class VisitEndpoints
 
     /// <summary>
     /// <paramref name="Visitors"/>: whom a planner may plan for (empty for a craftsman, who plans his own).
+    /// <paramref name="Days"/>: the days of visits of all who go out, from today on.
+    /// <paramref name="Busy"/>: the rest of the plan of the one chosen (<paramref name="EmployeeId"/>).
     /// <paramref name="Pending"/>: enquiries whose address is not on the map yet (looked up a few at a time).
     /// </summary>
-    public record VisitPlanDto(int EmployeeId, PlaceDto Company, IReadOnlyList<VisitorDto> Visitors, IReadOnlyList<string> Regions,
+    public record VisitPlanDto(int EmployeeId, IReadOnlyList<PlaceDto> Branches, IReadOnlyList<VisitorDto> Visitors, IReadOnlyList<string> Regions,
         IReadOnlyList<DayDto> Days, IReadOnlyList<EnquiryDto> Enquiries, IReadOnlyList<BusyDto> Busy, int Pending,
         IReadOnlyList<string> DeclineReasons);
 
@@ -198,6 +205,10 @@ public static class VisitEndpoints
         var entries = await db.PlanEntries.Include(e => e.Site)
             .Where(e => e.EmployeeId == employeeId && e.Date >= today && e.Date <= until)
             .OrderBy(e => e.Date).ThenBy(e => e.StartTime).ToListAsync();
+        // The days of visits of everybody who goes out.
+        var visitEntries = await db.PlanEntries.Include(e => e.Site).ThenInclude(s => s!.ResponsiblePlanner).Include(e => e.Employee)
+            .Where(e => e.Activity == Activity && e.Date >= today && e.Date <= until)
+            .OrderBy(e => e.Date).ThenBy(e => e.StartTime).ToListAsync();
 
         // The enquiries without a visit yet; their addresses looked up on the map, a few at a time.
         var offers = (await db.Sites.Include(s => s.ResponsiblePlanner).Where(s => s.Status == SiteStatus.Angebot).ToListAsync())
@@ -205,17 +216,19 @@ public static class VisitEndpoints
         var visited = (await db.PlanEntries.Where(e => e.Activity == Activity && e.SiteId != null).Select(e => e.SiteId!.Value).Distinct().ToListAsync())
             .ToHashSet();
         var open = offers.Where(s => !visited.Contains(s.Id)).ToList();
-        var lookUps = open.Concat(entries.Where(e => e.Site is not null).Select(e => e.Site!)).Where(LocationEndpoints.NeedsLookUp)
+        var lookUps = open.Concat(visitEntries.Where(e => e.Site is not null).Select(e => e.Site!)).Where(LocationEndpoints.NeedsLookUp)
             .Distinct().Take(LocationEndpoints.LookUpsPerRequest).ToList();
         foreach (var site in lookUps)
             if (!await LocationEndpoints.LookUpAsync(site, geocoder)) break;
         if (lookUps.Count > 0) await db.SaveChangesAsync();
 
         VisitDto Visit(PlanEntry v) => new(v.Id, v.Site!.Id, Customer(v.Site), Address(v.Site), v.Site.ClientPhone,
-            v.Site.Latitude, v.Site.Longitude, v.StartTime ?? DayFrom, v.EndTime ?? (v.StartTime ?? DayFrom).Add(OnSite));
-        var days = entries.Where(e => e.Activity == Activity).Select(e => e.Date).Distinct()
-            .Select(date => new DayDto(date, entries.Where(e => e.Date == date && e.Activity == Activity && e.Site is not null)
-                .Select(Visit).ToList(), entries.Any(e => e.Date == date && e.Activity == Activity && e.SiteId is null)))
+            v.Site.Latitude, v.Site.Longitude, v.StartTime ?? DayFrom, v.EndTime ?? (v.StartTime ?? DayFrom).Add(OnSite),
+            v.Site.ResponsiblePlanner?.Region);
+        var days = visitEntries.GroupBy(e => (e.Date, e.EmployeeId))
+            .Select(day => new DayDto(day.Key.Date, day.Where(e => e.Site is not null).Select(Visit).ToList(),
+                day.Any(e => e.SiteId is null), day.Key.EmployeeId, day.First().Employee?.Name ?? ""))
+            .OrderBy(d => d.Date).ThenBy(d => d.Employee)
             .ToList();
 
         // The rest of the plan, to warn of an overlap: time kept free and the day of visits itself hold nothing.
@@ -235,7 +248,7 @@ public static class VisitEndpoints
                 s.ResponsiblePlanner?.Name, s.ResponsiblePlanner?.Region, s.Latitude, s.Longitude, calls.GetValueOrDefault(s.Id),
                 OfferEndpoints.ReportOf(s)))
             .ToList();
-        return new VisitPlanDto(employeeId, Company, visitors, Regions, days, enquiries, busy, open.Count(LocationEndpoints.NeedsLookUp),
+        return new VisitPlanDto(employeeId, Branches, visitors, Regions, days, enquiries, busy, open.Count(LocationEndpoints.NeedsLookUp),
             OfferEndpoints.ReasonsAt(Activity));
     }
 }

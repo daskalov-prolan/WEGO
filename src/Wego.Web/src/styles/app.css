@@ -3488,118 +3488,6 @@ html.plan-full .shell-nav {
   gap: 3px;
 }
 
-/* Planning the visits: customers and days as rows to tap, the best day marked in green. */
-.visit-pick {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #d5dee2;
-  border-radius: 8px;
-  background: #fff;
-  text-align: left;
-}
-
-.visit-pick:hover:not(:disabled) {
-  border-color: var(--wego-aqua);
-  background: var(--wego-hover);
-}
-
-.visit-pick:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.visit-pick.best {
-  border: 2px solid var(--wego-green);
-}
-
-.visit-enquiry {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.visit-extra {
-  color: var(--wego-teal);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.visit-detail {
-  color: #4f6268;
-  font-size: 0.85rem;
-}
-
-.visit-fit {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  font-size: 0.85rem;
-}
-
-.visit-fit strong {
-  font-size: 1rem;
-}
-
-.visit-other,
-.visit-confirm,
-.visit-day {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--surface-muted);
-}
-
-.visit-tour {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-@media (max-width: 700px) {
-  .visit-tour {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.visit-route {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--surface-muted);
-}
-
-/* The day of visits opened from its card in the plan. */
-.visit-day.focus {
-  outline: 2px solid var(--mantine-color-blue-5);
-  outline-offset: -2px;
-}
-
-/* A customer on the spot: call and enter, beside the customer; below it on the phone. */
-.visit-spot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  cursor: default;
-}
-@media (max-width: 700px) {
-  .visit-spot {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .visit-spot-actions > * {
-    flex: 1;
-  }
-  .visit-tabs .mantine-SegmentedControl-label {
-    padding-inline: 4px;
-    font-size: 0.8rem;
-  }
-}
-
 /* The step of the offer in front of the customer: a small sign in the colour of the text. */
 .step-mark {
   display: inline-flex;
@@ -3614,38 +3502,209 @@ html.plan-full .shell-nav {
   margin: 2px 0;
 }
 
-/* The planning of visits: each customer a card, the lunch break as a band. */
+/* The planning of visits: each customer a card. */
 .visit-customer {
   border: 1px solid #d9e3e6;
   border-radius: 8px;
   padding: 8px 10px;
   background: #fff;
 }
-.visit-row {
+
+/* How many customers wait, in a red circle on the buttons of the first page. */
+.visit-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 13px;
+  background: #d71f27;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Back: plainly to be seen. */
+.visit-back {
+  border: 2px solid var(--wego-teal);
+  color: var(--wego-teal);
+  font-weight: 700;
+}
+
+/* The days of visits of everybody, by week; a tap opens the customers of a day. */
+.visit-week {
+  margin: 8px 0 4px;
+  color: #6b7a80;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.visit-day-card {
+  overflow: hidden;
+  border: 1px solid #dde5e8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.visit-day-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+}
+
+.visit-day-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.visit-day-toggle:disabled {
+  cursor: default;
+}
+
+.visit-day-date {
+  min-width: 74px;
+  font-weight: 700;
+}
+
+.visit-day-who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #3d5054;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visit-day-count {
+  color: var(--wego-teal);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.visit-day-count.free {
+  color: #2b8a3e;
+}
+
+.visit-day-visits {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding: 8px 12px 10px 96px;
+  border-top: 1px solid #dde5e8;
+  background: #f4f8f9;
 }
-.visit-row.agreed,
-.visit-row.gone {
-  padding: 6px 10px;
+
+.visit-day-visits .visit-time {
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .visit-day-visits {
+    padding-left: 12px;
+  }
+}
+
+/* The map of the visits: over the rest of the window. */
+.visit-map {
+  height: max(360px, calc(100dvh - 230px));
   border-radius: 8px;
-  background: #e7f5ec;
 }
-.visit-row.gone {
-  background: #f1f3f5;
+
+/* On a desktop in a window, with its margins. */
+@media (min-width: 721px) {
+  .visit-map {
+    height: max(360px, calc(100dvh - 300px));
+  }
 }
-.visit-lunch {
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: #fff4d6;
-  font-size: 13px;
+
+.visit-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.85rem;
+}
+
+.visit-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  vertical-align: -1px;
+}
+
+.visit-legend-star,
+.visit-branch {
+  color: #f5c400;
+  text-shadow: 0 0 2px #5c4a00, 0 0 1px #5c4a00;
+}
+
+.visit-legend-star {
+  margin-right: 4px;
+}
+
+.visit-branch {
+  font-size: 26px;
+  line-height: 26px;
+  text-align: center;
+}
+
+.leaflet-tooltip.visit-tag {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip.visit-tag::before {
+  display: none;
+}
+
+.leaflet-tooltip.visit-tag.open {
+  background: #d71f27;
+}
+
+.leaflet-tooltip.visit-tag.agreed {
+  background: var(--wego-teal);
+}
+
+.visit-popup-waiting {
+  color: #d71f27;
   font-weight: 600;
 }
-.visit-agreed {
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #e7f5ec;
+
+.visit-popup-plan {
+  display: block;
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--wego-teal);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* A no reported by who visits, on the card of the enquiry: for a planner to confirm. */

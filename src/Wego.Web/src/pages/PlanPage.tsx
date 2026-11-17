@@ -29,6 +29,7 @@ import { emptySite, toSiteInput } from '../lib/sites'
 import { isVisit, VISIT } from '../lib/visitGroup'
 import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
+import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
 import { AssignSite } from '../components/AssignSite'
 import {
@@ -380,6 +381,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   useEffect(() => {
     api.plan(year).then(setPlan, (e) => setError(messageOf(e)))
   }, [year])
+  // Changed by another planner: loaded anew in the background, where the plan stands.
+  useLiveChanges(() => api.plan(year).then(setPlan, () => {}))
 
   // The way back is used once; opening the plan anew starts at today again.
   useEffect(() => {

@@ -80,8 +80,8 @@ public class Employee
     public List<string> AdditionalActivities { get; set; } = [];
 
     /// <summary>
-    /// Planners: the region of their enquiries (see VisitEndpoints.Regions), for planning the visits there in one
-    /// tour; null for no region.
+    /// Planners: the region of their enquiries (see VisitEndpoints.Regions), for listing the visits there (and showing
+    /// them on the map) together; null for no region.
     /// </summary>
     public string? Region { get; set; }
 

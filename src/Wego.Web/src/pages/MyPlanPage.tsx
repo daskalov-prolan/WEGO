@@ -17,6 +17,7 @@ import { useWindowEvent } from '@mantine/hooks'
 import { COMPANY_ADDRESS, customers, isVisit, VISIT, visitGroup, visitsAsOne, visitTime } from '../lib/visitGroup'
 import { mapsLink } from '../lib/visitRoute'
 import { VisitPlanner } from '../components/VisitPlanner'
+import { useLiveChanges } from '../lib/useLiveChanges'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
 const FIRST_YEAR = 2026
@@ -75,6 +76,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       )
     }
   }, [lastYear, user.id, plans])
+
+  // Changed by a planner: the years loaded anew, the list staying where it is.
+  useLiveChanges(() => {
+    for (const y of plans.keys()) api.plan(y).then((fresh) => setPlans((current) => new Map(current).set(y, fresh)), () => {})
+  })
 
   const loaded = Array.from({ length: lastYear - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).every((y) => plans.has(y))
 

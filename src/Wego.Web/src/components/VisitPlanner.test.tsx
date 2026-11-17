@@ -12,10 +12,20 @@ const enquiry = (siteId: number, name: string, region: string | null, north: num
 
 const plan: VisitPlan = {
   employeeId: 4,
-  company: { name: 'Betrieb', address: 'Alt-Karow 53, 13125 Berlin', latitude: 52.6157, longitude: 13.479 },
+  branches: [{ name: 'WEGO Karow', address: 'Alt-Karow 53, 13125 Berlin', latitude: 52.6115, longitude: 13.4824 }],
   visitors: [],
   regions: ['Karow', 'Reinickendorf'],
-  days: [{ date: '2026-11-20', visits: [] }, { date: '2026-11-27', visits: [] }],
+  days: [
+    {
+      date: '2026-11-20', employeeId: 4, employee: 'Stefan Buder', reserved: true,
+      visits: [{ entryId: 9, siteId: 7, name: 'Herr Fest', address: 'Weg 1', phone: null, latitude: 52.62, longitude: 13.48, from: '09:00:00', to: '10:00:00', region: 'Karow' }],
+    },
+    {
+      date: '2026-11-25', employeeId: 5, employee: 'Tsonyo Matev', reserved: false,
+      visits: [{ entryId: 10, siteId: 8, name: 'Frau Ost', address: 'Weg 2', phone: null, latitude: null, longitude: null, from: '16:00:00', to: '17:00:00', region: 'Reinickendorf' }],
+    },
+    { date: '2026-11-27', employeeId: 4, employee: 'Stefan Buder', reserved: true, visits: [] },
+  ],
   enquiries: [
     { ...enquiry(1, 'Frau Alt', 'Karow', 1, '2026-10-01'), call: { siteId: 1, at: '2026-11-10T09:15:00Z', by: 'Stefan', count: 2 } },
     enquiry(2, 'Herr Neu', 'Karow', 2, '2026-11-01'),
@@ -51,8 +61,8 @@ describe('VisitPlanner', () => {
     const changed = vi.fn()
     renderWithProviders(<VisitPlanner onClose={() => {}} onChanged={changed} />)
     expect(await screen.findByText('Was möchten Sie planen?')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Besichtigungen Region Karow\s*2/ })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Einzelne Besichtigung/ }))
+    expect(screen.getByRole('button', { name: /Besichtigungen Karow\s*2/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Alle Besichtigungen\s*3/ }))
 
     // The longest waiting on top, with the calls not reached.
     const cards = document.querySelectorAll('.visit-customer')
@@ -86,47 +96,43 @@ describe('VisitPlanner', () => {
     )
   })
 
-  it('opened from a day of visits in the calendar, starts at that day with what is agreed and all customers', async () => {
-    const withVisit: VisitPlan = {
-      ...plan,
-      days: [{
-        date: '2026-11-20', reserved: true,
-        visits: [{ entryId: 9, siteId: 7, name: 'Herr Fest', address: 'Weg 1', phone: null, latitude: 52.62, longitude: 13.48, from: '09:00:00', to: '10:00:00' }],
-      }],
-    }
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withVisit), { status: 200 })))
-    renderWithProviders(<VisitPlanner employeeId={4} date="2026-11-20" onClose={() => {}} />)
-    expect(await screen.findByText('Schon vereinbart')).toBeInTheDocument()
-    expect(screen.getByText(/09:00–10:00 Herr Fest/)).toBeInTheDocument()
-    expect(screen.getByText('Kunden ohne Termin, die ältesten oben')).toBeInTheDocument()
-    // All customers, of every region; each with the first free time around the agreed visit.
-    expect(screen.getByText('Familie West')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Termin eintragen \(frei ab \d\d:\d\d\)/ }).length).toBe(3)
-  })
-
-  it('plans a region on a day set aside: the tour suggested from the oldest, agreed customer by customer', async () => {
+  it('shows the days of visits of everybody; a day opens with its customers, an empty one can be released', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderWithProviders(<VisitPlanner onClose={() => {}} />)
-    await user.click(await screen.findByRole('button', { name: /Besichtigungen Region Karow/ }))
-    expect(screen.getByText('Welchen Besichtigungstag möchten Sie planen?')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Fr 20.11.2026/ }))
+    expect(await screen.findByText('Geplante Besichtigungstage')).toBeInTheDocument()
+    expect(screen.getByText('KW 47')).toBeInTheDocument()
+    expect(screen.getByText('KW 48')).toBeInTheDocument()
+    expect(screen.getByText('Tsonyo Matev')).toBeInTheDocument()
+    expect(screen.getByText('reserviert, frei')).toBeInTheDocument()
 
-    // Only the customers of the region.
+    expect(screen.queryByText('Herr Fest')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Fr 20\.11\.\s*Stefan Buder\s*1 Kunde/ }))
+    expect(screen.getByText('Herr Fest')).toBeInTheDocument()
+    expect(screen.getByText('09:00')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'freigeben' }))
+    await waitFor(() => expect(posted).toContainEqual({ url: '/api/visits/days/remove', body: { employeeId: 4, date: '2026-11-27' } }))
+  })
+
+  it('opened from a visit in the calendar, shows that day open', async () => {
+    renderWithProviders(<VisitPlanner employeeId={4} date="2026-11-20" onClose={() => {}} />)
+    expect(await screen.findByText('Herr Fest')).toBeInTheDocument()
+  })
+
+  it('lists the customers of a region only, and shows them on the map', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<VisitPlanner onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: /Besichtigungen Karow/ }))
+    expect(screen.getByText('Frau Alt')).toBeInTheDocument()
     expect(screen.queryByText('Familie West')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Tour vorschlagen' }))
-    expect(screen.getByRole('link', { name: 'Route in Google Maps ›' })).toHaveAttribute('href', expect.stringContaining('Alt-Karow'))
-    const times = [...document.querySelectorAll('.visit-time')].map((row) => row.textContent?.slice(0, 5))
-    expect(times).toEqual(['07:45', '09:00'])
 
-    await user.click(screen.getAllByRole('button', { name: 'Termin angenommen' })[0])
-    await waitFor(() =>
-      expect(posted).toContainEqual({ url: '/api/visits', body: { employeeId: 4, siteId: 1, date: '2026-11-20', start: '07:45' } }),
-    )
-    // The customer cannot that day: the next day of visits with its first free time.
-    await user.click(screen.getAllByRole('button', { name: 'Kann an diesem Tag nicht' })[1])
-    await user.click(screen.getByRole('button', { name: /Fr 27.11.2026 um 07:45 eintragen/ }))
-    await waitFor(() =>
-      expect(posted).toContainEqual({ url: '/api/visits', body: { employeeId: 4, siteId: 2, date: '2026-11-27', start: '07:45' } }),
-    )
+    await user.click(screen.getByRole('button', { name: 'Auf Karte anzeigen' }))
+    expect(screen.getByRole('region', { name: 'Karte der Besichtigungen' })).toBeInTheDocument()
+    expect(screen.getByText('offen (2)')).toBeInTheDocument()
+    expect(screen.getByText('vereinbart (1)')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /zurück zur Liste/ }))
+    expect(screen.getByText('Frau Alt')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /zurück/ }))
+    expect(screen.getByText('Was möchten Sie planen?')).toBeInTheDocument()
   })
 })

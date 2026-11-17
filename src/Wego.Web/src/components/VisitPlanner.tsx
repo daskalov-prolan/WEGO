@@ -1,51 +1,41 @@
-import { Alert, Anchor, Badge, Button, Group, Loader, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Button, Group, Loader, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
-import type { CallAttempt, VisitDay, VisitEnquiry, VisitPlan } from '../api/types'
-import { addDays, formatDate, todayIso } from '../lib/dates'
-import { mapsLink, ON_SITE, toMin, toTime } from '../lib/visitRoute'
-import { LUNCH, nextFree, suggestTour, type Tour, type TourStop } from '../lib/visitTour'
+import type { VisitDay, VisitEnquiry, VisitPlan } from '../api/types'
+import { addDays, formatDate, isoWeek, todayIso } from '../lib/dates'
+import { callLine, shortDate, waiting } from '../lib/visitText'
 import { Sheet } from './Sheet'
+import { VisitMap } from './VisitMap'
 
 /**
- * Planning the visits of the enquiries, for whoever goes out to them (or a planner for them): first the question
- * what to plan, then one customer at a time on any day (16:00 by default), or a tour through a region on a day the
- * planners set aside. Each visit is an hour on site; only what the customer agreed to is saved.
+ * Planning the visits of the enquiries, for whoever goes out to them (or a planner for them). The first page: how
+ * many customers wait (all, per region) and the days of visits planned for everybody. Then the customers, all or
+ * those of a region, one at a time on any day (16:00 by default), as a list or on the map; who visits sets the
+ * tours himself. Each visit is an hour on site.
  */
 
-/** One customer at a time; or a day (of a region, or opened from the calendar with all customers, region null). */
-type Mode = { kind: 'single' } | { kind: 'region'; region: string | null; date: string | null }
+/** The customers: all (region null) or those of a region; as a list or on the map. */
+type Mode = { region: string | null; map: boolean }
 
 const SINGLE_TIME = '16:00'
+/** An hour on site. */
+const ON_SITE = 60
 
-/** "15.11. 10:15": when the customer was called last (the server keeps UTC). */
-function callTime(call: CallAttempt) {
-  const at = new Date(call.at)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(at.getDate())}.${pad(at.getMonth() + 1)}. ${pad(at.getHours())}:${pad(at.getMinutes())}`
-}
-
-/** Not reached: when, by whom, how often. */
-export const callLine = (call: CallAttempt) =>
-  `Nicht erreicht: ${callTime(call)} · ${call.by}${call.count > 1 ? ` (${call.count}×)` : ''}`
-
-const daysSince = (iso: string) => Math.round((Date.parse(todayIso()) - Date.parse(iso)) / 86_400_000)
-/** "wartet seit heute", "seit 1 Tag", "seit 5 Tagen". */
-const waiting = (iso: string) => {
-  const days = daysSince(iso)
-  return days <= 0 ? 'wartet seit heute' : days === 1 ? 'wartet seit 1 Tag' : `wartet seit ${days} Tagen`
-}
 const hm = (time: string) => time.slice(0, 5)
-const stopOf = (enquiry: VisitEnquiry): TourStop => ({ siteId: enquiry.siteId, latitude: enquiry.latitude, longitude: enquiry.longitude })
-const agreedOf = (day: VisitDay | undefined): TourStop[] =>
-  (day?.visits ?? []).map((visit) => ({ siteId: visit.siteId, latitude: visit.latitude, longitude: visit.longitude, from: toMin(visit.from) }))
-const onMap = (enquiry: VisitEnquiry) => enquiry.latitude !== null && enquiry.longitude !== null
+const toMin = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+const dayKey = (day: Pick<VisitDay, 'employeeId' | 'date'>) => `${day.employeeId}|${day.date}`
 
-/** date: opened from a day of visits in the calendar, it starts at that day. */
+/** date: opened from a visit in the calendar, the first page shows that day of the visitor open. */
 export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employeeId?: number; date?: string; onClose: () => void; onChanged?: () => void }) {
   const [plan, setPlan] = useState<VisitPlan | null>(null)
-  const [mode, setMode] = useState<Mode | null>(date ? { kind: 'region', region: null, date } : null)
+  const [mode, setMode] = useState<Mode | null>(null)
+  // The customer whose appointment is being entered (also from the map).
+  const [open, setOpen] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(date && employeeId ? `${employeeId}|${date}` : null)
   const [error, setError] = useState('')
   // Something saved: the page behind loads again once the window closes (not before, so it stays open for the next call).
   const [changed, setChanged] = useState(false)
@@ -73,9 +63,14 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
   }
 
   const visitorName = plan?.visitors.find((v) => v.id === plan.employeeId)?.name
-  const title = mode === null ? 'Besichtigungen planen'
-    : mode.kind === 'single' ? 'Einzelne Besichtigung'
-      : `Besichtigungen${mode.region ? ` Region ${mode.region}` : ''}${mode.date ? ` · ${formatDate(mode.date)}` : ''}`
+  const list = mode === null ? '' : mode.region ? `Besichtigungen ${mode.region}` : 'Alle Besichtigungen'
+  const title = mode === null ? 'Besichtigungen planen' : mode.map ? `${list} · Karte` : list
+  const region = mode?.region ?? null
+  const enquiries = useMemo(() => (plan ? plan.enquiries.filter((e) => !region || e.region === region) : []), [plan, region])
+  const visits = useMemo(
+    () => (plan ? plan.days.flatMap((day) => day.visits.filter((v) => !region || v.region === region).map((visit) => ({ visit, day }))) : []),
+    [plan, region],
+  )
 
   return (
     <Sheet title={title} onClose={close} size="xl" full>
@@ -83,7 +78,7 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
         error ? <Alert color="red" variant="light">{error}</Alert> : <Loader />
       ) : (
         <Stack gap="sm" className="visit-planner">
-          {plan.visitors.length > 0 && (
+          {plan.visitors.length > 0 && !mode?.map && (
             <Select
               label="Wer besichtigt"
               data={plan.visitors.map((v) => ({ value: String(v.id), label: v.name }))}
@@ -99,21 +94,40 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
           )}
 
           {mode === null ? (
-            <ModeChoice plan={plan} onChoose={setMode} />
+            <>
+              <ModeChoice plan={plan} onChoose={(region) => setMode({ region, map: false })} />
+              <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} run={run} />
+            </>
           ) : (
-            <Group gap="xs">
-              <Button size="compact-sm" variant="subtle" onClick={() => setMode(mode.kind === 'region' && mode.date && mode.region ? { ...mode, date: null } : null)}>
-                ‹ zurück
-              </Button>
-              {visitorName && <Text size="sm" c="dimmed">für {visitorName}</Text>}
-            </Group>
+            <>
+              <Group gap="xs" justify="space-between">
+                <Group gap="xs">
+                  <Button className="visit-back" variant="default" onClick={() => setMode(mode.map ? { ...mode, map: false } : null)}>
+                    ‹ {mode.map ? 'zurück zur Liste' : 'zurück'}
+                  </Button>
+                  {visitorName && !mode.map && <Text size="sm" c="dimmed">für {visitorName}</Text>}
+                </Group>
+                {!mode.map && (
+                  <Button variant="outline" color="red" onClick={() => setMode({ ...mode, map: true })}>
+                    Auf Karte anzeigen
+                  </Button>
+                )}
+              </Group>
+              {mode.map ? (
+                <VisitMap
+                  enquiries={enquiries}
+                  visits={visits}
+                  branches={plan.branches}
+                  onPlan={(siteId) => {
+                    setMode({ ...mode, map: false })
+                    setOpen(siteId)
+                  }}
+                />
+              ) : (
+                <CustomerList plan={plan} enquiries={enquiries} open={open} onOpen={setOpen} run={run} />
+              )}
+            </>
           )}
-
-          {mode?.kind === 'single' && <SingleVisits plan={plan} run={run} />}
-          {mode?.kind === 'region' && mode.region && !mode.date && (
-            <DayChoice plan={plan} region={mode.region} onChoose={(date) => setMode({ ...mode, date })} run={run} />
-          )}
-          {mode?.kind === 'region' && mode.date && <RegionDay plan={plan} region={mode.region} date={mode.date} run={run} />}
         </Stack>
       )}
     </Sheet>
@@ -122,20 +136,102 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
 
 type Run = (change: Promise<VisitPlan>) => Promise<boolean>
 
-/** "Was möchten Sie planen?" */
-function ModeChoice({ plan, onChoose }: { plan: VisitPlan; onChoose: (mode: Mode) => void }) {
+/** "Was möchten Sie planen?": all customers waiting, or those of a region; the number in red. */
+function ModeChoice({ plan, onChoose }: { plan: VisitPlan; onChoose: (region: string | null) => void }) {
+  const count = (n: number) => <span className="visit-count">{n}</span>
   return (
     <Stack gap="xs">
       <Text fw={600}>Was möchten Sie planen?</Text>
-      <Button variant="light" justify="space-between" onClick={() => onChoose({ kind: 'single' })}
-        rightSection={<Badge variant="white">{plan.enquiries.length}</Badge>}>
-        Einzelne Besichtigung
+      <Button variant="light" size="md" justify="space-between" onClick={() => onChoose(null)} rightSection={count(plan.enquiries.length)}>
+        Alle Besichtigungen
       </Button>
       {plan.regions.map((region) => (
-        <Button key={region} variant="light" justify="space-between" onClick={() => onChoose({ kind: 'region', region, date: null })}
-          rightSection={<Badge variant="white">{plan.enquiries.filter((e) => e.region === region).length}</Badge>}>
-          Besichtigungen Region {region}
+        <Button key={region} variant="light" size="md" justify="space-between" onClick={() => onChoose(region)}
+          rightSection={count(plan.enquiries.filter((e) => e.region === region).length)}>
+          Besichtigungen {region}
         </Button>
+      ))}
+    </Stack>
+  )
+}
+
+/**
+ * "Geplante Besichtigungstage": the days of visits of everybody, by week; a tap shows the customers of the day. A day
+ * set aside without customers can be released (by a planner, or by who visits on his own day).
+ */
+function PlannedDays({ plan, expanded, onExpand, run }: { plan: VisitPlan; expanded: string | null; onExpand: (key: string | null) => void; run: Run }) {
+  const planner = plan.visitors.length > 0
+  return (
+    <Stack gap={6} mt="sm">
+      <div>
+        <Text fw={700} size="lg">Geplante Besichtigungstage</Text>
+        <Text size="xs" c="dimmed">Alle Besichtiger · antippen zeigt die Kunden</Text>
+      </div>
+      {plan.days.length === 0 && <Text size="sm" c="dimmed">Noch keine Besichtigungen geplant.</Text>}
+      {plan.days.map((day, index) => {
+        const key = dayKey(day)
+        const week = isoWeek(day.date)
+        const newWeek = index === 0 || isoWeek(plan.days[index - 1].date) !== week || plan.days[index - 1].date.slice(0, 4) !== day.date.slice(0, 4)
+        const isOpen = expanded === key
+        const count = day.visits.length
+        return (
+          <div key={key}>
+            {newWeek && <div className="visit-week">KW {week}</div>}
+            <div className={isOpen ? 'visit-day-card open' : 'visit-day-card'}>
+              <div className="visit-day-row">
+                <button type="button" className="visit-day-toggle" disabled={count === 0} aria-expanded={count > 0 ? isOpen : undefined}
+                  onClick={() => onExpand(isOpen ? null : key)}>
+                  <span className="visit-day-date">{shortDate(day.date)}</span>
+                  <span className="visit-day-who">{day.employee}</span>
+                  {count > 0 ? (
+                    <span className="visit-day-count">{count === 1 ? '1 Kunde' : `${count} Kunden`} {isOpen ? '▴' : '▾'}</span>
+                  ) : (
+                    <span className="visit-day-count free">reserviert, frei</span>
+                  )}
+                </button>
+                {count === 0 && (planner || day.employeeId === plan.employeeId) && (
+                  <Button size="compact-sm" variant="default" onClick={() => run(api.removeVisitDay(day.employeeId, day.date))}>
+                    freigeben
+                  </Button>
+                )}
+              </div>
+              {isOpen && (
+                <div className="visit-day-visits">
+                  {day.visits.map((v) => (
+                    <div key={v.entryId}>
+                      <Text size="sm"><b className="visit-time">{hm(v.from)}</b> {v.name}</Text>
+                      {v.address && <Text size="xs" c="dimmed">{v.address}</Text>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </Stack>
+  )
+}
+
+/** The customers without a visit, the longest waiting on top; one opened to enter the appointment. */
+function CustomerList({ plan, enquiries, open, onOpen, run }: {
+  plan: VisitPlan; enquiries: VisitEnquiry[]; open: number | null; onOpen: (siteId: number | null) => void; run: Run
+}) {
+  // Opened from the map: the customer scrolled into view.
+  useEffect(() => {
+    if (open !== null) document.querySelector(`[data-visit-site="${open}"]`)?.scrollIntoView({ block: 'center' })
+  }, [open])
+  if (enquiries.length === 0) return <Text c="dimmed">Alle Anfragen haben einen Besichtigungstermin.</Text>
+  return (
+    <Stack gap="xs">
+      {enquiries.map((enquiry) => (
+        <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}
+          actions={open !== enquiry.siteId && <Button size="compact-sm" onClick={() => onOpen(enquiry.siteId)}>Termin eintragen</Button>}>
+          {open === enquiry.siteId && (
+            <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={addDays(todayIso(), 1)} initialTime={SINGLE_TIME}
+              run={run} onDone={() => onOpen(null)} />
+          )}
+        </Customer>
       ))}
     </Stack>
   )
@@ -155,7 +251,7 @@ function Customer({ enquiry, plan, run, actions, children }: {
   // A planner (who may plan for others) declines at once; who visits reports it for a planner to confirm.
   const confirms = plan.visitors.length > 0
   return (
-    <div className="visit-customer">
+    <div className="visit-customer" data-visit-site={enquiry.siteId}>
       <Group justify="space-between" wrap="nowrap" align="flex-start">
         <div>
           <Text fw={700}>{enquiry.name}</Text>
@@ -167,7 +263,6 @@ function Customer({ enquiry, plan, run, actions, children }: {
           {enquiry.requestedOn && <Text size="xs" c="red" fw={600}>{waiting(enquiry.requestedOn)}</Text>}
           {enquiry.description && <Text size="xs" fs="italic">{enquiry.description}</Text>}
           {enquiry.call && <Text size="xs" c="red">{callLine(enquiry.call)}</Text>}
-          {!onMap(enquiry) && <Text size="xs" c="dimmed">Adresse nicht auf der Karte: Fahrzeit geschätzt.</Text>}
           {enquiry.report && (
             <Text size="xs" c="red" fw={600}>
               Absage gemeldet: {enquiry.report.reason}{enquiry.report.note ? ` (${enquiry.report.note})` : ''} · wartet auf Bestätigung durch den Planer
@@ -235,28 +330,9 @@ function overlap(plan: VisitPlan, date: string | null, start: string) {
   return plan.busy.find((b) => b.date === date && (!b.from || !b.to || (toMin(b.from) < from + ON_SITE && from < toMin(b.to)))) ?? null
 }
 
-/** One customer at a time: the list of all enquiries without a visit, the longest waiting on top. */
-function SingleVisits({ plan, run }: { plan: VisitPlan; run: Run }) {
-  const [open, setOpen] = useState<number | null>(null)
-  if (plan.enquiries.length === 0) return <Text c="dimmed">Alle Anfragen haben einen Besichtigungstermin.</Text>
-  return (
-    <Stack gap="xs">
-      {plan.enquiries.map((enquiry) => (
-        <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}
-          actions={open !== enquiry.siteId && <Button size="compact-sm" onClick={() => setOpen(enquiry.siteId)}>Termin eintragen</Button>}>
-          {open === enquiry.siteId && (
-            <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={addDays(todayIso(), 1)} initialTime={SINGLE_TIME}
-              run={run} onDone={() => setOpen(null)} />
-          )}
-        </Customer>
-      ))}
-    </Stack>
-  )
-}
-
-/** Day and time agreed on the telephone; a warning when something else is planned then. */
-function AppointmentForm({ plan, siteId, initialDate, initialTime, fixedDate = false, run, onDone }: {
-  plan: VisitPlan; siteId: number; initialDate: string; initialTime: string; fixedDate?: boolean; run: Run; onDone: () => void
+/** Day and time agreed on the telephone; what is planned that day already, and a warning when something else is then. */
+function AppointmentForm({ plan, siteId, initialDate, initialTime, run, onDone }: {
+  plan: VisitPlan; siteId: number; initialDate: string; initialTime: string; run: Run; onDone: () => void
 }) {
   const [date, setDate] = useState<string | null>(initialDate)
   const [time, setTime] = useState(initialTime)
@@ -266,9 +342,7 @@ function AppointmentForm({ plan, siteId, initialDate, initialTime, fixedDate = f
   return (
     <Stack gap={6} mt={8} className="visit-form">
       <Group grow align="flex-end">
-        {!fixedDate && (
-          <DateInput label="Tag" valueFormat="DD.MM.YYYY" minDate={new Date(todayIso())} value={date} onChange={setDate} />
-        )}
+        <DateInput label="Tag" valueFormat="DD.MM.YYYY" minDate={new Date(todayIso())} value={date} onChange={setDate} />
         <TextInput label="Uhrzeit" type="time" step={900} value={time} onChange={(e) => setTime(e.currentTarget.value)} />
       </Group>
       {date && (
@@ -299,163 +373,5 @@ function AppointmentForm({ plan, siteId, initialDate, initialTime, fixedDate = f
         <Button size="compact-sm" variant="default" onClick={onDone}>Abbrechen</Button>
       </Group>
     </Stack>
-  )
-}
-
-/** "Welchen Besichtigungstag möchten Sie planen?": the days the planners set aside; an empty one can be released. */
-function DayChoice({ plan, region, onChoose, run }: { plan: VisitPlan; region: string; onChoose: (date: string) => void; run: Run }) {
-  const open = plan.enquiries.filter((e) => e.region === region).length
-  const reserved = plan.days.filter((d) => d.reserved !== false)
-  return (
-    <Stack gap="xs">
-      <Text fw={600}>Welchen Besichtigungstag möchten Sie planen?</Text>
-      <Text size="xs" c="dimmed">{open} Anfragen der Region ohne Termin.</Text>
-      {reserved.length === 0 && (
-        <Text c="dimmed">Keine Besichtigungstage reserviert. Die Planer reservieren sie im Kalender der Angebotsphase.</Text>
-      )}
-      {reserved.map((day) => (
-        <Group key={day.date} gap="xs" wrap="nowrap">
-          <Button variant="light" style={{ flex: 1 }} justify="space-between" onClick={() => onChoose(day.date)}
-            rightSection={<Text size="xs">{day.visits.length === 0 ? 'noch frei' : `${day.visits.length} Kunden`}</Text>}>
-            {formatDate(day.date)}
-          </Button>
-          {day.visits.length === 0 && (
-            <Button variant="default" size="sm" onClick={() => run(api.removeVisitDay(plan.employeeId, day.date))}>
-              freigeben
-            </Button>
-          )}
-        </Group>
-      ))}
-    </Stack>
-  )
-}
-
-/** A day of visits through a region: the customers agreed so far, a tour suggested, the other customers of the region. */
-function RegionDay({ plan, region, date, run }: { plan: VisitPlan; region: string | null; date: string; run: Run }) {
-  const day = plan.days.find((d) => d.date === date)
-  const enquiries = useMemo(() => (region ? plan.enquiries.filter((e) => e.region === region) : plan.enquiries), [plan.enquiries, region])
-  const [tour, setTour] = useState<Tour | null>(null)
-  const [open, setOpen] = useState<number | null>(null)
-  const company = plan.company
-
-  // Customers who said no (reported) are not suggested.
-  const suggest = () => setTour(suggestTour(enquiries.filter((e) => onMap(e) && !e.report).map(stopOf), agreedOf(day), company))
-  const agreed = new Set(day?.visits.map((v) => v.siteId))
-  const inTour = new Set(tour?.rows.flatMap((r) => (r.kind === 'visit' ? [r.siteId] : [])))
-  const others = enquiries.filter((e) => !inTour.has(e.siteId))
-  const byId = new Map(enquiries.map((e) => [e.siteId, e]))
-  const visitById = new Map(day?.visits.map((v) => [v.siteId, v]))
-  const freeAt = (enquiry: VisitEnquiry) => {
-    const at = nextFree(stopOf(enquiry), agreedOf(day), company)
-    return at === null ? null : toTime(at)
-  }
-  const route = tour
-    ? tour.rows.flatMap((r) => (r.kind === 'visit' ? [byId.get(r.siteId)?.address ?? visitById.get(r.siteId)?.address ?? null] : []))
-    : (day?.visits ?? []).map((v) => v.address)
-
-  return (
-    <Stack gap="sm">
-      {day && day.visits.length > 0 && !tour && (
-        <div className="visit-agreed">
-          <Text fw={600} size="sm">Schon vereinbart</Text>
-          {day.visits.map((v) => (
-            <Text key={v.entryId} size="sm">✓ {hm(v.from)}–{hm(v.to)} {v.name}{v.address ? ` · ${v.address}` : ''}</Text>
-          ))}
-        </div>
-      )}
-
-      <Group gap="xs">
-        <Button onClick={suggest}>{tour ? 'Rest neu berechnen' : 'Tour vorschlagen'}</Button>
-        {route.some(Boolean) && (
-          <Anchor href={mapsLink([company.address, ...route, company.address])} target="_blank" rel="noreferrer" size="sm">
-            Route in Google Maps ›
-          </Anchor>
-        )}
-        {tour && <Button variant="default" onClick={() => setTour(null)}>Vorschlag verwerfen</Button>}
-      </Group>
-      {tour && (
-        <Text size="xs" c="dimmed">
-          Abfahrt 7:30 ab {company.address} · je 60 Min. vor Ort · {tour.driving} Min. Fahrt geschätzt · zurück {tour.back} Min.
-          Erst wenn der Kunde zusagt, wird der Termin eingetragen.
-        </Text>
-      )}
-
-      {tour?.rows.map((row) =>
-        row.kind === 'lunch' ? (
-          <div key="lunch" className="visit-lunch">Mittagspause {toTime(row.start)}–{toTime(row.start + LUNCH)}</div>
-        ) : agreed.has(row.siteId) ? (
-          <div key={row.siteId} className="visit-row agreed">
-            <Text size="sm">✓ {hm(visitById.get(row.siteId)!.from)} {visitById.get(row.siteId)!.name} · Termin angenommen</Text>
-          </div>
-        ) : byId.has(row.siteId) ? (
-          <TourRow key={row.siteId} plan={plan} enquiry={byId.get(row.siteId)!} date={date} start={toTime(row.start)} drive={row.drive} run={run} />
-        ) : (
-          <div key={row.siteId} className="visit-row gone"><Text size="sm" c="dimmed">Kunde ist inzwischen anders geplant.</Text></div>
-        ),
-      )}
-
-      <Text fw={600} size="sm" mt="xs">
-        {tour ? (region ? 'Weitere Kunden der Region' : 'Weitere Kunden') : region ? `Kunden der Region ${region}, die ältesten oben` : 'Kunden ohne Termin, die ältesten oben'}
-      </Text>
-      {others.length === 0 && <Text size="sm" c="dimmed">Keine weiteren.</Text>}
-      {others.map((enquiry) => {
-        const at = freeAt(enquiry)
-        return (
-          <Customer key={enquiry.siteId} enquiry={enquiry} plan={plan} run={run}
-            actions={open !== enquiry.siteId && (
-              <Button size="compact-sm" onClick={() => setOpen(enquiry.siteId)}>
-                {at ? `Termin eintragen (frei ab ${at})` : 'Termin eintragen'}
-              </Button>
-            )}>
-            {open === enquiry.siteId && (
-              <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={date} initialTime={at ?? SINGLE_TIME} fixedDate
-                run={run} onDone={() => setOpen(null)} />
-            )}
-          </Customer>
-        )
-      })}
-    </Stack>
-  )
-}
-
-/** A customer of the suggested tour: agreed as suggested, at another time, or on another day of visits. */
-function TourRow({ plan, enquiry, date, start, drive, run }: {
-  plan: VisitPlan; enquiry: VisitEnquiry; date: string; start: string; drive: number; run: Run
-}) {
-  const [choice, setChoice] = useState<'time' | 'day' | null>(null)
-  const company = plan.company
-  const laterDays = plan.days.filter((d) => d.reserved !== false && d.date !== date && d.date >= todayIso())
-  return (
-    <div className="visit-row">
-      <Text size="sm" fw={700} className="visit-time">{start} <Text span size="xs" c="dimmed" fw={400}>· {drive} Min. Fahrt</Text></Text>
-      <Customer enquiry={enquiry} plan={plan} run={run} actions={
-        <>
-          <Button size="compact-sm" onClick={() => run(api.planVisit({ employeeId: plan.employeeId, siteId: enquiry.siteId, date, start }))}>
-            Termin angenommen
-          </Button>
-          <Button size="compact-sm" variant="default" onClick={() => setChoice(choice === 'time' ? null : 'time')}>Andere Uhrzeit</Button>
-          <Button size="compact-sm" variant="default" onClick={() => setChoice(choice === 'day' ? null : 'day')}>Kann an diesem Tag nicht</Button>
-        </>
-      }>
-        {choice === 'time' && (
-          <AppointmentForm plan={plan} siteId={enquiry.siteId} initialDate={date} initialTime={start} fixedDate run={run} onDone={() => setChoice(null)} />
-        )}
-        {choice === 'day' && (
-          <Stack gap={4} mt={8}>
-            <Text size="xs" c="dimmed">Nächste Besichtigungstage, jeweils die erste freie Uhrzeit:</Text>
-            {laterDays.length === 0 && <Text size="sm" c="dimmed">Keine weiteren Besichtigungstage reserviert: „Einzelne Besichtigung“ nehmen.</Text>}
-            {laterDays.map((d) => {
-              const at = nextFree(stopOf(enquiry), agreedOf(d), company)
-              return (
-                <Button key={d.date} size="compact-sm" variant="light" disabled={at === null} justify="flex-start"
-                  onClick={() => run(api.planVisit({ employeeId: plan.employeeId, siteId: enquiry.siteId, date: d.date, start: toTime(at!) }))}>
-                  {formatDate(d.date)} {at === null ? '· voll' : `um ${toTime(at)} eintragen`}
-                </Button>
-              )
-            })}
-          </Stack>
-        )}
-      </Customer>
-    </div>
   )
 }

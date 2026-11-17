@@ -758,6 +758,9 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         var reserved = await (await g.PostAsJsonAsync("/api/visits/days", new { employeeId = stefan, date = day })).Content.ReadFromJsonAsync<JsonElement>();
         var reservedDay = Assert.Single(reserved.GetProperty("days").EnumerateArray());
         Assert.Equal((day, true), (reservedDay.GetProperty("date").GetString(), reservedDay.GetProperty("reserved").GetBoolean()));
+        // The days of everybody who goes out, with who; the two branches for the map.
+        Assert.Equal(stefan, reservedDay.GetProperty("employeeId").GetInt32());
+        Assert.Equal(2, reserved.GetProperty("branches").GetArrayLength());
         var single = date.AddDays(1).ToString("yyyy-MM-dd");
         var one = await (await s.PostAsJsonAsync("/api/visits", new { employeeId = stefan, siteId = first, date = single, start = "16:00" }))
             .Content.ReadFromJsonAsync<JsonElement>();
@@ -784,6 +787,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         Assert.Equal(HttpStatusCode.OK, released.StatusCode);
         Assert.DoesNotContain((await released.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("days").EnumerateArray(),
             d => d.GetProperty("date").GetString() == day);
+
+        // The planner's page learns that Stefan changed something (a failed change counts not), and who asks.
+        var changes = await g.GetFromJsonAsync<JsonElement>("/api/changes");
+        Assert.Contains(changes.GetProperty("recent").EnumerateArray(), c => c.GetProperty("byId").GetInt32() == stefan);
+        Assert.NotEqual(stefan, changes.GetProperty("you").GetInt32());
     }
 
     [Fact]
