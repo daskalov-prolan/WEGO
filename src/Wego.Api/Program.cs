@@ -39,6 +39,15 @@ builder.Services.AddHttpClient(NominatimGeocoder.Client, client =>
 });
 builder.Services.AddSingleton<IGeocoder, NominatimGeocoder>();
 
+// The own calendars of the employees (e.g. iCloud): read every 15 minutes, their times shown as "belegt".
+builder.Services.AddHttpClient(CalendarEndpoints.Client, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("WEGO-Personaleinsatzplanung/1.0");
+});
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<ExternalCalendarSync>();
+
 builder.Services.AddHttpClient(PostalCodeEndpoints.OpenPlzClient, client =>
 {
     client.BaseAddress = new Uri("https://openplzapi.org/");
@@ -156,6 +165,7 @@ app.MapMyEndpoints();
 app.MapLocationEndpoints();
 app.MapChangeEndpoints();
 app.MapMeetingEndpoints();
+app.MapCalendarEndpoints();
 
 app.Run();
 

@@ -7,6 +7,7 @@ import { api, messageOf } from '../api/client'
 import type { CalendarNote, Entry, MeetingWeek, Plan, User } from '../api/types'
 import { meetingTime, MeetingWeekDialog } from '../components/MeetingDialogs'
 import { canPlanRole } from '../lib/roles'
+import { busyTime, clashes } from '../lib/busy'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
@@ -67,6 +68,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   const [details, setDetails] = useState<Entry | null>(null)
   // Whoever goes out to visits plans them from here.
   const [visiting, setVisiting] = useState(false)
+  // A visit of his to change (day and time), opened from its line.
+  const [changingVisit, setChangingVisit] = useState<Entry | null>(null)
 
   // Every year of the list, each loaded once.
   useEffect(() => {
@@ -101,6 +104,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       planners: unique(all.flatMap(([, p]) => p.planners ?? [])),
       notes: unique(all.flatMap(([, p]) => p.notes ?? [])),
       meetings: all.flatMap(([y, p]) => (p.meetings ?? []).filter((week) => week.date.startsWith(`${y}-`))),
+      busy: all.flatMap(([y, p]) => (p.busy ?? []).filter((b) => b.date.startsWith(`${y}-`))),
     }
   }, [loaded, plans, year])
 
@@ -378,6 +382,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       {visiting && (
         <VisitPlanner employeeId={user.id} onClose={() => setVisiting(false)} onChanged={() => setPlans(new Map())} />
       )}
+      {changingVisit && (
+        <VisitPlanner employeeId={user.id} date={changingVisit.date} change={changingVisit.id} onClose={() => setChangingVisit(null)}
+          onChanged={() => setPlans(new Map())} />
+      )}
       {meetingWeek && plan && (
         <MeetingWeekDialog week={meetingWeek} me={user.id} plans={canPlanRole(user.role)} decides={user.role === 'PlanerG'}
           people={[...plan.employees, ...(plan.planners ?? [])].map((e) => ({ id: e.id, name: e.name }))}
@@ -402,6 +410,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           const born = birthdays.get(day.iso.slice(5))
           const notes = notesByDate.get(day.iso) ?? []
           const meetings = meetingsByDate.get(day.iso) ?? []
+          // Busy after his own calendar (e.g. Apple's): the times only.
+          const busy = (plan.busy ?? []).filter((b) => b.employeeId === user.id && b.date === day.iso)
           // Empty weekends only take up space; today always shows, it is where the list begins.
           if (day.isWeekend && entries.length === 0 && notes.length === 0 && meetings.length === 0 && day.iso !== today && !born) return null
 
@@ -463,6 +473,16 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
               )}
 
               <Stack gap="xs">
+                {busy.map((b, i) => {
+                  const clash = clashes(b, entries, meetings)
+                  return (
+                    <div key={`busy${i}`} className={clash.length > 0 ? 'my-entry my-busy clash' : 'my-entry my-busy'}>
+                      <span className="when">{busyTime(b)}</span>
+                      <span className="where">{clash.length > 0 ? '⚠ ' : ''}Privat belegt (eigener Kalender)</span>
+                      {clash.length > 0 && <span className="what">Überschneidung mit {clash.join(', ')}</span>}
+                    </div>
+                  )
+                })}
                 {/* The meetings of the week: a tap opens it (a craftsman asks to be let off there). */}
                 {meetings.map((week) => {
                   const asked = week.requested.includes(user.id)
@@ -510,6 +530,14 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                                   <strong>{visit.siteName}</strong>
                                   {addresses[i] && <span className="detail">{addresses[i]}</span>}
                                 </span>
+                                {/* Day and time of the visit changed, in the planning of the visits. */}
+                                {user.doesVisits && (
+                                  <span role="button" tabIndex={0} className="my-visit-change"
+                                    onClick={(event) => { event.stopPropagation(); setChangingVisit(visit) }}
+                                    onKeyDown={(event) => { if (event.key === 'Enter') { event.stopPropagation(); setChangingVisit(visit) } }}>
+                                    ändern
+                                  </span>
+                                )}
                               </Line>
                             )
                           })}

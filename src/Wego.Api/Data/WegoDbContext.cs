@@ -14,6 +14,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
     public DbSet<Meeting> Meetings => Set<Meeting>();
+    public DbSet<ExternalBusy> ExternalBusy => Set<ExternalBusy>();
     public DbSet<ClosureVacation> ClosureVacations => Set<ClosureVacation>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
@@ -38,6 +39,10 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.Role).HasMaxLength(50);
             e.Property(x => x.MainActivity).HasMaxLength(30);
             e.Property(x => x.HourlyRate).HasPrecision(8, 2);
+            e.Property(x => x.CalendarToken).HasMaxLength(64);
+            e.HasIndex(x => x.CalendarToken).IsUnique();
+            e.Property(x => x.ExternalCalendarUrl).HasMaxLength(1000);
+            e.Property(x => x.ExternalCalendarError).HasMaxLength(300);
             e.Property(x => x.Phone).HasMaxLength(50);
             // A deleted activity is no longer the main activity of anybody.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
@@ -143,6 +148,12 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
         {
             e.Property(x => x.Title).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxTitle);
             e.Property(x => x.Text).HasMaxLength(Endpoints.CalendarNoteEndpoints.MaxText);
+            e.HasIndex(x => new { x.EmployeeId, x.Date });
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ExternalBusy>(e =>
+        {
             e.HasIndex(x => new { x.EmployeeId, x.Date });
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });

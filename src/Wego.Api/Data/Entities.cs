@@ -58,6 +58,15 @@ public class Employee
 
     public int VacationDaysPerYear { get; set; } = 30;
 
+    /// <summary>The secret of his calendar link: his own appointments for Apple, Google or Outlook to subscribe to.</summary>
+    public string? CalendarToken { get; set; }
+
+    /// <summary>A calendar of his own (e.g. iCloud, shared publicly): its appointments are shown as "belegt".</summary>
+    public string? ExternalCalendarUrl { get; set; }
+    public DateTime? ExternalCalendarSyncedAt { get; set; }
+    /// <summary>Why the calendar could not be read the last time; null when it could.</summary>
+    public string? ExternalCalendarError { get; set; }
+
     /// <summary>Telephone number, shown in the list of employees to everybody.</summary>
     public string? Phone { get; set; }
 
@@ -355,6 +364,20 @@ public class CalendarNote
     public DateOnly Date { get; set; }
     public required string Title { get; set; }
     public string? Text { get; set; }
+}
+
+/// <summary>
+/// A time an employee is busy after his own calendar (see <see cref="Employee.ExternalCalendarUrl"/>): only the time,
+/// nothing of what it is. Without times the whole day.
+/// </summary>
+public class ExternalBusy
+{
+    public int Id { get; set; }
+    public int EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public TimeOnly? StartTime { get; set; }
+    public TimeOnly? EndTime { get; set; }
 }
 
 /// <summary>

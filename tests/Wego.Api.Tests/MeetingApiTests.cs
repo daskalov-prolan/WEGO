@@ -91,6 +91,19 @@ public class MeetingApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFact
         Assert.Equal(new[] { b }, letOff.GetProperty("employeeIds").EnumerateArray().Select(e => e.GetInt32()));
         Assert.Empty(letOff.GetProperty("requested").EnumerateArray());
 
+        // His calendar link: his appointments for Apple & Co., without a login; a link made anew, the old one is gone.
+        var link = (await (await craftsman.PostAsync("/api/me/calendar/link", null)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("link").GetString()!;
+        var anonymous = factory.CreateClient();
+        var feed = await anonymous.GetAsync(new Uri(link).PathAndQuery);
+        Assert.Equal("text/calendar", feed.Content.Headers.ContentType?.MediaType);
+        var ics = await feed.Content.ReadAsStringAsync();
+        Assert.Contains("BEGIN:VCALENDAR", ics);
+        Assert.Contains("SUMMARY:Bauberatung", ics);
+        await craftsman.PostAsync("/api/me/calendar/link?renew=true", null);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(new Uri(link).PathAndQuery)).StatusCode);
+        // Only calendars of Apple, Google or Outlook are read.
+        Assert.Equal(HttpStatusCode.BadRequest, (await craftsman.PutAsJsonAsync("/api/me/calendar/external", new { url = "https://example.com/x.ics" })).StatusCode);
+
         // The series goes; nothing is left of it.
         Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/meetings/{id}")).StatusCode);
         Assert.Empty(await WeeksAsync());

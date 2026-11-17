@@ -245,6 +245,9 @@ public static class VisitEndpoints
         // The meetings of every week (e.g. the Bauberatung) are in the way as well.
         busy.AddRange((await MeetingEndpoints.OccurrencesAsync(db, today, until, employeeId))
             .Select(o => new BusyDto(o.Date, o.Title, o.StartTime, o.EndTime)));
+        // And the times busy after his own calendar (e.g. Apple's), without what they are.
+        busy.AddRange((await db.ExternalBusy.AsNoTracking().Where(b => b.EmployeeId == employeeId && b.Date >= today && b.Date <= until).ToListAsync())
+            .Select(b => new BusyDto(b.Date, "privat belegt", b.StartTime, b.EndTime)));
         busy = busy.OrderBy(b => b.Date).ThenBy(b => b.From).ToList();
 
         var calls = (await OfferEndpoints.CallsAsync(db, open.Select(s => s.Id).ToList())).ToDictionary(c => c.SiteId);
