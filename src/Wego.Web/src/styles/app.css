@@ -3628,7 +3628,28 @@ html.plan-full .shell-nav {
 /* On a desktop in a window, with its margins. */
 @media (min-width: 721px) {
   .visit-map {
-    height: max(360px, calc(100dvh - 300px));
+    height: max(360px, calc(100dvh - 340px));
+  }
+}
+
+/* A big touch screen (a smart board): the window wide, everything but the map drawn larger. */
+@media (any-pointer: coarse) and (min-width: 1800px) {
+  .sheet:has(.visit-planner) .mantine-Modal-content {
+    flex: 0 0 min(1500px, 70vw);
+    max-width: none;
+  }
+
+  .visit-map .leaflet-tooltip.visit-tag {
+    padding: 3px 9px;
+    font-size: 0.95rem;
+  }
+
+  .visit-planner > :not(.visit-map) {
+    zoom: 1.3;
+  }
+
+  .visit-map {
+    height: max(360px, calc(100dvh - 400px));
   }
 }
 
