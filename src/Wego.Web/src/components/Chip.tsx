@@ -3,6 +3,7 @@ import type { Activity, Entry } from '../api/types'
 import { activityLabel, serviceName, tentativeName, entryName, entryStyle, entryTitle, isFree, isMarkedStep } from '../lib/activities'
 import { ActivityIcon } from './ActivityIcon'
 import { ServiceIcon } from './ServiceIcon'
+import { serviceDescription } from '../lib/siteInfo'
 import { dragSource } from '../lib/dragPlan'
 import { formatTimeRange, WHOLE_DAY } from '../lib/dates'
 
@@ -47,7 +48,7 @@ export function NoteMark({ important }: { important: boolean }) {
  * The name of a site; a service call with the sign of its tool in place of "SE:": a grout float for tiling, else a
  * wrench.
  */
-export function SiteName({ name, activity }: { name: string; activity?: Activity | null }) {
+export function SiteName({ name, activity, siteId }: { name: string; activity?: Activity | null; siteId?: number | null }) {
   const tentative = tentativeName(name)
   if (tentative !== null)
     return (
@@ -62,7 +63,10 @@ export function SiteName({ name, activity }: { name: string; activity?: Activity
   if (service === null) return <>{name}</>
   return (
     <>
-      <ServiceIcon tool={activity === 'Fliesen' ? 'float' : 'wrench'} />
+      {/* Pointed at: what the service call is about (its description). */}
+      <span className="service-sign" title={serviceDescription(siteId) ?? 'Serviceauftrag'}>
+        <ServiceIcon tool={activity === 'Fliesen' ? 'float' : 'wrench'} />
+      </span>
       {service}
     </>
   )
@@ -102,10 +106,10 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
             entry.type
           ) : onSiteClick && siteId !== null ? (
             <span className="site-link" role="link" onClick={(event) => onSiteClick(siteId, event)}>
-              <SiteName name={entry.siteName ?? ''} activity={entry.activity} />
+              <SiteName name={entry.siteName ?? ''} activity={entry.activity} siteId={siteId} />
             </span>
           ) : (
-            <SiteName name={entryName(entry)} activity={entry.activity} />
+            <SiteName name={entryName(entry)} activity={entry.activity} siteId={siteId} />
           )}
         </span>
         {entry.note && <NoteMark important={entry.noteImportant} />}

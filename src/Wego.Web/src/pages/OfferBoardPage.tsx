@@ -57,6 +57,16 @@ const handedOverKey = (site: Site, steps: OfferStep[]) =>
     .sort()
     .at(-1) ?? '~'
 
+/**
+ * Sorts a card of the Objektauswahl: those still to plan first, the one visited longest ago on top; those with an
+ * appointment after them, the next on top.
+ */
+const selectionKey = (site: Site, stage: Stage, steps: OfferStep[]) => {
+  if (stage.planned) return `1 ${appointmentKey(stage)}`
+  const visited = steps.filter((step) => step.siteId === site.id && step.activity === 'Besichtigung').map((step) => step.date).sort().at(-1)
+  return `0 ${visited ?? '~'}`
+}
+
 /** Steps that may need more than one appointment (as on the server). */
 const REPEATABLE: Activity[] = ['Objektauswahl']
 
@@ -342,11 +352,14 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
             .map((site) => ({ site, stage: stageOf(site, offers.steps, order, today) }))
             .filter(({ stage }) => stage.column === column.key)
             // The next appointment on top, enquiries still to plan after them in the order they came in; waiting for
-            // the yes, the offer handed over longest ago on top.
+            // the yes, the offer handed over longest ago on top; the Objektauswahl still to plan first, the one
+            // visited longest ago on top, those with an appointment after them.
             .sort((a, b) =>
               column.key === WAITING
                 ? handedOverKey(a.site, offers.steps).localeCompare(handedOverKey(b.site, offers.steps))
-                : appointmentKey(a.stage).localeCompare(appointmentKey(b.stage)),
+                : column.key === 'Objektauswahl'
+                  ? selectionKey(a.site, a.stage, offers.steps).localeCompare(selectionKey(b.site, b.stage, offers.steps))
+                  : appointmentKey(a.stage).localeCompare(appointmentKey(b.stage)),
             )
             .map(({ site }) => site)
           const info = column.activity ? activityInfo(column.activity) : null

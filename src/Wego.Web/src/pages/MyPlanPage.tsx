@@ -8,6 +8,7 @@ import type { CalendarNote, Entry, MeetingWeek, Plan, User } from '../api/types'
 import { meetingTime, MeetingWeekDialog } from '../components/MeetingDialogs'
 import { canPlanRole } from '../lib/roles'
 import { busyTime, clashes } from '../lib/busy'
+import { rememberSites } from '../lib/siteInfo'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
@@ -136,6 +137,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   }
 
   // The own calendar notes by day, as in the fields of the plan.
+  // What the service calls are about, for the sign of the wrench.
+  useMemo(() => rememberSites(plan?.sites ?? []), [plan])
   // The meetings of every week he takes part in (e.g. the Bauberatung).
   const meetingsByDate = useMemo(() => {
     const map = new Map<string, MeetingWeek[]>()
@@ -586,7 +589,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                       )}
                       <span className="when">{formatDayTime(entry)}</span>
                       <span className="where">
-                        <SiteName name={entry.siteName ?? ''} activity={entry.activity} />
+                        <SiteName name={entry.siteName ?? ''} activity={entry.activity} siteId={entry.siteId} />
                       </span>
                       {/* A service call: what is to do there, in place of the activity. */}
                       {site?.isService ? (

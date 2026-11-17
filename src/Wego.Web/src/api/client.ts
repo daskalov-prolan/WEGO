@@ -152,6 +152,8 @@ export const api = {
   makeCalendarLink: (renew = false) => request<MyCalendar>('POST', `/api/me/calendar/link${renew ? '?renew=true' : ''}`),
   /** The own calendar shared with the plan; null: no longer. */
   setOwnCalendar: (url: string | null) => request<MyCalendar>('PUT', '/api/me/calendar/external', { url }),
+  /** The own calendar read at once. */
+  syncOwnCalendar: () => request<MyCalendar>('POST', '/api/me/calendar/sync'),
   meetings: () => request<Meeting[]>('GET', '/api/meetings'),
   createMeeting: (input: MeetingInput) => request<Meeting>('POST', '/api/meetings', input),
   updateMeeting: (id: number, input: MeetingInput) => request<Meeting>('PUT', `/api/meetings/${id}`, input),

@@ -23,6 +23,7 @@ import { SiteForm } from '../components/SiteForm'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
 import { forgetHandedUndo, handedUndo } from '../lib/undoHandoff'
 import { keepHistory, keptHistory, MAX_STEPS } from '../lib/planHistory'
+import { rememberSites } from '../lib/siteInfo'
 import { MonthJump } from '../components/MonthJump'
 import { YearPicker } from '../components/YearPicker'
 import { SiteSheet } from '../components/SiteSheet'
@@ -431,6 +432,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     )
   const dropNote = (id: number) =>
     setPlan((current) => current && { ...current, notes: (current.notes ?? []).filter((note) => note.id !== id) })
+  // What the service calls are about, for the sign of the wrench (before the fields are drawn).
+  useMemo(() => rememberSites(plan?.sites ?? []), [plan])
   // The meetings of every week (e.g. the Bauberatung), in the fields of their participants.
   const meetingsByCell = useMemo(() => {
     const result = new Map<string, MeetingWeek[]>()
