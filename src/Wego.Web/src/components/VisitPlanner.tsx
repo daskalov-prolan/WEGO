@@ -1,10 +1,11 @@
 import { Alert, Button, Group, Loader, Radio, Select, Stack, Text, TextInput } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { DatePickerInput } from '@mantine/dates'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { VisitDay, VisitEnquiry, VisitPlan } from '../api/types'
 import { addDays, formatDate, isoWeek, todayIso } from '../lib/dates'
 import { callLine, shortDate, waiting } from '../lib/visitText'
+import { useIsPhone } from '../lib/useIsPhone'
 import { Sheet } from './Sheet'
 import { VisitMap } from './VisitMap'
 
@@ -43,6 +44,12 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
     if (changed) onChanged?.()
     onClose()
   }
+  // The X (and Esc): one step back, from the map to the list, from the list to the first page; there it closes.
+  const back = () => {
+    if (mode?.map) setMode({ ...mode, map: false })
+    else if (mode) setMode(null)
+    else close()
+  }
 
   const load = useCallback((id?: number) => api.visits(id).then(setPlan, (e) => setError(messageOf(e))), [])
   useEffect(() => {
@@ -72,22 +79,28 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
     [plan, region],
   )
 
+  // A planner chooses for whom.
+  const who = plan && plan.visitors.length > 0 && (
+    <Select
+      // A heading as large as the others of the page.
+      label="Wer besichtigt"
+      labelProps={{ fz: "lg", fw: 700, mb: 6, c: "var(--mantine-color-text)" }}
+      data={plan.visitors.map((v) => ({ value: String(v.id), label: v.name }))}
+      value={String(plan.employeeId)}
+      allowDeselect={false}
+      onChange={(value) => value && load(Number(value))}
+      comboboxProps={{ withinPortal: true }}
+    />
+  )
+
   return (
-    <Sheet title={title} onClose={close} size="xl" full>
+    <Sheet title={title} onClose={back} size="xl" full>
       {!plan ? (
         error ? <Alert color="red" variant="light">{error}</Alert> : <Loader />
       ) : (
         <Stack gap="sm" className="visit-planner">
-          {plan.visitors.length > 0 && !mode?.map && (
-            <Select
-              label="Wer besichtigt"
-              data={plan.visitors.map((v) => ({ value: String(v.id), label: v.name }))}
-              value={String(plan.employeeId)}
-              allowDeselect={false}
-              onChange={(value) => value && load(Number(value))}
-              comboboxProps={{ withinPortal: true }}
-            />
-          )}
+          {/* On the first page between the choice and the days planned. */}
+          {mode && !mode.map && who}
           {error && <Alert color="red" variant="light" withCloseButton onClose={() => setError('')}>{error}</Alert>}
           {plan.pending > 0 && (
             <Text size="xs" c="dimmed">{plan.pending} Adressen werden noch auf der Karte gesucht (beim nächsten Öffnen).</Text>
@@ -95,8 +108,8 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
 
           {mode === null ? (
             <>
-              <ModeChoice plan={plan} onChoose={(region) => setMode({ region, map: false })} />
-              <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} run={run} />
+              <ModeChoice plan={plan} who={who} onChoose={(region) => setMode({ region, map: false })} />
+              <PlannedDays plan={plan} expanded={expanded} onExpand={setExpanded} onVisitor={load} run={run} />
             </>
           ) : (
             <>
@@ -137,11 +150,11 @@ export function VisitPlanner({ employeeId, date, onClose, onChanged }: { employe
 type Run = (change: Promise<VisitPlan>) => Promise<boolean>
 
 /** "Was möchten Sie planen?": all customers waiting, or those of a region; the number in red. */
-function ModeChoice({ plan, onChoose }: { plan: VisitPlan; onChoose: (region: string | null) => void }) {
+function ModeChoice({ plan, who, onChoose }: { plan: VisitPlan; who: React.ReactNode; onChoose: (region: string | null) => void }) {
   const count = (n: number) => <span className="visit-count">{n}</span>
   return (
     <Stack gap="xs">
-      <Text fw={600}>Was möchten Sie planen?</Text>
+      <Text fw={700} size="lg">Was möchten Sie planen?</Text>
       <Button variant="light" size="md" justify="space-between" onClick={() => onChoose(null)} rightSection={count(plan.enquiries.length)}>
         Alle Besichtigungen
       </Button>
@@ -151,22 +164,26 @@ function ModeChoice({ plan, onChoose }: { plan: VisitPlan; onChoose: (region: st
           Besichtigungen {region}
         </Button>
       ))}
+      {/* Between the choice and the days planned. */}
+      {who && <div className="visit-who">{who}</div>}
     </Stack>
   )
 }
 
 /**
- * "Geplante Besichtigungstage": the days of visits of everybody, by week; a tap shows the customers of the day. A day
+ * "Geplante Besichtigungstage": the days of visits of everybody, by week; a tap shows the customers of the day, a tap
+ * on a customer opens the appointment to change it (a planner's for whoever visits, a visitor's his own). A day
  * set aside without customers can be released (by a planner, or by who visits on his own day).
  */
-function PlannedDays({ plan, expanded, onExpand, run }: { plan: VisitPlan; expanded: string | null; onExpand: (key: string | null) => void; run: Run }) {
+function PlannedDays({ plan, expanded, onExpand, onVisitor, run }: {
+  plan: VisitPlan; expanded: string | null; onExpand: (key: string | null) => void; onVisitor: (id: number) => void; run: Run
+}) {
   const planner = plan.visitors.length > 0
+  // The visit being changed.
+  const [changing, setChanging] = useState<number | null>(null)
   return (
     <Stack gap={6} mt="sm">
-      <div>
-        <Text fw={700} size="lg">Geplante Besichtigungstage</Text>
-        <Text size="xs" c="dimmed">Alle Besichtiger · antippen zeigt die Kunden</Text>
-      </div>
+      <Text fw={700} size="lg">Geplante Besichtigungstage</Text>
       {plan.days.length === 0 && <Text size="sm" c="dimmed">Noch keine Besichtigungen geplant.</Text>}
       {plan.days.map((day, index) => {
         const key = dayKey(day)
@@ -197,12 +214,26 @@ function PlannedDays({ plan, expanded, onExpand, run }: { plan: VisitPlan; expan
               </div>
               {isOpen && (
                 <div className="visit-day-visits">
-                  {day.visits.map((v) => (
-                    <div key={v.entryId}>
-                      <Text size="sm"><b className="visit-time">{hm(v.from)}</b> {v.name}</Text>
-                      {v.address && <Text size="xs" c="dimmed">{v.address}</Text>}
-                    </div>
-                  ))}
+                  {day.visits.map((v) => {
+                    const mine = planner || day.employeeId === plan.employeeId
+                    return (
+                      <div key={v.entryId}>
+                        <button type="button" className="visit-day-visit" disabled={!mine}
+                          onClick={() => {
+                            // The appointment in the plan of whoever visits that day (a planner switches to him).
+                            if (day.employeeId !== plan.employeeId) onVisitor(day.employeeId)
+                            setChanging(changing === v.entryId ? null : v.entryId)
+                          }}>
+                          <Text size="sm" component="span"><b className="visit-time">{hm(v.from)}</b> {v.name}</Text>
+                          {v.address && <Text size="xs" c="dimmed" component="span" display="block">{v.address}</Text>}
+                        </button>
+                        {changing === v.entryId && day.employeeId === plan.employeeId && (
+                          <AppointmentForm plan={plan} siteId={v.siteId} initialDate={day.date} initialTime={hm(v.from)}
+                            except={{ date: day.date, from: v.from }} run={run} onDone={() => setChanging(null)} />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -324,25 +355,32 @@ function Customer({ enquiry, plan, run, actions, children }: {
 }
 
 /** What else is in the plan of the visitor at that time. */
-function overlap(plan: VisitPlan, date: string | null, start: string) {
+function overlap(busy: VisitPlan['busy'], date: string | null, start: string) {
   if (!date || !start) return null
   const from = toMin(start)
-  return plan.busy.find((b) => b.date === date && (!b.from || !b.to || (toMin(b.from) < from + ON_SITE && from < toMin(b.to)))) ?? null
+  return busy.find((b) => b.date === date && (!b.from || !b.to || (toMin(b.from) < from + ON_SITE && from < toMin(b.to)))) ?? null
 }
 
 /** Day and time agreed on the telephone; what is planned that day already, and a warning when something else is then. */
-function AppointmentForm({ plan, siteId, initialDate, initialTime, run, onDone }: {
-  plan: VisitPlan; siteId: number; initialDate: string; initialTime: string; run: Run; onDone: () => void
+function AppointmentForm({ plan, siteId, initialDate, initialTime, except, run, onDone }: {
+  plan: VisitPlan; siteId: number; initialDate: string; initialTime: string
+  /** An appointment being changed: it is not in the way of itself. */
+  except?: { date: string; from: string }
+  run: Run; onDone: () => void
 }) {
   const [date, setDate] = useState<string | null>(initialDate)
   const [time, setTime] = useState(initialTime)
-  const clash = overlap(plan, date, time)
+  // On a phone the calendar as a window of its own in the middle, without the keyboard over it.
+  const isPhone = useIsPhone()
+  const busy = except ? plan.busy.filter((b) => !(b.date === except.date && b.from === except.from)) : plan.busy
+  const clash = overlap(busy, date, time)
   // Everything the visitor has that day, by time (the whole day first).
-  const that = date ? plan.busy.filter((b) => b.date === date).sort((a, b) => (a.from ?? '').localeCompare(b.from ?? '')) : []
+  const that = date ? busy.filter((b) => b.date === date).sort((a, b) => (a.from ?? '').localeCompare(b.from ?? '')) : []
   return (
     <Stack gap={6} mt={8} className="visit-form">
       <Group grow align="flex-end">
-        <DateInput label="Tag" valueFormat="DD.MM.YYYY" minDate={new Date(todayIso())} value={date} onChange={setDate} />
+        <DatePickerInput label="Tag" valueFormat="DD.MM.YYYY" minDate={new Date(todayIso())} value={date} onChange={setDate}
+          dropdownType={isPhone ? 'modal' : 'popover'} />
         <TextInput label="Uhrzeit" type="time" step={900} value={time} onChange={(e) => setTime(e.currentTarget.value)} />
       </Group>
       {date && (

@@ -35,8 +35,11 @@ export function VisitMap({ enquiries, visits, branches, onPlan }: {
   useEffect(() => {
     if (!element.current) return
     map.current = L.map(element.current).setView(BERLIN, 11)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // OpenStreetMap wants to know the page asking (the server sends no referrer otherwise: Referrer-Policy
+    // same-origin): only its address goes along.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      referrerPolicy: 'strict-origin-when-cross-origin',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map.current)
     // The stars of the branches below the customers: a customer next door stays to be tapped.

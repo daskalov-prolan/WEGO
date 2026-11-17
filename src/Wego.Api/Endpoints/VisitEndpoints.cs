@@ -158,7 +158,8 @@ public static class VisitEndpoints
     /// <summary>Whoever does visits: the craftsmen given the activity first, then the planners.</summary>
     private static async Task<List<VisitorDto>> VisitorsAsync(WegoDbContext db) =>
         (await db.Employees.Where(e => e.IsActive && e.DeletedAt == null).OrderBy(e => e.SortOrder).ThenBy(e => e.Name).ToListAsync())
-        .Where(e => e.AdditionalActivities.Contains(Activity) || e.MainActivity == Activity || Roles.CanPlan(e.Role))
+        // Whoever has the activity Besichtigung (ticked under Verwaltung), planners as well; craftsmen first.
+        .Where(e => e.AdditionalActivities.Contains(Activity) || e.MainActivity == Activity)
         .OrderBy(e => Roles.CanPlan(e.Role))
         .Select(e => new VisitorDto(e.Id, e.Name)).ToList();
 

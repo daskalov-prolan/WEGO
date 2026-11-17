@@ -28,8 +28,11 @@ export function SitesMap({ points, height = 520, linkToPage = true }: { points: 
   useEffect(() => {
     if (!element.current) return
     map.current = L.map(element.current).setView(BERLIN, 11)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // OpenStreetMap wants to know the page asking (the server sends no referrer otherwise: Referrer-Policy
+    // same-origin): only its address goes along.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      referrerPolicy: 'strict-origin-when-cross-origin',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map.current)
     layer.current = L.layerGroup().addTo(map.current)

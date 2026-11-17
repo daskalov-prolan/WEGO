@@ -472,10 +472,11 @@ function EmployeesSection({ openId = null }: { openId?: number | null }) {
                   onChange={(value) => change({ mainActivity: (value as Activity | null) ?? null })}
                 />
               )}
-              {/* A craftsman who does visits as well: he is in the offer phase too, for them only. */}
-              {editing.input.showInPlan && !canPlanRole(editing.input.role) && (
+              {/* Who does visits: a craftsman then is in the offer phase too, for them only; a planner is among those
+                  to choose from when visits are planned. */}
+              {(editing.input.showInPlan || canPlanRole(editing.input.role)) && (
                 <Checkbox
-                  label="Macht auch Besichtigungen (erscheint dafür auch in der Angebotsphase)"
+                  label={canPlanRole(editing.input.role) ? 'Macht Besichtigungen (steht bei „Wer besichtigt“ zur Auswahl)' : 'Macht auch Besichtigungen (erscheint dafür auch in der Angebotsphase)'}
                   checked={editing.input.additionalActivities?.includes('Besichtigung') ?? false}
                   onChange={(e) => {
                     const others = (editing.input.additionalActivities ?? []).filter((activity) => activity !== 'Besichtigung')
