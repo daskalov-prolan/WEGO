@@ -142,6 +142,8 @@ export const api = {
   myVacation: (year: number) => request<MyVacation>('GET', `/api/me/vacation?year=${year}`),
   teamVacation: (year: number) => request<EmployeeVacation[]>('GET', `/api/vacation?year=${year}`),
   vacationOverview: (year: number) => request<Vacation[]>('GET', `/api/reports/vacation?year=${year}`),
+  /** Whether something changed: the version, the last changes with who made them, and who asks. */
+  changes: () => request<{ version: number; recent: { version: number; byId: number; by: string | null }[]; you: number }>('GET', '/api/changes'),
   visits: (employeeId?: number) => request<VisitPlan>('GET', `/api/visits${employeeId ? `?employeeId=${employeeId}` : ''}`),
   setVisitDay: (employeeId: number, date: string) => request<VisitPlan>('POST', '/api/visits/days', { employeeId, date }),
   removeVisitDay: (employeeId: number, date: string) => request<VisitPlan>('POST', '/api/visits/days/remove', { employeeId, date }),

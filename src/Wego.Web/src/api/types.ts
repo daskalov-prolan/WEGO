@@ -187,11 +187,15 @@ export interface PlannedVisit {
   longitude: number | null
   from: string
   to: string
+  /** That of the planner of the enquiry. */
+  region?: string | null
 }
 
-/** A day set aside for visits by the planners, with the customers planned on it so far. */
+/** A day of visits of one who goes out: set aside by the planners, or with a customer planned on its own. */
 export interface VisitDay {
   date: string
+  employeeId: number
+  employee: string
   visits: PlannedVisit[]
   /** Set aside for visits by the planners; else a day with a customer planned on its own. */
   reserved?: boolean
@@ -225,10 +229,12 @@ export interface VisitBusy {
 
 export interface VisitPlan {
   employeeId: number
-  company: VisitPlace
+  /** The branches of WEGO, as stars on the map. */
+  branches: VisitPlace[]
   /** Whom a planner may plan for; empty for a craftsman, who plans his own. */
   visitors: { id: number; name: string }[]
   regions: string[]
+  /** The days of visits of all who go out. */
   days: VisitDay[]
   enquiries: VisitEnquiry[]
   busy: VisitBusy[]

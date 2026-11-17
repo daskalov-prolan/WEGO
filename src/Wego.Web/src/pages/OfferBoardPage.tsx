@@ -6,7 +6,9 @@ import { api, messageOf } from '../api/client'
 import type { Activity, DeclineReport, Entry, Offers, OfferStep, PlanEmployee, Planner, Site, StepInput } from '../api/types'
 import { OfferSteps } from '../components/OfferSteps'
 import { Sheet } from '../components/Sheet'
-import { callLine, VisitPlanner } from '../components/VisitPlanner'
+import { VisitPlanner } from '../components/VisitPlanner'
+import { useLiveChanges } from '../lib/useLiveChanges'
+import { callLine } from '../lib/visitText'
 import { SiteForm } from '../components/SiteForm'
 import { TimeSelect } from '../components/TimeSelect'
 import { activityInfo, activityLabel, DECLINE_REASONS, textOfActivity } from '../lib/activities'
@@ -128,6 +130,8 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
   const load = useCallback(() => {
     api.offers().then(setOffers, (e) => setError(messageOf(e)))
   }, [])
+  // Changed by somebody else: the enquiries loaded anew.
+  useLiveChanges(load)
   useEffect(() => {
     load()
     api.planners().then(setPlanners, () => {})
