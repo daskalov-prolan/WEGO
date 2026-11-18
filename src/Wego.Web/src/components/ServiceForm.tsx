@@ -1,14 +1,16 @@
 import { Alert, Button, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { useRef, useState, type FormEvent } from 'react'
+import { useMediaQuery } from '@mantine/hooks'
 import { api, messageOf } from '../api/client'
 import type { Activity, Site, SiteInput } from '../api/types'
 import { activityLabel } from '../lib/activities'
 import { formatDateLong, HALF_DAYS } from '../lib/dates'
 import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
+import { TimeSelect } from './TimeSelect'
 
-/** When the service call is: the whole day or one half (see HALF_DAYS). */
-export type ServiceTime = 'day' | 'morning' | 'afternoon'
+/** When the service call is: the whole day, one half (see HALF_DAYS), or a time of its own (e.g. 14–16). */
+export type ServiceTime = 'day' | 'morning' | 'afternoon' | 'custom'
 
 export const serviceTimes = (time: ServiceTime) =>
   time === 'morning' ? HALF_DAYS[0] : time === 'afternoon' ? HALF_DAYS[1] : { start: '', end: '' }
@@ -18,10 +20,10 @@ interface Props {
   /** An appointment the customer has not confirmed yet, in place of a service call. */
   tentative?: boolean
   /** Creates the service call (a site marked as such) and puts it on the day. */
-  onCreate: (input: SiteInput, time: ServiceTime, activity: Activity | null) => Promise<Site>
+  onCreate: (input: SiteInput, times: { start: string; end: string }, activity: Activity | null) => Promise<Site>
   onClose: () => void
   /** The time chosen first: the afternoon when the day has a site already. */
-  initialTime?: ServiceTime
+  initialTime?: Exclude<ServiceTime, 'custom'>
   /** What the employee can do there (its colour in the plan); a service call asks for one of them. */
   activities?: Activity[]
   /** The one chosen first: the main activity of the employee. */
@@ -38,6 +40,12 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
     tentative ? { ...emptySite, status: 'Angebot', isTentative: true } : { ...emptySite, status: 'Bauphase', plannedStart: date, isService: true },
   )
   const [time, setTime] = useState<ServiceTime>(initialTime)
+  // A time of its own: from and to ("HH:mm").
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const customMissing = time === 'custom' && (!from || !to)
+  // Four choices of the time do not fit side by side on a narrow phone: one below the other there.
+  const narrow = useMediaQuery('(max-width: 480px)')
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -74,7 +82,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
     setBusy(true)
     setError('')
     try {
-      await onCreate(service, time, tentative ? null : activity)
+      await onCreate(service, time === 'custom' ? { start: from, end: to } : serviceTimes(time), tentative ? null : activity)
       onClose()
     } catch (e) {
       setError(messageOf(e))
@@ -149,13 +157,23 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
             </Text>
             <SegmentedControl
               value={time}
+              fullWidth
+              orientation={narrow ? 'vertical' : 'horizontal'}
               onChange={(value) => setTime(value as ServiceTime)}
               data={[
                 { value: 'day', label: 'Ganzer Tag' },
                 { value: 'morning', label: '½ vormittags' },
                 { value: 'afternoon', label: '½ nachmittags' },
+                { value: 'custom', label: 'Andere Zeit' },
               ]}
             />
+            {time === 'custom' && (
+              <Group grow gap="xs" mt="xs">
+                <TimeSelect label="von" value={from} required
+                  onChange={(start) => { setFrom(start); if (to && start && to <= start) setTo('') }} />
+                <TimeSelect label="bis" value={to} required onChange={setTo} after={from} />
+              </Group>
+            )}
           </div>
           {error && (
             <Alert color="red" variant="light">
@@ -166,7 +184,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
             <Button variant="default" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button type="submit" loading={busy} disabled={!service.client?.trim()}>
+            <Button type="submit" loading={busy} disabled={!service.client?.trim() || customMissing}>
               {tentative ? 'Termin eintragen' : 'Service eintragen'}
             </Button>
           </Group>
