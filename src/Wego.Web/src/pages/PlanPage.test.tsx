@@ -88,8 +88,12 @@ describe('PlanPage', () => {
     const monday = cell(/Anna, Montag, 02.03.2026/)
     expect(within(monday).getByText('8–10 Uhr')).toBeInTheDocument()
     expect(within(monday).getByText('11–13 Uhr')).toBeInTheDocument()
-    // Four hours on sites: the rest of the day shows as free.
-    expect(within(monday).getByTitle('verfügbar: dieser Teil des Tages ist frei')).toBeInTheDocument()
+    // Four hours on sites: the free time of an hour or more around them shows as free.
+    expect(within(monday).getAllByTitle(/^verfügbar/).map((chip) => chip.title)).toEqual([
+      'verfügbar 7–8 Uhr',
+      'verfügbar 10–11 Uhr',
+      'verfügbar 13–16 Uhr',
+    ])
     expect(within(cell(/Bernd, Dienstag, 03.03.2026/)).queryByText('verfügbar')).not.toBeInTheDocument()
     // The short form for narrow screens names the first site and counts the rest.
     expect(within(monday).getByText('+1')).toBeInTheDocument()
@@ -715,7 +719,7 @@ describe('PlanPage', () => {
     const wednesday = await screen.findByRole('button', { name: /Bernd, Mittwoch, 04.03.2026/ })
     // In the afternoon on the site: the free morning comes first.
     const chips = [...wednesday.querySelectorAll('.cell-full .chip')].map((chip) => chip.textContent)
-    expect(chips[0]).toBe('verfügbar')
+    expect(chips[0]).toBe('7:30–11:30 Uhrverfügbar')
 
     // A click on "verfügbar" opens the day with a new row for the free half.
     await user.click(within(wednesday).getByText('verfügbar'))

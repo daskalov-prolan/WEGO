@@ -12,8 +12,8 @@ import { rememberSites } from '../lib/siteInfo'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
 import { formatAddress } from '../lib/sites'
-import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, HALF_DAYS, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
-import { activityLabel, entryStyle, isFree, onlyHalfDay } from '../lib/activities'
+import { addDays, CURRENT_YEAR, formatDateLong, formatDayTime, isoWeek, PLAN_YEARS, todayIso, weekOf } from '../lib/dates'
+import { activityLabel, entryStyle, freeGaps, isFree } from '../lib/activities'
 import { jumpTo } from '../lib/jump'
 import { holidaysByDate, useSwipe } from '../lib/ui'
 import { HOME_EVENT } from '../lib/home'
@@ -118,26 +118,22 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
    * stored as an entry of its own).
    */
   const withFreeHalf = (entries: Entry[]): Entry[] => {
-    // The visits of the day count as one entry: the time set aside for them.
-    const halves = visitsAsOne(entries)
-    if (!onlyHalfDay(halves)) return entries
-    const morning = halves.every((entry) => (entry.endTime ?? '').slice(0, 5) <= '12:00')
-    const afternoon = halves.every((entry) => (entry.startTime ?? '') >= '12:00')
-    // Work around midday leaves no half free.
-    if (!morning && !afternoon) return entries
-    const half = morning ? HALF_DAYS[1] : HALF_DAYS[0]
-    const free: Entry = {
+    // Free time of an hour or more between his work (the visits of the day count as one entry): "verfügbar".
+    const gaps = freeGaps(visitsAsOne(entries))
+    if (gaps.length === 0) return entries
+    const free: Entry[] = gaps.map((gap, i) => ({
       ...entries[0],
-      id: -entries[0].id,
+      id: -(entries[0].id * 10 + i),
       siteId: null,
       siteName: null,
       activity: null,
-      startTime: `${half.start}:00`,
-      endTime: `${half.end}:00`,
+      startTime: `${gap.start}:00`,
+      endTime: `${gap.end}:00`,
       note: null,
       noteImportant: false,
-    }
-    return morning ? [...entries, free] : [free, ...entries]
+      confirmation: null,
+    }))
+    return [...entries, ...free].sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''))
   }
 
   // The own calendar notes by day, as in the fields of the plan.

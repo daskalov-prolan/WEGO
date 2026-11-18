@@ -96,7 +96,9 @@ describe('MyPlanPage', () => {
     expect(within(card).getByText('2 Kunden')).toBeInTheDocument()
     expect([...card.querySelectorAll('.my-visit-customer strong')].map((name) => name.textContent)).toEqual(['Herr Kurz', 'Familie Schulze'])
     expect(within(card).getByRole('link', { name: 'Route in Google Maps ›' })).toHaveAttribute('href', expect.stringContaining('Alt-Karow'))
-    expect(within(thursday).getByText('verfügbar')).toBeInTheDocument()
+    // The afternoon is free (and the hour before the first customer).
+    expect(within(thursday).getAllByText('verfügbar')).toHaveLength(2)
+    expect(within(thursday).getByText('12–16 Uhr')).toBeInTheDocument()
   })
 
   it('shows the own notes of a day and the free half of a day as "verfügbar"', async () => {
