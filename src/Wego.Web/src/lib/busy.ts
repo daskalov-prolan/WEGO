@@ -16,6 +16,14 @@ export function overlaps(a: { startTime: string | null; endTime: string | null }
 export const busyTime = (busy: OwnBusy) =>
   busy.startTime && busy.endTime ? `${busy.startTime.slice(0, 5)}–${busy.endTime.slice(0, 5)}` : 'ganztägig'
 
+/** The sites and offer steps of his day at the time of a meeting (not vacation, not time kept free). */
+export function meetingClashes(week: MeetingWeek, entries: Entry[]): string[] {
+  const at = { startTime: week.startTime, endTime: week.endTime }
+  return entries
+    .filter((entry) => entry.type === 'Baustelle' && !(entry.siteId === null && entry.activity === null) && overlaps(at, entry))
+    .map((entry) => entry.siteName ?? entry.activity ?? 'Eintrag')
+}
+
 /** What is planned for him at a busy time: entries (not time kept free) and meetings. */
 export function clashes(busy: OwnBusy, entries: Entry[], meetings: MeetingWeek[]): string[] {
   const names: string[] = []

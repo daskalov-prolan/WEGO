@@ -315,16 +315,21 @@ export function MeetingWeekDialog({ week, people, me, plans, decides, onClose, o
 }
 
 /** A week of a meeting in a field of the plan: name and time, marked when a participant asked to be let off. */
-export function MeetingChip({ week, employeeId, onOpen }: { week: MeetingWeek; employeeId: number; onOpen?: (week: MeetingWeek) => void }) {
+export function MeetingChip({ week, employeeId, onOpen, clashes = [] }: {
+  week: MeetingWeek; employeeId: number; onOpen?: (week: MeetingWeek) => void
+  /** What else is planned for him then: the meeting in red. */
+  clashes?: string[]
+}) {
   const asked = week.requested.includes(employeeId)
+  const clash = clashes.length > 0
   return (
     <span
-      className={asked ? 'meeting-chip asked' : 'meeting-chip'}
-      title={`${week.title} ${meetingTime(week.startTime, week.endTime)}${asked ? ' · Absage beantragt' : ''}${week.moved ? ' · verschoben' : ''}`}
+      className={['meeting-chip', asked ? 'asked' : '', clash ? 'clash' : ''].filter(Boolean).join(' ')}
+      title={`${week.title} ${meetingTime(week.startTime, week.endTime)}${asked ? ' · Absage beantragt' : ''}${week.moved ? ' · verschoben' : ''}${clash ? ` · Überschneidung mit ${clashes.join(', ')}` : ''}`}
       data-clickable={onOpen ? true : undefined}
       onClick={onOpen ? (event) => { event.stopPropagation(); onOpen(week) } : undefined}
     >
-      <span className="meeting-chip-icon" aria-hidden>{asked ? '?' : '⟳'}</span>
+      <span className="meeting-chip-icon" aria-hidden>{asked ? '?' : clash ? '⚠' : '⟳'}</span>
       <span className="meeting-chip-name">{week.title}</span>
       <span className="meeting-chip-time">{meetingTime(week.startTime, week.endTime)}</span>
     </span>

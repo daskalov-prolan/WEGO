@@ -15,6 +15,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
     public DbSet<Meeting> Meetings => Set<Meeting>();
     public DbSet<ExternalBusy> ExternalBusy => Set<ExternalBusy>();
+    public DbSet<ExternalCalendar> ExternalCalendars => Set<ExternalCalendar>();
     public DbSet<ClosureVacation> ClosureVacations => Set<ClosureVacation>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<ActivityType> Activities => Set<ActivityType>();
@@ -41,8 +42,6 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.Property(x => x.HourlyRate).HasPrecision(8, 2);
             e.Property(x => x.CalendarToken).HasMaxLength(64);
             e.HasIndex(x => x.CalendarToken).IsUnique();
-            e.Property(x => x.ExternalCalendarUrl).HasMaxLength(1000);
-            e.Property(x => x.ExternalCalendarError).HasMaxLength(300);
             e.Property(x => x.Phone).HasMaxLength(50);
             // A deleted activity is no longer the main activity of anybody.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.MainActivity).OnDelete(DeleteBehavior.SetNull);
@@ -152,10 +151,19 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ExternalCalendar>(e =>
+        {
+            e.Property(x => x.Url).HasMaxLength(1000);
+            e.Property(x => x.Error).HasMaxLength(300);
+            e.HasIndex(x => x.EmployeeId);
+            e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<ExternalBusy>(e =>
         {
             e.HasIndex(x => new { x.EmployeeId, x.Date });
             e.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Calendar).WithMany().HasForeignKey(x => x.CalendarId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Meeting>(e =>

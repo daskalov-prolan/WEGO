@@ -411,7 +411,14 @@ export interface OwnBusy {
 /** Mein Bereich: the link to the own appointments, and the own calendar shared with the plan. */
 export interface MyCalendar {
   link: string | null
-  externalUrl: string | null
+  /** His own calendars shared with the plan (e.g. Privat, Arbeit), each read on its own. */
+  calendars: OwnCalendar[]
+}
+
+/** One own calendar: busy the times read from it; error why it could not be read the last time. */
+export interface OwnCalendar {
+  id: number
+  url: string
   syncedAt: string | null
   error: string | null
   busy: number

@@ -134,16 +134,17 @@ describe('PlanPage', () => {
 
   it('folds weekends to narrow strips unless switched off', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
-    await screen.findByText(/KW 10/)
+    // The first plan of the file takes a while to draw on a busy machine.
+    await screen.findByText(/KW 10/, undefined, { timeout: 5000 })
     const table = () => document.querySelector('table.timeline')!
 
     expect(table()).toHaveClass('fold-weekends')
     // Under "Ansicht", with the size.
     await userEvent.click(screen.getByRole('button', { name: /^Ansicht/ }))
-    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }, { timeout: 3000 }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }, { timeout: 5000 }))
     expect(table()).not.toHaveClass('fold-weekends')
     expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
-  })
+  }, 15000)
 
   it('on a phone only pages by week with ‹ Heute ›, weekends narrow', async () => {
     const wide = window.matchMedia
@@ -160,6 +161,10 @@ describe('PlanPage', () => {
       expect(screen.queryByText(/KW 10/)).not.toBeInTheDocument()
       expect(screen.queryByRole('switch', { name: 'Wochenenden ausblenden' })).not.toBeInTheDocument()
       expect(document.querySelector('table.timeline')).toHaveClass('fold-weekends')
+      // The search behind the magnifier, so that the plan keeps the screen.
+      expect(screen.queryByPlaceholderText('Suchen: Kunde, Baustelle, Adresse')).not.toBeInTheDocument()
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Suchen' }))
+      expect(screen.getByPlaceholderText('Suchen: Kunde, Baustelle, Adresse')).toBeInTheDocument()
     } finally {
       window.matchMedia = wide
       localStorage.removeItem('wego.plan.showWeekends')

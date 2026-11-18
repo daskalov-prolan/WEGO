@@ -1,7 +1,7 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, MeetingWeek, NamedItem, OwnBusy, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { BusyChip } from './BusyChip'
-import { clashes } from '../lib/busy'
+import { clashes, meetingClashes } from '../lib/busy'
 import { MeetingChip } from './MeetingDialogs'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
@@ -566,6 +566,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
       start: week.startTime,
       node: (
         <MeetingChip key={`${week.meetingId}|${week.originalDate}`} week={week} employeeId={employee.id}
+          clashes={meetingClashes(week, entries)}
           onOpen={cell.opensMeetings ? (w) => props().onOpenMeeting?.(w) : undefined} />
       ),
     })),
@@ -662,6 +663,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
           <span className="cell-meetings">
             {meetings.map((week) => (
               <MeetingChip key={`${week.meetingId}|${week.originalDate}`} week={week} employeeId={employee.id}
+                clashes={meetingClashes(week, entries)}
                 onOpen={cell.opensMeetings ? (w) => props().onOpenMeeting?.(w) : undefined} />
             ))}
             {/* Busy after his own calendar: only the time; red when the plan has something then as well. */}

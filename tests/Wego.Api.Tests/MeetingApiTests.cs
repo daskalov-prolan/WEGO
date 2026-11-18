@@ -102,7 +102,11 @@ public class MeetingApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFact
         await craftsman.PostAsync("/api/me/calendar/link?renew=true", null);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(new Uri(link).PathAndQuery)).StatusCode);
         // Only calendars of Apple, Google or Outlook are read.
-        Assert.Equal(HttpStatusCode.BadRequest, (await craftsman.PutAsJsonAsync("/api/me/calendar/external", new { url = "https://example.com/x.ics" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await craftsman.PostAsJsonAsync("/api/me/calendar/external", new { url = "https://example.com/x.ics" })).StatusCode);
+        // Several calendars can be shared, each on its own; none yet, and only his own can be taken away.
+        var mine = await craftsman.GetFromJsonAsync<JsonElement>("/api/me/calendar");
+        Assert.Empty(mine.GetProperty("calendars").EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await craftsman.DeleteAsync("/api/me/calendar/external/999999")).StatusCode);
 
         // The series goes; nothing is left of it.
         Assert.Equal(HttpStatusCode.NoContent, (await g.DeleteAsync($"/api/meetings/{id}")).StatusCode);

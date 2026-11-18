@@ -3984,3 +3984,49 @@ html.plan-full .shell-nav {
 .timeline:not(.zoom-month) .cell-meetings {
   display: none;
 }
+
+/* A meeting while its participant is planned on a site: red, the site named in the tooltip. */
+.meeting-chip.clash {
+  border-left-color: #d71f27;
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+/* On a phone the head of the plan is two rows: the view and the year, then paging, undo and signs for the search,
+   the meetings and the clashes; the search opens below them. */
+.phone-paging .history-buttons {
+  flex: none;
+}
+
+.phone-sign {
+  position: relative;
+  overflow: visible;
+}
+
+.phone-sign .phone-sign-count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 0.7rem;
+}
+
+.plan-search.phone-search {
+  min-width: 0;
+  flex: none;
+}
+
+.plan-search.phone-search > * {
+  max-width: none;
+}
+
+/* One own calendar in Mein Bereich: its state and "Trennen". */
+.own-calendar {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f7fafb;
+}

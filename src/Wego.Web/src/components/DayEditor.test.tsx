@@ -48,6 +48,24 @@ describe('openHalf', () => {
 })
 
 describe('DayEditor', () => {
+  it('warns of a site at the time of a meeting (e.g. the Bauberatung)', () => {
+    renderWithProviders(
+      <DayEditor
+        employee={{ id: 3, name: 'Koko', mainActivity: 'Fliesen', additionalActivities: [] }}
+        date="2026-11-06"
+        entries={[morning]}
+        sites={[site]}
+        meetings={[{ meetingId: 1, title: 'Bauberatung', date: '2026-11-06', originalDate: '2026-11-06', startTime: '09:00:00',
+          endTime: '10:30:00', employeeIds: [3], moved: false, requested: [], names: {} }]}
+        onCreateSite={async () => site}
+        onClose={() => {}}
+        onSave={async () => {}}
+      />,
+    )
+    expect(screen.getByText('Überschneidung mit einem Wiederholungstermin')).toBeInTheDocument()
+    expect(screen.getByText('Bauberatung 09:00–10:30 und AK 54B zur selben Zeit.')).toBeInTheDocument()
+  })
+
   it('puts a new site before the afternoon taken already: into the morning', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})

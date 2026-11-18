@@ -14,7 +14,7 @@ import {
 } from '@mantine/core'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
-import type { Activity, DayEntryInput, Entry, EntryType, PlanEmployee, Site, SiteInput } from '../api/types'
+import type { Activity, DayEntryInput, Entry, EntryType, MeetingWeek, PlanEmployee, Site, SiteInput } from '../api/types'
 import { activityLabel, allowedActivities, defaultActivity, entryStyle, isFree, isOpen, onlyHalfDay } from '../lib/activities'
 import { formatDateLong, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
 import { emptySite } from '../lib/sites'
@@ -36,6 +36,8 @@ interface Props {
   /** Planer G: Urlaub and Krank are changed under Verwaltung, a link leads there. */
   absenceLink?: boolean
   onClose: () => void
+  /** The meetings of the employee that day (e.g. the Bauberatung): a site at their time is warned of. */
+  meetings?: MeetingWeek[]
   /** Saves the day; a rejected promise keeps the editor open and shows the message. */
   onSave: (entries: DayEntryInput[]) => Promise<void>
   /** Puts the day on the clipboard of the plan; without it there is no copy button. */
@@ -515,6 +517,21 @@ export function DayEditor(props: Props) {
               </Button>
             )}
           </Group>
+
+          {/* A site at the time of a meeting: both stay, but it is said. */}
+          {(props.meetings ?? []).flatMap((week) => {
+            const at = { start: week.startTime.slice(0, 5), end: week.endTime.slice(0, 5) }
+            const clashing = rows.filter((row) => isWork(row) && (!row.start || !row.end || overlaps(row, at)))
+            if (clashing.length === 0) return []
+            const names = clashing.map((row) => sites.find((site) => site.id === row.siteId)?.name ?? 'Baustelle').join(', ')
+            return [
+              <Alert key={`${week.meetingId}|${week.originalDate}`} color="orange" variant="light" title="Überschneidung mit einem Wiederholungstermin">
+                <Text size="sm">
+                  {week.title} {at.start}–{at.end} und {names} zur selben Zeit.
+                </Text>
+              </Alert>,
+            ]
+          })}
 
           {error && (
             <Alert color="red" variant="light">
