@@ -101,8 +101,8 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
           </Text>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <TextInput label="Kunde" maxLength={200} required data-autofocus {...field('client')} />
-            <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
-            <TextInput label="Telefon 2 (z. B. Handy)" type="tel" maxLength={50} {...field('clientPhone2')} />
+            <TextInput label="Telefon Kunde (z. B. Handy)" type="tel" maxLength={50} {...field('clientPhone')} />
+            <TextInput label="Telefon 2 (z. B. Festnetz)" type="tel" maxLength={50} {...field('clientPhone2')} />
           </SimpleGrid>
           <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
