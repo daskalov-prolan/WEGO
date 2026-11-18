@@ -1,6 +1,6 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core'
 import type { Entry, NamedItem, SchoolHoliday, Site } from '../api/types'
-import { formatAddress } from '../lib/sites'
+import { clientPhones, formatAddress } from '../lib/sites'
 import { entryStyle } from '../lib/activities'
 import { formatDateLong } from '../lib/dates'
 import { Chip } from './Chip'
@@ -46,7 +46,7 @@ export function DayDetails({ employee, date, entries, holiday, siteById, onClose
               {site && (
                 <Group gap="xs">
                   <SiteWayButtons site={site} size="xs" />
-                  {site.clientPhone && <CallButton phone={site.clientPhone} size="xs" />}
+                  {clientPhones(site).map((phone) => <CallButton key={phone} phone={phone} size="xs" />)}
                 </Group>
               )}
             </div>

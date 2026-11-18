@@ -2,7 +2,7 @@ import { Button, Group, Select, Text } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
-import { emptySite, formatAddress } from '../lib/sites'
+import { clientPhones, emptySite, formatAddress } from '../lib/sites'
 import { SiteForm } from './SiteForm'
 import { SiteWayButtons } from './SiteActions'
 
@@ -95,7 +95,7 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
             </Text>
             <Text size="sm">
               <span className="muted-inline">Telefon Kunde: </span>
-              {chosen.clientPhone ?? '–'}
+              {clientPhones(chosen).join(' · ') || '–'}
             </Text>
           </div>
           <div className="site-contact-actions">

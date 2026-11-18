@@ -203,6 +203,9 @@ public class Site
     /// <summary>Telephone number of the customer, to call before a visit or the start of the work.</summary>
     public string? ClientPhone { get; set; }
 
+    /// <summary>A second number of the customer: many give the landline and the mobile.</summary>
+    public string? ClientPhone2 { get; set; }
+
     /// <summary>Number of the project in Label, the merchandise management software of the company.</summary>
     public string? LabelProjectNumber { get; set; }
 

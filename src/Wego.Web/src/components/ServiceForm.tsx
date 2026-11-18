@@ -44,7 +44,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
   // The town filled in from the postal code; one typed by hand is not replaced.
   const filledCity = useRef<string | null>(null)
 
-  const field = (key: 'client' | 'clientPhone' | 'street' | 'city' | 'description') => ({
+  const field = (key: 'client' | 'clientPhone' | 'clientPhone2' | 'street' | 'city' | 'description') => ({
     value: service[key] ?? '',
     onChange: (event: { currentTarget: { value: string } }) => {
       const value = event.currentTarget.value
@@ -102,6 +102,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <TextInput label="Kunde" maxLength={200} required data-autofocus {...field('client')} />
             <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+            <TextInput label="Telefon 2 (z. B. Handy)" type="tel" maxLength={50} {...field('clientPhone2')} />
           </SimpleGrid>
           <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">

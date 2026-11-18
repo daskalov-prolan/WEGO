@@ -2,7 +2,7 @@ import { Stack, Text } from '@mantine/core'
 import type { ReactNode } from 'react'
 import type { Site } from '../api/types'
 import { formatDate } from '../lib/dates'
-import { clientName, formatAddress } from '../lib/sites'
+import { clientName, clientPhones, formatAddress } from '../lib/sites'
 import { CallButton, SiteWayButtons } from './SiteActions'
 import { StatusBadge } from './SiteStatus'
 
@@ -46,7 +46,9 @@ export function SiteSummary({
             (clientName(site) ?? '–')
           )}
         </Fact>
-        <Fact label="Telefon">{site.clientPhone ? <CallButton phone={site.clientPhone} size="xs" /> : '–'}</Fact>
+        <Fact label="Telefon">
+          {clientPhones(site).length > 0 ? clientPhones(site).map((phone) => <CallButton key={phone} phone={phone} size="xs" />) : '–'}
+        </Fact>
       </section>
       <section className="form-section">
         <h3>Adresse</h3>

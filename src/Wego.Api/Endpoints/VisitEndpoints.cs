@@ -36,7 +36,7 @@ public static class VisitEndpoints
 
     /// <summary>A customer agreed; <paramref name="Region"/> that of the planner of the enquiry.</summary>
     public record VisitDto(int EntryId, int SiteId, string Name, string? Address, string? Phone, double? Latitude, double? Longitude,
-        TimeOnly From, TimeOnly To, string? Region = null);
+        TimeOnly From, TimeOnly To, string? Region = null, string? Phone2 = null);
 
     /// <summary>
     /// A day with visits of one who goes out: set aside for them by the planners (<paramref name="Reserved"/>), or
@@ -47,7 +47,7 @@ public static class VisitEndpoints
     /// <summary>An enquiry without a visit yet; <paramref name="Region"/> that of its planner.</summary>
     public record EnquiryDto(int SiteId, string Name, string? Address, string? Phone, IReadOnlyList<string> Scope,
         string? Description, DateOnly? RequestedOn, string? Planner, string? Region, double? Latitude, double? Longitude,
-        OfferEndpoints.CallDto? Call, OfferEndpoints.DeclineReportDto? Report = null);
+        OfferEndpoints.CallDto? Call, OfferEndpoints.DeclineReportDto? Report = null, string? Phone2 = null);
 
     /// <summary>Something else in the plan of the visitor (without times the whole day): to warn of an overlap.</summary>
     public record BusyDto(DateOnly Date, string Name, TimeOnly? From, TimeOnly? To);
@@ -225,7 +225,7 @@ public static class VisitEndpoints
 
         VisitDto Visit(PlanEntry v) => new(v.Id, v.Site!.Id, Customer(v.Site), Address(v.Site), v.Site.ClientPhone,
             v.Site.Latitude, v.Site.Longitude, v.StartTime ?? DayFrom, v.EndTime ?? (v.StartTime ?? DayFrom).Add(OnSite),
-            v.Site.ResponsiblePlanner?.Region);
+            v.Site.ResponsiblePlanner?.Region, v.Site.ClientPhone2);
         var days = visitEntries.GroupBy(e => (e.Date, e.EmployeeId))
             .Select(day => new DayDto(day.Key.Date, day.Where(e => e.Site is not null).Select(Visit).ToList(),
                 day.Any(e => e.SiteId is null), day.Key.EmployeeId, day.First().Employee?.Name ?? ""))
@@ -254,7 +254,7 @@ public static class VisitEndpoints
         var enquiries = open.OrderBy(s => s.RequestedOn ?? DateOnly.MaxValue).ThenBy(s => s.Id)
             .Select(s => new EnquiryDto(s.Id, Customer(s), Address(s), s.ClientPhone, s.Scope, s.Description, s.RequestedOn,
                 s.ResponsiblePlanner?.Name, s.ResponsiblePlanner?.Region, s.Latitude, s.Longitude, calls.GetValueOrDefault(s.Id),
-                OfferEndpoints.ReportOf(s)))
+                OfferEndpoints.ReportOf(s), s.ClientPhone2))
             .ToList();
         return new VisitPlanDto(employeeId, Branches, visitors, Regions, days, enquiries, busy, open.Count(LocationEndpoints.NeedsLookUp),
             OfferEndpoints.ReasonsAt(Activity));

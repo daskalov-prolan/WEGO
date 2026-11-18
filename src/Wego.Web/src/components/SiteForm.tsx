@@ -137,7 +137,11 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
                 </div>
                 <TextInput label="Auftraggeber" maxLength={200} data-autofocus style={{ flex: 1, minWidth: 0 }} {...field('client')} />
               </Group>
-              <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+              {/* Many customers give two numbers: the landline and the mobile. */}
+              <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+                <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+                <TextInput label="Telefon 2 (z. B. Handy)" type="tel" maxLength={50} {...field('clientPhone2')} />
+              </SimpleGrid>
               <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
               <SimpleGrid cols={3} spacing="sm">
                 <TextInput

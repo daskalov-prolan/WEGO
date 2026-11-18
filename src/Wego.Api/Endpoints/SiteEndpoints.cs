@@ -12,7 +12,7 @@ public static class SiteEndpoints
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
         string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService, bool IsTentative,
         DateOnly? RequestedOn = null, IReadOnlyList<string>? Scope = null,
-        string? DeclineReason = null, string? DeclineNote = null, string? Salutation = null);
+        string? DeclineReason = null, string? DeclineNote = null, string? Salutation = null, string? ClientPhone2 = null);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -22,7 +22,7 @@ public static class SiteEndpoints
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
         string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null,
         bool? IsService = null, bool? IsTentative = null, DateOnly? RequestedOn = null,
-        IReadOnlyList<string>? Scope = null, string? Salutation = null);
+        IReadOnlyList<string>? Scope = null, string? Salutation = null, string? ClientPhone2 = null);
 
     /// <summary>How the customer is addressed (Anrede).</summary>
     public static readonly string[] Salutations = ["Herr", "Frau", "Familie"];
@@ -250,6 +250,7 @@ public static class SiteEndpoints
             target.Client ??= site.Client;
             target.ResponsiblePlannerId ??= site.ResponsiblePlannerId;
             target.ClientPhone ??= site.ClientPhone;
+            target.ClientPhone2 ??= site.ClientPhone2;
             target.Salutation ??= site.Salutation;
             if (target.Street is null)
             {
@@ -344,7 +345,7 @@ public static class SiteEndpoints
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
         s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService, s.IsTentative, s.RequestedOn,
-        s.Scope, s.DeclineReason, s.DeclineNote, s.Salutation);
+        s.Scope, s.DeclineReason, s.DeclineNote, s.Salutation, s.ClientPhone2);
 
     private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
         plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
@@ -365,6 +366,7 @@ public static class SiteEndpoints
             (Clean(input.AddressAddition), 200, "Der Adresszusatz"), (Clean(input.PostalCode), 10, "Die PLZ"),
             (Clean(input.City), 100, "Der Ort"), (Clean(input.Description), 1000, "Die Beschreibung"),
             (Clean(input.LabelProjectNumber), 50, "Die Projektnummer"), (Clean(input.ClientPhone), 50, "Die Telefonnummer"),
+            (Clean(input.ClientPhone2), 50, "Die zweite Telefonnummer"),
         };
         foreach (var (value, max, label) in fields)
         {
@@ -386,6 +388,7 @@ public static class SiteEndpoints
 
         site.Client = client;
         site.ClientPhone = Clean(input.ClientPhone);
+        site.ClientPhone2 = Clean(input.ClientPhone2);
         site.Salutation = Clean(input.Salutation);
         site.Street = street;
         site.HouseNumber = Clean(input.HouseNumber);

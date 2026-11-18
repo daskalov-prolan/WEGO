@@ -29,7 +29,7 @@ const RENAMED = { Angebotskalkulation: 'Objektauswahl', Angebotsbesprechung: 'An
 const renamed = (activity) => RENAMED[activity] ?? activity
 const PLANNER_ROLES = ['Planer', 'PlanerA', 'PlanerG']
 const EMPLOYEE_FIELDS = ['name', 'sortOrder', 'isActive', 'showInPlan', 'vacationDaysPerYear', 'mainActivity', 'additionalActivities']
-const SITE_FIELDS = ['client', 'clientPhone', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
+const SITE_FIELDS = ['client', 'clientPhone', 'clientPhone2', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
   'description', 'plannedStart', 'plannedEnd', 'labelProjectNumber']
 
 const norm = (value) => (value ?? '').toString().trim().toLocaleLowerCase('de')

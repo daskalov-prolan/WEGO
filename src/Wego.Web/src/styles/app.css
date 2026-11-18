@@ -4141,3 +4141,10 @@ html.plan-full .shell-nav {
     font-size: 12px;
   }
 }
+
+/* The numbers of a customer in the list of sites: the landline and the mobile one below the other. */
+.sites-table .phones {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

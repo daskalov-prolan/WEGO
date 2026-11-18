@@ -18,7 +18,7 @@ const sites = [
   site(3, 'Zesch', null, null),
   {
     ...site(4, 'Chung', '2026-03-10', '2026-03-31'),
-    street: 'Alt-Karow 53', postalCode: '13125', city: 'Berlin', clientPhone: '030 123 45', responsiblePlannerId: 9,
+    street: 'Alt-Karow 53', postalCode: '13125', city: 'Berlin', clientPhone: '030 123 45', clientPhone2: '0171 765', responsiblePlannerId: 9,
   },
   site(5, 'Abgesagt', '2026-03-20', '2026-03-25', 'Storniert'),
 ]
@@ -127,6 +127,9 @@ describe('SitesPage', () => {
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     expect(await within(chung).findByText('Planer G')).toBeInTheDocument()
     expect(within(chung).getByText('Alt-Karow 53, 13125 Berlin')).toBeInTheDocument()
+    // Both numbers of the customer: the landline and the mobile.
+    expect(within(chung).getByText('030 123 45')).toBeInTheDocument()
+    expect(within(chung).getByText('0171 765')).toBeInTheDocument()
     expect(within(chung).queryByRole('link', { name: 'Anrufen: 030 123 45' })).toBeNull()
   })
 

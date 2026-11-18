@@ -950,14 +950,19 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var created = await g.PostAsJsonAsync("/api/sites",
-            new { client = "Familie Anruf", clientPhone = " 030 1234567 ", nameSource = "Auftraggeber" });
+            new { client = "Familie Anruf", clientPhone = " 030 1234567 ", clientPhone2 = " 0171 7654321 ", nameSource = "Auftraggeber" });
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
 
         var site = await g.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
         Assert.Equal("030 1234567", site.GetProperty("clientPhone").GetString());
+        // Many give the landline and the mobile.
+        Assert.Equal("0171 7654321", site.GetProperty("clientPhone2").GetString());
         var tooLong = await g.PutAsJsonAsync($"/api/sites/{id}",
             new { client = "Familie Anruf", clientPhone = new string('1', 51), nameSource = "Auftraggeber" });
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        var secondTooLong = await g.PutAsJsonAsync($"/api/sites/{id}",
+            new { client = "Familie Anruf", clientPhone2 = new string('1', 51), nameSource = "Auftraggeber" });
+        Assert.Equal(HttpStatusCode.BadRequest, secondTooLong.StatusCode);
     }
 
     [Fact]

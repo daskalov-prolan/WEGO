@@ -2,7 +2,7 @@ import type { Planner, Site, SiteHourlyRate, SiteReport, StatusChange, Employee 
 import { ACTIVITIES, activityLabel, SITE_STATUSES } from './activities'
 import { formatDate, formatHours, formatTimeRange } from './dates'
 import { euro, rowsOf } from './siteHours'
-import { clientName, formatAddress } from './sites'
+import { clientName, clientPhones, formatAddress } from './sites'
 
 /** Everything the page of a site shows to Planer G, without its calendar. */
 export interface SiteSummaryData {
@@ -95,7 +95,7 @@ export async function buildSitePdf({ site, report, planners, employees, siteRate
 
   heading('Kunde')
   fact('Auftraggeber', clientName(site) ?? '')
-  fact('Telefon', site.clientPhone ?? '')
+  fact('Telefon', clientPhones(site).join(' · '))
   heading('Adresse')
   fact('Adresse', formatAddress(site) ?? '')
   heading('Planung')

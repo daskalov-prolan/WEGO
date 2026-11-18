@@ -65,6 +65,8 @@ export interface SiteInput {
   salutation?: string | null
   /** Telephone number of the customer. */
   clientPhone: string | null
+  /** A second number: many customers give the landline and the mobile. */
+  clientPhone2?: string | null
   /** Number of the project in Label, the merchandise management software. */
   labelProjectNumber: string | null
   street: string | null
@@ -183,6 +185,7 @@ export interface PlannedVisit {
   name: string
   address: string | null
   phone: string | null
+  phone2?: string | null
   latitude: number | null
   longitude: number | null
   from: string
@@ -207,6 +210,7 @@ export interface VisitEnquiry {
   name: string
   address: string | null
   phone: string | null
+  phone2?: string | null
   scope: string[]
   description: string | null
   requestedOn: string | null
