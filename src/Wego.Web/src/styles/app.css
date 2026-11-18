@@ -497,9 +497,9 @@ a:hover {
   white-space: nowrap;
 }
 
-/* ⇅ on a column that can sort, faint; the arrow of the one that sorts. */
+/* ▲ on every column that can sort, faint; in full on the one that sorts (▼ when downwards). */
 .sort-sign {
-  opacity: 0.55;
+  opacity: 0.35;
 }
 
 .sort-button.active .sort-sign {
@@ -4079,4 +4079,65 @@ html.plan-full .shell-nav {
 
 .visit-reminder-row:hover {
   text-decoration: underline;
+}
+
+/* The status in the list of sites always whole ("BAUPHASE"), not cut short when the columns get narrow. */
+.sites-table .status-cell {
+  white-space: nowrap;
+}
+
+.sites-table .status-cell .mantine-Badge-root,
+.sites-table .status-cell .mantine-Badge-label {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* In the list of sites the coloured part of the slider looks like the badge under "Status": as high, the same
+   letters, as round. */
+.sites-table .status-slider {
+  padding: 2px;
+}
+
+.sites-table .status-slider .mantine-SegmentedControl-label {
+  height: 20px;
+  padding: 0 14px 0 8px;
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.sites-table .status-slider.done .mantine-SegmentedControl-label {
+  padding: 0 8px 0 14px;
+}
+
+.sites-table .status-slider .mantine-SegmentedControl-indicator {
+  border-radius: 999px;
+}
+
+.sites-table .status-slider .mantine-SegmentedControl-indicator::after {
+  right: 4px;
+  width: 8px;
+  height: 8px;
+}
+
+.sites-table .status-slider {
+  width: 176px !important;
+}
+
+/* At the smart board: both higher, to be hit with a finger; still alike. */
+@media (any-pointer: coarse) and (min-width: 1800px) {
+  .sites-table .status-slider .mantine-SegmentedControl-label {
+    height: 24px;
+    font-size: 12px;
+    line-height: 24px;
+  }
+
+  .sites-table .status-slider {
+    width: 186px !important;
+  }
+
+  .sites-table .status-cell .mantine-Badge-root {
+    height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
 }

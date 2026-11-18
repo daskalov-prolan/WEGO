@@ -7,7 +7,7 @@ import { SiteForm } from '../components/SiteForm'
 import { LazySitesMap } from '../components/SiteMapLink'
 import { StatusBadge, StatusSlider, TentativeBadge } from '../components/SiteStatus'
 import { finishSite } from '../lib/siteDone'
-import { isOpen, SITE_STATUSES } from '../lib/activities'
+import { isOpen, SITE_STATUSES, tentativeName } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
 import { useIsPhone } from '../lib/useIsPhone'
@@ -51,12 +51,15 @@ function shows(site: Site, show: Show, today: string): boolean {
 /** How the list is grouped: not at all, by the planner in charge, or by status. */
 type Grouping = 'none' | 'planner' | 'status'
 
+/** The name to sort by: an appointment not confirmed yet ("? Müller") among the others by its name. */
+const sortName = (site: Site) => tentativeName(site.name) ?? site.name
+
 function compare(a: Site, b: Site, valueOf: (site: Site) => string | null): number {
   const left = valueOf(a)
   const right = valueOf(b)
   // Sites without the value come last, whichever the direction.
-  if (!left || !right) return left ? -1 : right ? 1 : a.name.localeCompare(b.name, 'de')
-  return left.localeCompare(right, 'de') || a.name.localeCompare(b.name, 'de')
+  if (!left || !right) return left ? -1 : right ? 1 : sortName(a).localeCompare(sortName(b), 'de')
+  return left.localeCompare(right, 'de') || sortName(a).localeCompare(sortName(b), 'de')
 }
 
 /**
@@ -126,7 +129,7 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
             .includes(needle),
         )
       : shown
-    const valueOf = (site: Site) => (sort.key === 'planner' ? plannerName(site) || null : (site[sort.key] ?? null))
+    const valueOf = (site: Site) => (sort.key === 'planner' ? plannerName(site) || null : sort.key === 'name' ? sortName(site) : (site[sort.key] ?? null))
     const sorted = [...found].sort((a, b) => compare(a, b, valueOf))
     if (!sort.descending) return sorted
     // Descending, but still with the empty values at the end.
@@ -211,12 +214,12 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
 
   const sortBy = (key: SortKey) =>
     setSort((current) => ({ key, descending: current.key === key ? !current.descending : false }))
-  // The head of a column to sort by: ⇅ while another one sorts, the direction when it does.
+  // The head of a column to sort by: a faint ▲ while another one sorts, its direction in full when it does.
   const sortHead = (key: SortKey, label: string) => (
     <Table.Th key={key}>
       <UnstyledButton onClick={() => sortBy(key)} className={sort.key === key ? 'sort-button active' : 'sort-button'}>
         {label}
-        <span aria-hidden className="sort-sign"> {sort.key === key ? (sort.descending ? '▼' : '▲') : '⇅'}</span>
+        <span aria-hidden className="sort-sign"> {sort.key === key && sort.descending ? '▼' : '▲'}</span>
       </UnstyledButton>
     </Table.Th>
   )
@@ -374,7 +377,7 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
                         </Table.Td>
                         <Table.Td>{site.requestedOn && formatDate(site.requestedOn)}</Table.Td>
                         <Table.Td>{site.plannedStart && formatDate(site.plannedStart)}</Table.Td>
-                        <Table.Td>
+                        <Table.Td className="status-cell">
                           {site.isTentative ? <TentativeBadge /> : <StatusBadge status={site.status} />}
                         </Table.Td>
                         <Table.Td>{plannerName(site)}</Table.Td>
