@@ -71,7 +71,7 @@ export function ConfirmRequests({ asked, onAnswered }: { asked: Asked[]; onAnswe
       <Modal opened={open} onClose={() => setOpen(false)} centered title="Bitte bestätigen: Serviceeinsätze">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
-            Der Planer möchte wissen, ob du diese Einsätze übernehmen kannst. Bis zu deiner Zusage stehen sie gestrichelt im Plan.
+            Der Planer möchte wissen, ob du diese Einsätze übernehmen kannst. Bis zu deiner Zusage stehen sie gestreift im Plan.
           </Text>
           {asked.map(({ entry, site }) => (
             <div key={entry.siteId} className="confirm-request">

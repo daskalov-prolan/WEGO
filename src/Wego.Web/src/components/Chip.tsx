@@ -77,7 +77,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
   // An appointment not confirmed yet: without colour, framed in dashes.
   const tentative = entry.type === 'Baustelle' && tentativeName(entry.siteName ?? '') !== null
-  // A service call the craftsman has not confirmed yet: dashed in its colour; said no to: dashed in red.
+  // A service call the craftsman has not confirmed yet: striped in its colour; said no to: striped in red.
   const asking = entry.confirmation === 'Offen' ? 'awaiting' : entry.confirmation === 'Abgelehnt' ? 'refused' : ''
   const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '', asking]
     .filter(Boolean)

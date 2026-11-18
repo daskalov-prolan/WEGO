@@ -129,8 +129,8 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
           )}
           {/* Some service calls the craftsman confirms first: until then dashed in the plan. */}
           {!tentative && (
-            <div>
-              <Text size="sm" fw={500} mb={4}>
+            <div className="confirm-question">
+              <Text size="sm" fw={700} mb={4}>
                 Muss der Handwerker den Einsatz bestätigen?
               </Text>
               <SegmentedControl
