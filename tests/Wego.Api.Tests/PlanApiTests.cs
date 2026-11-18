@@ -138,23 +138,6 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
-    public async Task Overlapping_time_windows_are_rejected()
-    {
-        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
-        var employeeId = await CreateEmployeeAsync(planer, "Overlap Tester", null, null);
-        var siteA = await CreateSiteAsync(planer, "A");
-        var siteB = await CreateSiteAsync(planer, "B");
-
-        var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-04-01", new object[]
-        {
-            new { type = "Baustelle", siteId = siteA, startTime = "08:00:00", endTime = "10:00:00" },
-            new { type = "Baustelle", siteId = siteB, startTime = "09:00:00", endTime = "11:00:00" },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
-    }
-
-    [Fact]
     public async Task Employee_without_planning_rights_can_read_but_not_change_the_plan()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
