@@ -33,7 +33,7 @@ import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
 import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
 import type { MeetingWeek, OwnBusy } from '../api/types'
-import { busyTime, clashes } from '../lib/busy'
+import { busyTime, clashes, meetingClashes } from '../lib/busy'
 import { Sheet } from '../components/Sheet'
 import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
@@ -268,6 +268,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   // The days that are currently in view; follows the scrolling.
   // The plan opens at today (or, back from a site, where it was); one scrolls from there into the past or the future.
   const [returnDate] = useState(loadReturnDate)
+  // On a phone the search is a magnifier that opens the field below the buttons.
+  const [searchOpen, setSearchOpen] = useState(false)
   const start =
     returnDate && returnDate >= first && returnDate <= last ? returnDate : today >= first && today <= last ? today : first
   // The days in view change with every move: kept outside the state, so that scrolling draws nothing anew. Only
@@ -945,13 +947,22 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
   const entriesOf = (employeeId: number, date: string) => entriesByCell.get(cellKey(employeeId, date)) ?? []
   // From today on: where the plan has something while somebody is busy after his own calendar.
+  const personName = (employeeId: number) => [...(plan?.employees ?? []), ...(plan?.planners ?? [])].find((e) => e.id === employeeId)?.name ?? '?'
   const clashList = canEdit
-    ? (plan?.busy ?? []).filter((b) => b.date >= today).flatMap((b) => {
-        const names = clashes(b, entriesOf(b.employeeId, b.date), meetingsByCell.get(cellKey(b.employeeId, b.date)) ?? [])
-        if (names.length === 0) return []
-        const who = [...(plan?.employees ?? []), ...(plan?.planners ?? [])].find((e) => e.id === b.employeeId)?.name ?? '?'
-        return [{ busy: b, who, names }]
-      })
+    ? [
+        // Busy after his own calendar.
+        ...(plan?.busy ?? []).filter((b) => b.date >= today).flatMap((b) => {
+          const names = clashes(b, entriesOf(b.employeeId, b.date), meetingsByCell.get(cellKey(b.employeeId, b.date)) ?? [])
+          return names.length === 0 ? [] : [{ date: b.date, who: personName(b.employeeId), what: `privat belegt ${busyTime(b)}`, names }]
+        }),
+        // A meeting while he is planned on a site.
+        ...(plan?.meetings ?? []).filter((week) => week.date >= today).flatMap((week) =>
+          week.employeeIds.flatMap((id) => {
+            const names = meetingClashes(week, entriesOf(id, week.date))
+            return names.length === 0 ? [] : [{ date: week.date, who: personName(id), what: `${week.title} ${week.startTime.slice(0, 5)}–${week.endTime.slice(0, 5)}`, names }]
+          }),
+        ),
+      ].sort((a, b) => a.date.localeCompare(b.date) || a.who.localeCompare(b.who))
     : []
 
   // The steps of the offer after the enquiry, and their appointments in the plan: for the window of a step.
@@ -1503,8 +1514,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
       value={perspective}
       onChange={(value) => changePerspective(value as Perspective)}
       data={[
-        { value: 'employees', label: 'Nach Mitarbeiter' },
-        { value: 'sites', label: 'Nach Baustelle' },
+        { value: 'employees', label: isPhone ? 'Mitarbeiter' : 'Nach Mitarbeiter' },
+        { value: 'sites', label: isPhone ? 'Baustelle' : 'Nach Baustelle' },
       ]}
       color="wego"
     />
@@ -1546,6 +1557,36 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     </UnstyledButton>,
   )
 
+  // Undo and redo: at the start of the activities, on a phone in the row of the paging.
+  const historyButtons = canEdit && (
+    <Group gap={4} wrap="nowrap" className="history-buttons">
+      <Tooltip label={history.undo.at(-1) ? `Rückgängig: ${history.undo.at(-1)!.label}` : 'Nichts rückgängig zu machen'}>
+        <ActionIcon
+          variant="default"
+          size="input-sm"
+          radius="xl"
+          aria-label="Rückgängig"
+          disabled={history.undo.length === 0 || busy}
+          onClick={() => undo().catch(fail)}
+        >
+          ↶
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label={history.redo.at(-1) ? `Wiederherstellen: ${history.redo.at(-1)!.label}` : 'Nichts wiederherzustellen'}>
+        <ActionIcon
+          variant="default"
+          size="input-sm"
+          radius="xl"
+          aria-label="Wiederherstellen"
+          disabled={history.redo.length === 0 || busy}
+          onClick={() => redo().catch(fail)}
+        >
+          ↷
+        </ActionIcon>
+      </Tooltip>
+    </Group>
+  )
+
   // First names, as in the plan.
   const paletteNames = shortNames(phaseEmployees)
 
@@ -1576,16 +1617,47 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           )}
           {/* Zoom, paging and the shown weeks at the right, before the switches. On a phone only ‹ Heute ›. */}
           {isPhone ? (
-            <Group gap={6} wrap="nowrap" justify="center" w="100%" className="phone-paging">
-              <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
-                ‹
-              </ActionIcon>
-              <Button size="sm" color="wegoRed.6" onClick={goToday}>
-                Heute
-              </Button>
-              <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
-                ›
-              </ActionIcon>
+            // One row for all the rest: paging, undo, the search, the meetings and the clashes as signs, so that
+            // the plan keeps the screen.
+            <Group gap={4} wrap="nowrap" justify="space-between" w="100%" className="phone-paging">
+              <Group gap={4} wrap="nowrap">
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(-1)} aria-label="Zurück">
+                  ‹
+                </ActionIcon>
+                <Button size="sm" px={10} color="wegoRed.6" onClick={goToday}>
+                  Heute
+                </Button>
+                <ActionIcon variant="default" size="input-sm" onClick={() => step(1)} aria-label="Weiter">
+                  ›
+                </ActionIcon>
+              </Group>
+              {historyButtons}
+              <Group gap={4} wrap="nowrap">
+                <ActionIcon
+                  variant={searchOpen || foundSite ? 'filled' : 'default'}
+                  color="wego"
+                  size="input-sm"
+                  radius="xl"
+                  aria-label="Suchen"
+                  aria-pressed={searchOpen}
+                  onClick={() => setSearchOpen((open) => !open)}
+                >
+                  ⌕
+                </ActionIcon>
+                {canEdit && (
+                  <ActionIcon variant="default" size="input-sm" radius="xl" className="phone-sign" aria-label="Wiederholungstermine"
+                    onClick={() => setMeetingsOpen(true)}>
+                    ⟳
+                    {meetingRequests > 0 && <span className="visit-count phone-sign-count">{meetingRequests}</span>}
+                  </ActionIcon>
+                )}
+                {clashList.length > 0 && (
+                  <ActionIcon variant="outline" color="red" size="input-sm" radius="xl" className="phone-sign" aria-label="Überschneidungen"
+                    onClick={() => setClashesOpen(true)}>
+                    ⚠<span className="visit-count phone-sign-count">{clashList.length}</span>
+                  </ActionIcon>
+                )}
+              </Group>
             </Group>
           ) : (
             <>
@@ -1673,44 +1745,17 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
 
         {/* Undo and redo, the activities of the phase right above the plan, then the search. Urlaub and Krank are
             entered under Verwaltung (Planer G) and only shown in the plan. */}
+        {/* On a phone only the search, when the magnifier opened it (or a site was found). */}
+        {isPhone ? (
+          (searchOpen || foundSite) && <div className="plan-search phone-search">{search}</div>
+        ) : (
         <div className="activity-row">
-          {canEdit && (
-            <Group gap={4} wrap="nowrap" className="history-buttons">
-              <Tooltip label={history.undo.at(-1) ? `Rückgängig: ${history.undo.at(-1)!.label}` : 'Nichts rückgängig zu machen'}>
-                <ActionIcon
-                  variant="default"
-                  size="input-sm"
-                  radius="xl"
-                  aria-label="Rückgängig"
-                  disabled={history.undo.length === 0 || busy}
-                  onClick={() => undo().catch(fail)}
-                >
-                  ↶
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={history.redo.at(-1) ? `Wiederherstellen: ${history.redo.at(-1)!.label}` : 'Nichts wiederherzustellen'}>
-                <ActionIcon
-                  variant="default"
-                  size="input-sm"
-                  radius="xl"
-                  aria-label="Wiederherstellen"
-                  disabled={history.redo.length === 0 || busy}
-                  onClick={() => redo().catch(fail)}
-                >
-                  ↷
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          )}
+          {historyButtons}
           {/* The activities go onto an employee's day (the site is chosen or created there), or onto an entry to
-              change what the employee does there; a phone cannot drag them, so they stay away there. */}
-          {!isPhone && (
-            <>
-              {canEdit && <span className="plan-sep" aria-hidden />}
-              <PhaseActivities phase={phase} draggable={canEdit} />
-              <span className="plan-sep" aria-hidden />
-            </>
-          )}
+              change what the employee does there. */}
+          {canEdit && <span className="plan-sep" aria-hidden />}
+          <PhaseActivities phase={phase} draggable={canEdit} />
+          <span className="plan-sep" aria-hidden />
           {/* The search right after the activities. */}
           <div className="plan-search">{search}</div>
           {/* Meetings every week (e.g. the Bauberatung); for Planer G with the number of requests to be let off. */}
@@ -1728,6 +1773,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             </Button>
           )}
         </div>
+        )}
         {canEdit && perspective === 'sites' && !isPhone && phaseEmployees.length > 0 && (
           <div className="employee-palette" role="group" aria-label="Mitarbeiter zum Einplanen">
             <Text size="xs" c="dimmed">
@@ -1746,11 +1792,6 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
               )
             })}
           </div>
-        )}
-        {canEdit && isPhone && selected.size === 0 && perspective === 'employees' && (
-          <Text size="xs" c="dimmed">
-            Tipp: Feld lange drücken, um mehrere Tage auszuwählen.
-          </Text>
         )}
       </div>
 
@@ -1939,6 +1980,7 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             fillFree={open.fillFree}
             phase={phase}
             entries={entriesOf(open.employee.id, open.date)}
+            meetings={meetingsByCell.get(cellKey(open.employee.id, open.date)) ?? []}
             sites={plan.sites}
             onCreateSite={createSite}
             onGoToSite={canEdit ? shared.onOpenSite : undefined}
@@ -2039,13 +2081,16 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         />
       )}
       {clashesOpen && (
-        <Sheet title="Überschneidungen mit privaten Terminen" onClose={() => setClashesOpen(false)} size="lg">
+        <Sheet title="Überschneidungen" onClose={() => setClashesOpen(false)} size="lg">
           <Stack gap="xs">
-            <Text size="sm" c="dimmed">Eingeplant, während der Mitarbeiter laut eigenem Kalender belegt ist (nur die Zeit ist bekannt).</Text>
-            {clashList.map(({ busy, who, names }, i) => (
+            <Text size="sm" c="dimmed">
+              Eingeplant, während der Mitarbeiter einen Wiederholungstermin hat oder laut eigenem Kalender belegt ist
+              (davon ist nur die Zeit bekannt).
+            </Text>
+            {clashList.map(({ date, who, what, names }, i) => (
               <div key={i} className="clash-row">
-                <Text size="sm" fw={700}>{who} · {formatDate(busy.date)}</Text>
-                <Text size="sm">privat belegt {busyTime(busy)} ↔ {names.join(', ')}</Text>
+                <Text size="sm" fw={700}>{who} · {formatDate(date)}</Text>
+                <Text size="sm">{what} ↔ {names.join(', ')}</Text>
               </div>
             ))}
           </Stack>

@@ -11,9 +11,14 @@ const when = (iso: string) => {
   return `${pad(at.getDate())}.${pad(at.getMonth() + 1)}. ${pad(at.getHours())}:${pad(at.getMinutes())}`
 }
 
+/** Whose calendar a link is, after its address. */
+const provider = (url: string) =>
+  /icloud\.com/i.test(url) ? 'Apple-Kalender' : /google\.com/i.test(url) ? 'Google-Kalender' : /outlook/i.test(url) ? 'Outlook-Kalender' : 'Kalender'
+
 /**
  * Mein Bereich, "Meine Kalender": the plan in the own calendar (a link to subscribe to, read only), and the own
- * calendar in the plan (its appointments shown there as "belegt", only the times).
+ * calendars in the plan (their appointments shown there as "belegt", only the times); several can be shared, e.g.
+ * Privat and Arbeit, each read on its own.
  */
 export function MyCalendars() {
   const [calendar, setCalendar] = useState<MyCalendar | null>(null)
@@ -22,22 +27,20 @@ export function MyCalendars() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.myCalendar().then((c) => {
-      setCalendar(c)
-      setUrl(c.externalUrl ?? '')
-    }, (e) => setError(messageOf(e)))
+    api.myCalendar().then(setCalendar, (e) => setError(messageOf(e)))
   }, [])
 
+  /** True when it went through. */
   const run = async (change: Promise<MyCalendar>, message?: string) => {
     setError('')
     try {
       const c = await change
       setCalendar(c)
-      setUrl(c.externalUrl ?? '')
-      if (c.error) setError(c.error)
-      else if (message) notifications.show({ message, color: 'teal' })
+      if (message) notifications.show({ message, color: 'teal' })
+      return true
     } catch (e) {
       setError(messageOf(e))
+      return false
     }
   }
 
@@ -95,29 +98,48 @@ export function MyCalendars() {
           iPhone: Kalender-App → unten „Kalender“ → beim gewünschten Kalender auf ⓘ → „Öffentlicher Kalender“ einschalten
           → „Link teilen“ → kopieren und hier einfügen.
         </Text>
-        <Text size="xs" c="orange.8" mb="xs">
-          Es erscheinen nur Termine aus genau diesem einen Kalender. Termine in anderen Kalendern (z. B. „Arbeit“, „Privat“,
-          Google oder Exchange) bitte in den freigegebenen Kalender legen oder diesen Kalender zusätzlich freigeben.
+        <Text size="xs" c="dimmed" mb="xs">
+          Es erscheinen nur Termine aus den verbundenen Kalendern. Haben Sie mehrere (z. B. „Privat“, „Arbeit“, „Familie“),
+          verbinden Sie jeden einzeln mit seinem eigenen Link.
         </Text>
         <Stack gap="xs">
-          <TextInput placeholder="webcal://p…-caldav.icloud.com/published/…" value={url} onChange={(e) => setUrl(e.currentTarget.value)} />
+          {calendar.calendars.map((own, i) => (
+            <div key={own.id} className="own-calendar">
+              <Group gap="xs" justify="space-between" wrap="nowrap">
+                <div style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={700}>{i + 1}. {provider(own.url)}</Text>
+                  {own.error ? (
+                    <Text size="xs" c="red.8">{own.error}</Text>
+                  ) : own.syncedAt ? (
+                    <Text size="xs" c="teal.8">
+                      Verbunden · zuletzt abgeglichen {when(own.syncedAt)} · {own.busy} belegte Zeiten in den nächsten Monaten
+                    </Text>
+                  ) : (
+                    <Text size="xs" c="dimmed">Wird abgeglichen …</Text>
+                  )}
+                </div>
+                <Button size="compact-sm" variant="default" style={{ flex: "none" }} aria-label={`Kalender ${i + 1} trennen`}
+                  onClick={() => run(api.removeOwnCalendar(own.id), 'Kalender getrennt.')}>
+                  Trennen
+                </Button>
+              </Group>
+            </div>
+          ))}
+          <TextInput
+            label={calendar.calendars.length === 0 ? 'Link des Kalenders' : 'Weiteren Kalender verbinden'}
+            placeholder="webcal://p…-caldav.icloud.com/published/…"
+            value={url}
+            onChange={(e) => setUrl(e.currentTarget.value)}
+          />
           <Group gap="xs">
-            <Button disabled={!url.trim() || url.trim() === calendar.externalUrl}
-              onClick={() => run(api.setOwnCalendar(url.trim()), 'Kalender verbunden.')}>
-              Verbinden
+            <Button disabled={!url.trim()}
+              onClick={() => run(api.addOwnCalendar(url.trim()), 'Kalender verbunden.').then((ok) => ok && setUrl(''))}>
+              {calendar.calendars.length === 0 ? 'Verbinden' : '+ Weiteren Kalender verbinden'}
             </Button>
-            {calendar.externalUrl && (
-              <>
-                <Button variant="default" onClick={() => run(api.syncOwnCalendar(), 'Kalender abgeglichen.')}>Jetzt abgleichen</Button>
-                <Button variant="default" onClick={() => run(api.setOwnCalendar(null), 'Kalender getrennt.')}>Trennen</Button>
-              </>
+            {calendar.calendars.length > 0 && (
+              <Button variant="default" onClick={() => run(api.syncOwnCalendar(), 'Kalender abgeglichen.')}>Jetzt abgleichen</Button>
             )}
           </Group>
-          {calendar.externalUrl && !calendar.error && calendar.syncedAt && (
-            <Text size="xs" c="teal.8">
-              Verbunden · zuletzt abgeglichen {when(calendar.syncedAt)} · {calendar.busy} belegte Zeiten in den nächsten Monaten
-            </Text>
-          )}
         </Stack>
       </Paper>
     </Stack>

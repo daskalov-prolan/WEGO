@@ -12,7 +12,7 @@ namespace Wego.Api.Endpoints;
 /// <summary>
 /// The plan and the calendars of the employees (e.g. Apple's) side by side. Each employee has a secret link to his
 /// own appointments, for his calendar to subscribe to (read only: changed here, in the plan). And a calendar of his
-/// own can be shared with the plan: its appointments are shown as "belegt", only the times, nothing of what they are.
+/// own (or several) can be shared with the plan: its appointments are shown as "belegt", only the times, nothing of what they are.
 /// </summary>
 public static class CalendarEndpoints
 {
@@ -39,7 +39,11 @@ public static class CalendarEndpoints
         }
     }
 
-    public record MyCalendarDto(string? Link, string? ExternalUrl, DateTime? SyncedAt, string? Error, int Busy);
+    /// <summary>How many calendars of his own one employee can share.</summary>
+    public const int MaxCalendars = 5;
+
+    public record OwnCalendarDto(int Id, string Url, DateTime? SyncedAt, string? Error, int Busy);
+    public record MyCalendarDto(string? Link, List<OwnCalendarDto> Calendars);
     public record ExternalInput(string? Url);
     public record BusyDto(int EmployeeId, DateOnly Date, TimeOnly? StartTime, TimeOnly? EndTime);
 
@@ -81,37 +85,54 @@ public static class CalendarEndpoints
         {
             var employee = await db.Employees.FirstOrDefaultAsync(e => e.Id == user.EmployeeId());
             if (employee is null) return Results.NotFound();
-            await SyncAsync(db, http, employee);
+            foreach (var calendar in await db.ExternalCalendars.Where(c => c.EmployeeId == employee.Id).ToListAsync())
+                await SyncAsync(db, http, calendar);
             return Results.Ok(await DtoAsync(db, employee, request));
         });
 
-        // His own calendar shared with the plan (or no longer: url empty); read at once.
-        me.MapPut("/external", async (ExternalInput input, ClaimsPrincipal user, HttpRequest request, WegoDbContext db, IHttpClientFactory http) =>
+        // One more calendar of his own shared with the plan; read at once.
+        me.MapPost("/external", async (ExternalInput input, ClaimsPrincipal user, HttpRequest request, WegoDbContext db, IHttpClientFactory http) =>
         {
             var employee = await db.Employees.FirstOrDefaultAsync(e => e.Id == user.EmployeeId());
             if (employee is null) return Results.NotFound();
             var url = input.Url?.Trim();
-            if (string.IsNullOrEmpty(url))
-            {
-                employee.ExternalCalendarUrl = null;
-                employee.ExternalCalendarSyncedAt = null;
-                employee.ExternalCalendarError = null;
-                await db.ExternalBusy.Where(b => b.EmployeeId == employee.Id).ExecuteDeleteAsync();
-                await db.SaveChangesAsync();
-                return Results.Ok(await DtoAsync(db, employee, request));
-            }
-            if (Normalize(url) is null)
+            if (string.IsNullOrEmpty(url) || Normalize(url) is not { } uri)
                 return ApiErrors.BadRequest("Bitte den Link eines freigegebenen Kalenders von Apple (iCloud), Google oder Outlook einfügen.");
-            employee.ExternalCalendarUrl = url;
-            await SyncAsync(db, http, employee);
+            var mine = await db.ExternalCalendars.Where(c => c.EmployeeId == employee.Id).ToListAsync();
+            if (mine.Any(c => Normalize(c.Url) == uri))
+                return ApiErrors.BadRequest("Dieser Kalender ist schon verbunden.");
+            if (mine.Count >= MaxCalendars)
+                return ApiErrors.BadRequest($"Es können höchstens {MaxCalendars} Kalender verbunden werden.");
+            var calendar = new ExternalCalendar { EmployeeId = employee.Id, Url = url };
+            db.ExternalCalendars.Add(calendar);
+            await db.SaveChangesAsync();
+            await SyncAsync(db, http, calendar);
+            return Results.Ok(await DtoAsync(db, employee, request));
+        });
+
+        // A calendar no longer shared: its busy times go with it.
+        me.MapDelete("/external/{id:int}", async (int id, ClaimsPrincipal user, HttpRequest request, WegoDbContext db) =>
+        {
+            var employee = await db.Employees.FirstOrDefaultAsync(e => e.Id == user.EmployeeId());
+            if (employee is null) return Results.NotFound();
+            var calendar = await db.ExternalCalendars.FirstOrDefaultAsync(c => c.Id == id && c.EmployeeId == employee.Id);
+            if (calendar is null) return Results.NotFound();
+            await db.ExternalBusy.Where(b => b.CalendarId == id).ExecuteDeleteAsync();
+            db.ExternalCalendars.Remove(calendar);
+            await db.SaveChangesAsync();
             return Results.Ok(await DtoAsync(db, employee, request));
         });
     }
 
-    private static async Task<MyCalendarDto> DtoAsync(WegoDbContext db, Employee employee, HttpRequest request) => new(
-        employee.CalendarToken is { } token ? $"{request.Scheme}://{request.Host}/api/calendar/{token}.ics" : null,
-        employee.ExternalCalendarUrl, employee.ExternalCalendarSyncedAt, employee.ExternalCalendarError,
-        await db.ExternalBusy.CountAsync(b => b.EmployeeId == employee.Id));
+    private static async Task<MyCalendarDto> DtoAsync(WegoDbContext db, Employee employee, HttpRequest request)
+    {
+        var busy = await db.ExternalBusy.Where(b => b.EmployeeId == employee.Id).GroupBy(b => b.CalendarId)
+            .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count);
+        var calendars = await db.ExternalCalendars.AsNoTracking().Where(c => c.EmployeeId == employee.Id).OrderBy(c => c.Id).ToListAsync();
+        return new(
+            employee.CalendarToken is { } token ? $"{request.Scheme}://{request.Host}/api/calendar/{token}.ics" : null,
+            calendars.Select(c => new OwnCalendarDto(c.Id, c.Url, c.SyncedAt, c.Error, busy.GetValueOrDefault(c.Id))).ToList());
+    }
 
     /// <summary>webcal:// as https://; null for anything but https to one of <see cref="Hosts"/>.</summary>
     public static Uri? Normalize(string url)
@@ -132,16 +153,16 @@ public static class CalendarEndpoints
         if (!user.CanPlan()) query = query.Where(b => b.EmployeeId == mine);
         if (employeeId is { } id) query = query.Where(b => b.EmployeeId == id);
         return (await query.OrderBy(b => b.Date).ThenBy(b => b.StartTime).ToListAsync())
-            .Select(b => new BusyDto(b.EmployeeId, b.Date, b.StartTime, b.EndTime)).ToList();
+            .Select(b => new BusyDto(b.EmployeeId, b.Date, b.StartTime, b.EndTime)).Distinct().ToList();
     }
 
     /// <summary>
-    /// Reads the own calendar of the employee and keeps its times from yesterday on (each day apart; the whole day
+    /// Reads one own calendar of an employee and keeps its times from yesterday on (each day apart; the whole day
     /// without times). What could not be read is kept as the error, the times read before stay.
     /// </summary>
-    public static async Task SyncAsync(WegoDbContext db, IHttpClientFactory http, Employee employee, CancellationToken cancel = default)
+    public static async Task SyncAsync(WegoDbContext db, IHttpClientFactory http, ExternalCalendar calendar, CancellationToken cancel = default)
     {
-        var uri = employee.ExternalCalendarUrl is { } url ? Normalize(url) : null;
+        var uri = Normalize(calendar.Url);
         if (uri is null) return;
         try
         {
@@ -153,14 +174,14 @@ public static class CalendarEndpoints
             if (response.Content.Headers.ContentLength > 5_000_000) throw new InvalidOperationException("Der Kalender ist zu groß.");
             var text = await response.Content.ReadAsStringAsync(cancel);
             var busy = Parse(text, Today.AddDays(-1), Today.AddDays(BusyAhead));
-            await db.ExternalBusy.Where(b => b.EmployeeId == employee.Id).ExecuteDeleteAsync(cancel);
-            db.ExternalBusy.AddRange(busy.Select(b => new ExternalBusy { EmployeeId = employee.Id, Date = b.Date, StartTime = b.Start, EndTime = b.End }));
-            employee.ExternalCalendarError = null;
-            employee.ExternalCalendarSyncedAt = DateTime.UtcNow;
+            await db.ExternalBusy.Where(b => b.CalendarId == calendar.Id).ExecuteDeleteAsync(cancel);
+            db.ExternalBusy.AddRange(busy.Select(b => new ExternalBusy { EmployeeId = calendar.EmployeeId, CalendarId = calendar.Id, Date = b.Date, StartTime = b.Start, EndTime = b.End }));
+            calendar.Error = null;
+            calendar.SyncedAt = DateTime.UtcNow;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or FormatException or ArgumentException)
         {
-            employee.ExternalCalendarError = e is InvalidOperationException ? e.Message : "Der Kalender konnte nicht gelesen werden.";
+            calendar.Error = e is InvalidOperationException ? e.Message : "Der Kalender konnte nicht gelesen werden.";
         }
         await db.SaveChangesAsync(cancel);
     }
@@ -313,8 +334,8 @@ public class ExternalCalendarSync(IServiceScopeFactory scopes, IHttpClientFactor
             {
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<WegoDbContext>();
-                var employees = await db.Employees.Where(e => e.ExternalCalendarUrl != null && e.IsActive && e.DeletedAt == null).ToListAsync(stoppingToken);
-                foreach (var employee in employees) await CalendarEndpoints.SyncAsync(db, http, employee, stoppingToken);
+                var calendars = await db.ExternalCalendars.Where(c => c.Employee.IsActive && c.Employee.DeletedAt == null).ToListAsync(stoppingToken);
+                foreach (var calendar in calendars) await CalendarEndpoints.SyncAsync(db, http, calendar, stoppingToken);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {

@@ -194,17 +194,6 @@ namespace Wego.Api.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ExternalCalendarError")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<DateTime?>("ExternalCalendarSyncedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExternalCalendarUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
                     b.Property<decimal?>("HourlyRate")
                         .HasPrecision(8, 2)
                         .HasColumnType("numeric(8,2)");
@@ -274,6 +263,9 @@ namespace Wego.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CalendarId")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
@@ -288,9 +280,41 @@ namespace Wego.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CalendarId");
+
                     b.HasIndex("EmployeeId", "Date");
 
                     b.ToTable("ExternalBusy");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.ExternalCalendar", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("SyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("ExternalCalendars");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.Meeting", b =>
@@ -770,6 +794,25 @@ namespace Wego.Api.Migrations
                 });
 
             modelBuilder.Entity("Wego.Api.Data.ExternalBusy", b =>
+                {
+                    b.HasOne("Wego.Api.Data.ExternalCalendar", "Calendar")
+                        .WithMany()
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Wego.Api.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Calendar");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.ExternalCalendar", b =>
                 {
                     b.HasOne("Wego.Api.Data.Employee", "Employee")
                         .WithMany()

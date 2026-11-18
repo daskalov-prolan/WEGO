@@ -25,10 +25,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// Mein Bereich also shows the own calendars: none here.
+const noCalendars = { link: null, calendars: [] }
+
 describe('MyAreaPage', () => {
   it('shows the own vacation from 2027 on: days left and the stretches taken and planned', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2027-03-01T09:00:00') })
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(vacation), { status: 200 }))
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/me/calendar') ? noCalendars : vacation), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<MyAreaPage user={user} />)
 
@@ -50,7 +53,7 @@ describe('MyAreaPage', () => {
       { employeeId: 4, name: 'Carla', vacation: { ...vacation, used: 33, remaining: -3, blocks: [{ from: '2027-06-01', to: '2027-07-16', days: 33 }] } },
     ]
     vi.stubGlobal('fetch', vi.fn(async (url: string) =>
-      new Response(JSON.stringify(url.startsWith('/api/vacation') ? team : vacation), { status: 200 })))
+      new Response(JSON.stringify(url.startsWith('/api/me/calendar') ? noCalendars : url.startsWith('/api/vacation') ? team : vacation), { status: 200 })))
     renderWithProviders(<MyAreaPage user={{ ...user, role: 'PlanerG' }} />)
 
     expect(await screen.findByText('Urlaub der Mitarbeiter 2027')).toBeInTheDocument()

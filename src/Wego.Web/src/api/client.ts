@@ -150,9 +150,11 @@ export const api = {
   myCalendar: () => request<MyCalendar>('GET', '/api/me/calendar'),
   /** The link to the own appointments (made anew: the old one no longer works). */
   makeCalendarLink: (renew = false) => request<MyCalendar>('POST', `/api/me/calendar/link${renew ? '?renew=true' : ''}`),
-  /** The own calendar shared with the plan; null: no longer. */
-  setOwnCalendar: (url: string | null) => request<MyCalendar>('PUT', '/api/me/calendar/external', { url }),
-  /** The own calendar read at once. */
+  /** One more own calendar shared with the plan. */
+  addOwnCalendar: (url: string) => request<MyCalendar>('POST', '/api/me/calendar/external', { url }),
+  /** An own calendar no longer shared. */
+  removeOwnCalendar: (id: number) => request<MyCalendar>('DELETE', `/api/me/calendar/external/${id}`),
+  /** The own calendars read at once. */
   syncOwnCalendar: () => request<MyCalendar>('POST', '/api/me/calendar/sync'),
   meetings: () => request<Meeting[]>('GET', '/api/meetings'),
   createMeeting: (input: MeetingInput) => request<Meeting>('POST', '/api/meetings', input),
