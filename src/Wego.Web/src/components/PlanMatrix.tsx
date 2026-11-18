@@ -1,7 +1,7 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, MeetingWeek, NamedItem, OwnBusy, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { BusyChip } from './BusyChip'
-import { clashes, meetingClashes } from '../lib/busy'
+import { clashes, meetingClashes, overlapping } from '../lib/busy'
 import { MeetingChip } from './MeetingDialogs'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
@@ -533,6 +533,8 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const afternoon = free && (halves[0].startTime ?? '') >= '12:00'
   const firstVisit = entries.findIndex(isVisit)
   const visits = visitGroup(entries)
+  // Two entries at the same time (e.g. after one was moved here): both in red until the times are set right.
+  const overlaps = new Set(overlapping(entries).map((entry) => entry.id))
   const freeChip = (
     <span
       className="chip chip-baustelle chip-half-free"
@@ -630,6 +632,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
               drop={cell.draggable ? lateDrop(() => props().dropOnEntry?.(entry)) : undefined}
               marked={marked?.ids.has(entry.id)}
               found={cell.found?.has(entry.id)}
+              clash={overlaps.has(entry.id)}
               stretch={
                 cell.stretches && marked && (marked.first === entry.id || marked.last === entry.id)
                   ? {

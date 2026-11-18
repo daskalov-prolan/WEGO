@@ -4216,3 +4216,15 @@ html.plan-full .shell-nav {
   border: 1px solid #d5dfe2;
   border-radius: 8px;
 }
+
+/* Two entries of a day at the same time (e.g. one moved there): framed in red with a sign until the times fit. */
+.chip.overlap {
+  outline: 2px solid var(--wego-red);
+  outline-offset: -2px;
+}
+
+.overlap-mark {
+  flex: none;
+  color: var(--wego-red);
+  font-weight: 800;
+}

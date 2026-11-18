@@ -350,12 +350,8 @@ public static class PlanEndpoints
             if (input.Note?.Length > 500) return "Die Notiz darf höchstens 500 Zeichen lang sein.";
         }
 
-        var timed = inputs.Where(i => i.StartTime is not null).OrderBy(i => i.StartTime).ToList();
-        for (var i = 1; i < timed.Count; i++)
-        {
-            if (timed[i].StartTime < timed[i - 1].EndTime)
-                return "Die Zeitfenster eines Tages dürfen sich nicht überschneiden.";
-        }
+        // Time windows of a day may overlap (e.g. an entry moved onto a day that has one at that time): the plan
+        // marks them in red and the planner sets the times right.
 
         return null;
     }

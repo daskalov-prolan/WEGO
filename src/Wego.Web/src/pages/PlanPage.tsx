@@ -33,7 +33,7 @@ import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
 import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
 import type { MeetingWeek, OwnBusy } from '../api/types'
-import { busyTime, clashes, meetingClashes } from '../lib/busy'
+import { busyTime, clashes, meetingClashes, overlapping } from '../lib/busy'
 import { askedCalls, ConfirmationsSheet } from '../components/ServiceConfirmations'
 import { Sheet } from '../components/Sheet'
 import { useLiveChanges } from '../lib/useLiveChanges'
@@ -958,6 +958,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
           const names = clashes(b, entriesOf(b.employeeId, b.date), meetingsByCell.get(cellKey(b.employeeId, b.date)) ?? [])
           return names.length === 0 ? [] : [{ date: b.date, who: personName(b.employeeId), what: `privat belegt ${busyTime(b)}`, names }]
         }),
+        // Two entries of his day at the same time (e.g. one moved there).
+        ...[...entriesByCell.values()].flatMap((cell) => {
+          const both = overlapping(cell)
+          if (both.length === 0 || both[0].date < today) return []
+          const at = (entry: Entry) => `${entry.siteName ?? entry.activity ?? 'Eintrag'} ${entry.startTime!.slice(0, 5)}–${entry.endTime!.slice(0, 5)}`
+          return [{ date: both[0].date, who: personName(both[0].employeeId), what: 'Zwei Einsätze zur selben Zeit', names: both.map(at) }]
+        }),
         // A meeting while he is planned on a site.
         ...(plan?.meetings ?? []).filter((week) => week.date >= today).flatMap((week) =>
           week.employeeIds.flatMap((id) => {
@@ -1019,6 +1026,18 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     // A new change ends what could be done again.
     setHistory((current) => ({ undo: [...current.undo, { label: message, before: previous, after: changes }].slice(-MAX_STEPS), redo: [] }))
     notifications.show({ id: `saved-${++notificationCount.current}`, autoClose: 4000, message })
+    // Saved all the same when two entries of a day are at the same time now: the planner is told, to set the times.
+    for (const change of changes) {
+      const both = overlapping(change.entries)
+      if (both.length === 0) continue
+      const names = both.map((entry) => `${siteById.get(entry.siteId ?? -1)?.name ?? entry.activity ?? 'Eintrag'} ${entry.startTime!.slice(0, 5)}–${entry.endTime!.slice(0, 5)}`)
+      notifications.show({
+        color: 'orange',
+        title: `Überschneidung: ${personName(change.employeeId)}, ${formatDate(change.date)}`,
+        message: `${names.join(' und ')} – bitte die Zeiten anpassen.`,
+        autoClose: 8000,
+      })
+    }
   }
 
   /** Takes back the newest change: its days as they were before. */

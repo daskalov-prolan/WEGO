@@ -985,6 +985,23 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Time_windows_of_a_day_may_overlap_the_plan_marks_them()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var employeeId = await CreateEmployeeAsync(planer, "Overlap Tester", null, null);
+        var first = await CreateSiteAsync(planer, "Familie Früh");
+        var second = await CreateSiteAsync(planer, "Familie Spät");
+
+        // E.g. an entry moved onto a day with one at that time: saved, the planner sets the times right afterwards.
+        var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-05-05", new object[]
+        {
+            new { type = "Baustelle", siteId = first, startTime = "07:30:00", endTime = "12:00:00" },
+            new { type = "Baustelle", siteId = second, startTime = "10:00:00", endTime = "14:00:00" },
+        });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+    }
+
+    [Fact]
     public async Task A_site_keeps_the_phone_number_of_the_customer()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
