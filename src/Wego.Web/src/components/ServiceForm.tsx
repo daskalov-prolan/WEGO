@@ -1,6 +1,5 @@
-import { Alert, Button, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { Alert, Button, Chip, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { useRef, useState, type FormEvent } from 'react'
-import { useMediaQuery } from '@mantine/hooks'
 import { api, messageOf } from '../api/client'
 import type { Activity, Site, SiteInput } from '../api/types'
 import { activityLabel } from '../lib/activities'
@@ -11,6 +10,13 @@ import { TimeSelect } from './TimeSelect'
 
 /** When the service call is: the whole day, one half (see HALF_DAYS), or a time of its own (e.g. 14–16). */
 export type ServiceTime = 'day' | 'morning' | 'afternoon' | 'custom'
+
+const SERVICE_TIMES: { value: ServiceTime; label: string }[] = [
+  { value: 'day', label: 'Ganzer Tag' },
+  { value: 'morning', label: '½ vormittags' },
+  { value: 'afternoon', label: '½ nachmittags' },
+  { value: 'custom', label: 'Andere Zeit' },
+]
 
 export const serviceTimes = (time: ServiceTime) =>
   time === 'morning' ? HALF_DAYS[0] : time === 'afternoon' ? HALF_DAYS[1] : { start: '', end: '' }
@@ -44,8 +50,6 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const customMissing = time === 'custom' && (!from || !to)
-  // Four choices of the time do not fit side by side on a narrow phone: one below the other there.
-  const narrow = useMediaQuery('(max-width: 480px)')
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -155,18 +159,16 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
             <Text size="sm" fw={500} mb={4}>
               Wann
             </Text>
-            <SegmentedControl
-              value={time}
-              fullWidth
-              orientation={narrow ? 'vertical' : 'horizontal'}
-              onChange={(value) => setTime(value as ServiceTime)}
-              data={[
-                { value: 'day', label: 'Ganzer Tag' },
-                { value: 'morning', label: '½ vormittags' },
-                { value: 'afternoon', label: '½ nachmittags' },
-                { value: 'custom', label: 'Andere Zeit' },
-              ]}
-            />
+            {/* Choices that go on to a second line when the window is narrow: none of them cut short. */}
+            <Chip.Group value={time} onChange={(value) => setTime(value as ServiceTime)}>
+              <Group gap={6} className="service-times">
+                {SERVICE_TIMES.map(({ value, label }) => (
+                  <Chip key={value} value={value} variant="filled" radius="sm">
+                    {label}
+                  </Chip>
+                ))}
+              </Group>
+            </Chip.Group>
             {time === 'custom' && (
               <Group grow gap="xs" mt="xs">
                 <TimeSelect label="von" value={from} required
