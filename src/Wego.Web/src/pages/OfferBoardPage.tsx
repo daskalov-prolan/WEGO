@@ -71,6 +71,11 @@ const selectionKey = (site: Site, stage: Stage, steps: OfferStep[]) => {
 const REPEATABLE: Activity[] = ['Objektauswahl']
 
 /** The appointments of an enquiry: the entries of one step on one day (one per employee). */
+/** "Stefan Buder" as "SB". */
+function initials(name: string) {
+  return name.split(/[\s-]+/).filter(Boolean).map((part) => part[0].toUpperCase()).join('')
+}
+
 function appointmentsOf(own: OfferStep[], order: Activity[]) {
   const list: { activity: Activity; date: string; entries: OfferStep[] }[] = []
   for (const activity of order) {
@@ -235,9 +240,15 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
         )}
         <ul className="offer-history">
           {site.requestedOn && <li>Anfrage {shortDate(site.requestedOn)}</li>}
-          {done.map(({ activity, date }) => (
+          {/* Who was there by his initials (e.g. who visited): whom to ask. */}
+          {done.map(({ activity, date, entries }) => (
             <li key={`${activity}-${date}`}>
               {labelOf(activity, date)} {shortDate(date)}
+              {entries.length > 0 && (
+                <span className="offer-who" title={entries.map((e) => e.employeeName).join(', ')}>
+                  {' · '}{entries.map((e) => initials(e.employeeName)).join(', ')}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -298,7 +309,7 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
           </Menu>
         </div>
         <Group gap={8}>
-          <OfferSteps steps={lib} waiting={waiting} />
+          <OfferSteps steps={lib} waiting={waiting} long />
         </Group>
         <Group gap={6}>
           {stage.planned && (
@@ -436,14 +447,13 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
           enquiry
           extra={
             <Button
-              variant="subtle"
               color="red"
               onClick={() => {
                 setDeclining(editing)
                 setEditing(null)
               }}
             >
-              Kunde hat abgesagt
+              Kunde sagt ab
             </Button>
           }
           onClose={() => setEditing(null)}

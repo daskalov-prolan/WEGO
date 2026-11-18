@@ -10,8 +10,12 @@ export interface OfferStep {
   date: string | null
 }
 
-/** A site with no step done or planned for so long waits: it is marked. */
-export const WAITING_DAYS = 14
+/**
+ * A site with no step done or planned for so long waits for an appointment: it is marked. The visit after 7 days,
+ * the Objektauswahl and the Angebotsübergabe after 10.
+ */
+export const WAITING_DAYS = 7
+export const WAITING_DAYS_LATER = 10
 
 /**
  * The steps of the offer phase of a site, in their fixed order: the enquiry (Anfrage) by the day it came in, the
@@ -35,7 +39,8 @@ export function offerSteps(site: Site, entries: Entry[], today: string): OfferSt
 
 /**
  * Days the site has been waiting: since the last step done, when nothing is planned and the offer is not handed
- * over yet. Null: it is not waiting (something planned, handed over, or less than WAITING_DAYS).
+ * over yet. Null: it is not waiting (something planned, handed over, or not yet WAITING_DAYS for the visit,
+ * WAITING_DAYS_LATER for a later step).
  */
 export function waitingDays(steps: OfferStep[], today: string): number | null {
   if (steps.some((step) => step.state === 'planned')) return null
@@ -43,5 +48,6 @@ export function waitingDays(steps: OfferStep[], today: string): number | null {
   const last = steps.filter((step) => step.state === 'done' && step.date).map((step) => step.date!).sort().at(-1)
   if (!last) return null
   const days = Math.round((Date.parse(today) - Date.parse(last)) / 86400000)
-  return days >= WAITING_DAYS ? days : null
+  const next = steps.find((step) => step.state === 'open')
+  return days >= (next?.activity === 'Besichtigung' ? WAITING_DAYS : WAITING_DAYS_LATER) ? days : null
 }

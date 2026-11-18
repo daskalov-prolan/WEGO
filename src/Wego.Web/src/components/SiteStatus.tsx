@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Site, SiteStatus, StatusChange } from '../api/types'
 import { nextStatuses, SITE_STATUSES } from '../lib/activities'
-import { finishSite, showDoneHint } from '../lib/siteDone'
+import { finishSite } from '../lib/siteDone'
 
 const ACTION: Record<SiteStatus, string> = {
   Angebot: 'Zur Angebotsphase',
@@ -73,13 +73,13 @@ export function StatusSlider({
 interface Props {
   site: Site
   canEdit: boolean
-  /** Planer G: sets the site done (with its summary as a PDF) and takes it back. */
-  canFinish?: boolean
+  /** Planer G: the summary of the site done saved as a PDF (with the wages). */
+  withSummary?: boolean
   onChanged: (site: Site) => void
 }
 
 /** Status of a site with the allowed next steps in one line; the log of all changes with date behind "Verlauf". */
-export function SiteStatusPanel({ site, canEdit, canFinish = false, onChanged }: Props) {
+export function SiteStatusPanel({ site, canEdit, withSummary = false, onChanged }: Props) {
   const [history, setHistory] = useState<StatusChange[]>([])
   const [error, setError] = useState('')
 
@@ -88,14 +88,9 @@ export function SiteStatusPanel({ site, canEdit, canFinish = false, onChanged }:
   }, [site.id, site.status, canEdit])
 
   const change = async (status: SiteStatus) => {
-    // Done, or back from done: Planer G only.
-    if (!canFinish && (status === 'Abgeschlossen' || site.status === 'Abgeschlossen')) {
-      showDoneHint()
-      return
-    }
     try {
       if (status === 'Abgeschlossen') {
-        const saved = await finishSite(site)
+        const saved = await finishSite(site, withSummary)
         if (saved) onChanged(saved)
         setError('')
         return

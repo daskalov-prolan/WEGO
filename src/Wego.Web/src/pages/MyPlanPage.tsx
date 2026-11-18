@@ -21,6 +21,7 @@ import { useWindowEvent } from '@mantine/hooks'
 import { COMPANY_ADDRESS, customers, isVisit, VISIT, visitGroup, visitsAsOne, visitTime } from '../lib/visitGroup'
 import { mapsLink } from '../lib/visitRoute'
 import { VisitPlanner } from '../components/VisitPlanner'
+import { VisitReminders } from '../components/VisitReminders'
 import { useLiveChanges } from '../lib/useLiveChanges'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
@@ -55,6 +56,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
 
   const [plans, setPlans] = useState<Map<number, Plan>>(new Map())
   const [error, setError] = useState('')
+  // Counted up after a visit was planned: the reminders read the enquiries again.
+  const [visitVersion, setVisitVersion] = useState(0)
   // The week in view while scrolling (its Monday), shown in the head.
   // Opened, the list always begins with today, whatever year was chosen last (here or in the plan).
   const opensToday = inRange(today)
@@ -359,6 +362,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           Besichtigungen planen
         </Button>
       )}
+      {/* Customers waiting for a visit, and new enquiries: for everyone who visits. */}
+      {user.doesVisits && <VisitReminders employeeId={user.id} version={visitVersion} onPlan={() => setVisiting(true)} />}
 
       <Group gap="xs" mt="sm" wrap="nowrap">
         <ActionIcon variant="default" size="lg" onClick={() => go(addDays(shownWeek, -7))} aria-label="Vorherige Woche">
@@ -383,11 +388,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       </div>
 
       {visiting && (
-        <VisitPlanner employeeId={user.id} onClose={() => setVisiting(false)} onChanged={() => setPlans(new Map())} />
+        <VisitPlanner employeeId={user.id} onClose={() => setVisiting(false)} onChanged={() => { setPlans(new Map()); setVisitVersion((v) => v + 1) }} />
       )}
       {changingVisit && (
         <VisitPlanner employeeId={user.id} date={changingVisit.date} change={changingVisit.id} onClose={() => setChangingVisit(null)}
-          onChanged={() => setPlans(new Map())} />
+          onChanged={() => { setPlans(new Map()); setVisitVersion((v) => v + 1) }} />
       )}
       {meetingWeek && plan && (
         <MeetingWeekDialog week={meetingWeek} me={user.id} plans={canPlanRole(user.role)} decides={user.role === 'PlanerG'}

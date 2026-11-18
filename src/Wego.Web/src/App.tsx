@@ -116,7 +116,7 @@ export default function App() {
   else if (page === 'mein-bereich') content = <MyAreaPage user={user} />
   // Sites are for planners; employees with their reports and the administration for Planer G only.
   else if (page === 'baustellen' && canPlan)
-    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage canFinish={isAdmin} />
+    content = selectedId ? <SitePage key={selectedId} year={year} siteId={selectedId} canSeeEmployees={isAdmin} /> : <SitesPage withSummary={isAdmin} />
   else if (page === 'mitarbeiter')
     content =
       selectedId && isAdmin ? (

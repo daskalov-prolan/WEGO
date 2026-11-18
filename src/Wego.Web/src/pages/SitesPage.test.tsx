@@ -94,19 +94,23 @@ describe('SitesPage', () => {
     await user.click(screen.getByRole('button', { name: /^Geplanter Start/ }))
     expect(names()).toEqual(['Bäßler', 'Chung', 'Arndt', 'Zesch'])
     expect(scrolledTo).toEqual([])
+
+    // By the planner in charge as well.
+    await user.click(screen.getByRole('button', { name: /^Zuständig/ }))
+    expect(screen.getByRole('button', { name: /^Zuständig/ })).toHaveTextContent('Zuständig ▲')
   })
 
   it('shows name, planned start, status, the planner in charge, address and phone of the customer', async () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-      'Name',
-      'Anfrage am',
+      'Name ⇅',
+      'Anfrage am ⇅',
       'Geplanter Start ▲',
       'Status',
-      'Zuständig',
+      'Zuständig ⇅',
       'Adresse',
-      'Telefon Kunde',
+      'Telefon',
       'Status setzen',
     ])
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
@@ -163,7 +167,7 @@ describe('SitesPage', () => {
       throw new DOMException('abgebrochen', 'AbortError')
     })
     Object.assign(window, { showSaveFilePicker: picker })
-    renderWithProviders(<SitesPage canFinish />)
+    renderWithProviders(<SitesPage withSummary />)
     await screen.findAllByText('Chung')
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     await user.click(within(chung).getByText('Erledigt'))
@@ -176,14 +180,18 @@ describe('SitesPage', () => {
     delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker
   })
 
-  it('tells Planer A that only the management sets sites done', async () => {
+  it('lets Planer A set a site done too, without the summary (it has the wages)', async () => {
     const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const picker = vi.fn()
+    Object.assign(window, { showSaveFilePicker: picker })
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
     const chung = screen.getAllByRole('row').find((row) => row.textContent?.startsWith('Chung'))!
     await user.click(within(chung).getByText('Erledigt'))
-    expect(await screen.findByText('Baustellen setzt nur die Geschäftsleitung (Planer G) auf erledigt.')).toBeInTheDocument()
-    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/status'))).toBe(false)
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url) === '/api/sites/4/status')).toBe(true))
+    expect(picker).not.toHaveBeenCalled()
+    delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker
   })
 
   it('groups the sites by the planner in charge or by status', async () => {
