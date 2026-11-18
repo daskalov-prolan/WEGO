@@ -80,6 +80,17 @@ describe('SitesPage', () => {
     expect(scrolledTo).toEqual([])
   })
 
+  it('sorts an appointment not confirmed yet ("? Brandt") among the others by its name', async () => {
+    const tentative = { ...site(6, '? Brandt', '2026-05-01', null), isTentative: true }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+      new Response(JSON.stringify(url === '/api/sites/planners' ? [] : [...sites, tentative]), { status: 200 })))
+    const user = userEvent.setup()
+    renderWithProviders(<SitesPage />)
+    await screen.findAllByText('Chung')
+    await user.click(screen.getByRole('button', { name: /^Name/ }))
+    expect(names().map((name) => name?.replace(/^\?\s*/, ''))).toEqual(['Arndt', 'Bäßler', 'Brandt', 'Chung', 'Zesch'])
+  })
+
   it('sorts by name and back by planned start', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SitesPage />)
@@ -97,18 +108,18 @@ describe('SitesPage', () => {
 
     // By the planner in charge as well.
     await user.click(screen.getByRole('button', { name: /^Zuständig/ }))
-    expect(screen.getByRole('button', { name: /^Zuständig/ })).toHaveTextContent('Zuständig ▲')
+    expect(screen.getByRole('button', { name: /^Zuständig/ })).toHaveClass('active')
   })
 
   it('shows name, planned start, status, the planner in charge, address and phone of the customer', async () => {
     renderWithProviders(<SitesPage />)
     await screen.findAllByText('Chung')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-      'Name ⇅',
-      'Anfrage am ⇅',
+      'Name ▲',
+      'Anfrage am ▲',
       'Geplanter Start ▲',
       'Status',
-      'Zuständig ⇅',
+      'Zuständig ▲',
       'Adresse',
       'Telefon',
       'Status setzen',
