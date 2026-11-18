@@ -4199,10 +4199,10 @@ html.plan-full .shell-nav {
 /* The question in the form of a service call, seen at once: whether the craftsman confirms it first. */
 .confirm-question {
   padding: 10px 12px;
-  border: 1px solid #f0b429;
-  border-left: 5px solid #f0b429;
+  border: 1px solid #77b2c3;
+  border-left: 5px solid var(--wego-teal);
   border-radius: 8px;
-  background: #fff8e1;
+  background: #c8e1e8;
 }
 
 .my-entry .confirm-state {
