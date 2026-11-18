@@ -85,6 +85,9 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
                         v => v.ToList()))
                 .HasMaxLength(400);
             e.Property(x => x.DeclineReason).HasMaxLength(60);
+            e.Property(x => x.Confirmation).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ConfirmationNote).HasMaxLength(500);
+            e.Property(x => x.ConfirmationBy).HasMaxLength(100);
             e.Property(x => x.DeclineStep).HasMaxLength(30);
             e.Property(x => x.ReportedDeclineReason).HasMaxLength(60);
             e.Property(x => x.ReportedDeclineNote).HasMaxLength(500);

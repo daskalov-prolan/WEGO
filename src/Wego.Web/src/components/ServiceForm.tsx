@@ -127,6 +127,22 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
               comboboxProps={{ withinPortal: true }}
             />
           )}
+          {/* Some service calls the craftsman confirms first: until then dashed in the plan. */}
+          {!tentative && (
+            <div>
+              <Text size="sm" fw={500} mb={4}>
+                Muss der Handwerker den Einsatz bestätigen?
+              </Text>
+              <SegmentedControl
+                value={service.needsConfirmation ? 'ja' : 'nein'}
+                onChange={(value) => setService((current) => ({ ...current, needsConfirmation: value === 'ja' }))}
+                data={[
+                  { value: 'nein', label: 'Nein' },
+                  { value: 'ja', label: 'Ja, erst anfragen' },
+                ]}
+              />
+            </div>
+          )}
           <div>
             <Text size="sm" fw={500} mb={4}>
               Wann

@@ -124,6 +124,11 @@ export const api = {
   changeSiteStatus: (id: number, status: SiteStatus) => request<Site>('POST', `/api/sites/${id}/status`, { status }),
   /** The customer confirmed the appointment: a service call or a site in the Bauphase. */
   confirmSite: (id: number, asService: boolean) => request<Site>('POST', `/api/sites/${id}/confirm`, { asService }),
+  /** Asks the craftsman (again) to confirm a service call, or fixes it without (ask false). */
+  askConfirmation: (id: number, ask: boolean) => request<Site>('POST', `/api/sites/${id}/confirmation`, { ask }),
+  /** The craftsman answers in Mein Plan: yes, or no with a few words. */
+  answerConfirmation: (id: number, accept: boolean, note: string | null) =>
+    request<Site>('POST', `/api/me/confirmations/${id}`, { accept, note }),
   updateSiteTask: (id: number, activity: Activity, estimatedDays: number, notNeeded: boolean) =>
     request<Site>('PUT', `/api/sites/${id}/tasks/${activity}`, { estimatedDays, notNeeded }),
   /** The offer phase: the enquiries with their steps, and the sites decided lately. */

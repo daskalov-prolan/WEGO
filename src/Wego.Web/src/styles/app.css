@@ -4148,3 +4148,66 @@ html.plan-full .shell-nav {
   flex-direction: column;
   gap: 4px;
 }
+
+/* A service call the craftsman has not confirmed yet: dashed in the colour of its activity, not filled in. */
+.timeline .chip.awaiting,
+.mini-cell .chip.awaiting,
+.chip.awaiting {
+  border: 2px dashed var(--entry-fill, var(--entry-strong, #5f7378));
+  background: #fff;
+  color: #14232a;
+  box-shadow: none;
+}
+
+.timeline .chip.awaiting .time,
+.timeline .chip.awaiting .activity,
+.mini-cell .chip.awaiting .time {
+  color: #3d5054;
+}
+
+/* One he said no to: dashed in red, with a cross, until the planner asks again or plans it otherwise. */
+.timeline .chip.refused,
+.mini-cell .chip.refused,
+.chip.refused {
+  border: 2px dashed var(--wego-red);
+  background: #fff1f0;
+  color: #14232a;
+  box-shadow: none;
+}
+
+.timeline .chip.refused .time,
+.timeline .chip.refused .activity,
+.mini-cell .chip.refused .time {
+  color: #3d5054;
+}
+
+.refused-mark {
+  flex: none;
+  color: var(--wego-red);
+  font-weight: 800;
+}
+
+/* Mein Plan: the same, in the tiles of his days. */
+.my-entry.awaiting {
+  border: 2px dashed var(--entry-strong, #5f7378);
+  border-left-width: 7px;
+  background: #fff;
+}
+
+.my-entry.refused {
+  border: 2px dashed var(--wego-red);
+  border-left-width: 7px;
+  background: #fff1f0;
+}
+
+.my-entry .confirm-state {
+  color: var(--wego-red);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.confirm-request {
+  padding: 10px 12px;
+  border: 1px solid #d5dfe2;
+  border-radius: 8px;
+}

@@ -547,6 +547,21 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("Confirmation")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ConfirmationAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfirmationBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ConfirmationNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("DeclineNote")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

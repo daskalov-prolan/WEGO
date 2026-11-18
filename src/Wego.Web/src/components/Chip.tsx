@@ -77,7 +77,9 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
   // An appointment not confirmed yet: without colour, framed in dashes.
   const tentative = entry.type === 'Baustelle' && tentativeName(entry.siteName ?? '') !== null
-  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '']
+  // A service call the craftsman has not confirmed yet: dashed in its colour; said no to: dashed in red.
+  const asking = entry.confirmation === 'Offen' ? 'awaiting' : entry.confirmation === 'Abgelehnt' ? 'refused' : ''
+  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '', asking]
     .filter(Boolean)
     .join(' ')
   const siteId = entry.siteId
@@ -86,7 +88,10 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
       className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
       // With a note, pointing at the entry shows the note instead of site and activity.
-      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry)}
+      title={
+        (asking === 'awaiting' ? 'Wartet auf Bestätigung des Handwerkers · ' : asking === 'refused' ? 'Vom Handwerker abgesagt · ' : '') +
+        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry))
+      }
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable && entry.type === 'Baustelle')}
       {...drop}
@@ -112,6 +117,7 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
             <SiteName name={entryName(entry)} activity={entry.activity} siteId={siteId} />
           )}
         </span>
+        {asking === 'refused' && <span className="refused-mark" aria-label="abgesagt">✕</span>}
         {entry.note && <NoteMark important={entry.noteImportant} />}
       </span>
       {withActivity && entry.activity && !isFree(entry) && <span className="activity">{activityLabel(entry.activity)}</span>}

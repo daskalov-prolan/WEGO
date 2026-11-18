@@ -67,6 +67,8 @@ export interface SiteInput {
   clientPhone: string | null
   /** A second number: many customers give the landline and the mobile. */
   clientPhone2?: string | null
+  /** Only when a service call is created: the craftsman is to confirm it first. */
+  needsConfirmation?: boolean
   /** Number of the project in Label, the merchandise management software. */
   labelProjectNumber: string | null
   street: string | null
@@ -109,9 +111,16 @@ export interface SiteTask {
   notNeeded: boolean
 }
 
+/** Where the confirmation of a service call by the craftsman stands; null when confirmed or never asked. */
+export type Confirmation = 'Offen' | 'Abgelehnt'
+
 export interface Site extends NamedItem, SiteInput {
   status: SiteStatus
   tasks: SiteTask[]
+  confirmation?: Confirmation | null
+  /** Why the craftsman said no, and who answered. */
+  confirmationNote?: string | null
+  confirmationBy?: string | null
   /** Why the customer said no (a declined offer), with a few words. */
   declineReason?: string | null
   declineNote?: string | null
@@ -288,6 +297,8 @@ export interface Entry {
   note: string | null
   /** The note is very important: shown with a red exclamation mark. */
   noteImportant: boolean
+  /** A service call waiting for the craftsman to confirm it (dashed), or one he said no to. */
+  confirmation?: Confirmation | null
 }
 
 /** An employee column of the plan, with what the employee can do. */

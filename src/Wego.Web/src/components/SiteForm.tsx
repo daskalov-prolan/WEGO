@@ -49,7 +49,7 @@ export function SiteForm({ title, initial, onClose, onSave, enquiry = false, ext
     api.planners().then((answer) => setPlanners(Array.isArray(answer) ? answer : []), () => {})
   }, [])
 
-  const field = (key: Exclude<keyof SiteInput, 'isService' | 'isTentative'>) => ({
+  const field = (key: Exclude<keyof SiteInput, 'isService' | 'isTentative' | 'needsConfirmation'>) => ({
     value: site[key] ?? '',
     onChange: (event: { currentTarget: { value: string } }) => {
       // Read the value now: React clears the event before the state update below runs.

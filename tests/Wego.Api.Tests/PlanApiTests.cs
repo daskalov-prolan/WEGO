@@ -287,6 +287,45 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_service_call_waits_for_the_craftsman_to_confirm_it_who_may_say_no()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var craftsmanId = await CreateEmployeeAsync(planer, "Bestätiger", "se.bestaetiger", "bestaetiger-pw-1");
+        var created = await (await planer.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Familie Frage", nameSource = "Auftraggeber", status = "Bauphase", plannedStart = $"{Year}-07-14",
+            isService = true, needsConfirmation = true,
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetInt32();
+        Assert.Equal("Offen", created.GetProperty("confirmation").GetString());
+        await planer.PutAsJsonAsync($"/api/plan/{craftsmanId}/{Year}-07-14", new object[] { new { type = "Baustelle", siteId = id } });
+
+        // In the plan the entry says it waits.
+        var plan = await planer.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        var entry = plan.GetProperty("entries").EnumerateArray().Single(e => e.GetProperty("siteId").ValueKind == JsonValueKind.Number
+            && e.GetProperty("siteId").GetInt32() == id);
+        Assert.Equal("Offen", entry.GetProperty("confirmation").GetString());
+
+        // Only who has it in his plan answers: not the planner.
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await planer.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).StatusCode);
+        var craftsman = await LoginAsync("se.bestaetiger", "bestaetiger-pw-1");
+        var declined = await (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = false, note = "Bin beim Arzt" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Abgelehnt", declined.GetProperty("confirmation").GetString());
+        Assert.Equal("Bin beim Arzt", declined.GetProperty("confirmationNote").GetString());
+        Assert.Equal("Bestätiger", declined.GetProperty("confirmationBy").GetString());
+        // Answered once: no second answer until the planner asks again.
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).StatusCode);
+
+        var asked = await (await planer.PostAsJsonAsync($"/api/sites/{id}/confirmation", new { ask = true })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Offen", asked.GetProperty("confirmation").GetString());
+        var accepted = await (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, accepted.GetProperty("confirmation").ValueKind);
+    }
+
+    [Fact]
     public async Task Site_status_follows_the_job_and_every_change_is_logged()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

@@ -22,6 +22,7 @@ import { COMPANY_ADDRESS, customers, isVisit, VISIT, visitGroup, visitsAsOne, vi
 import { mapsLink } from '../lib/visitRoute'
 import { VisitPlanner } from '../components/VisitPlanner'
 import { VisitReminders } from '../components/VisitReminders'
+import { askedCalls, ConfirmRequests } from '../components/ServiceConfirmations'
 import { useLiveChanges } from '../lib/useLiveChanges'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
@@ -334,6 +335,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
   })
 
   const siteById = useMemo(() => new Map((plan?.sites ?? []).map((site) => [site.id, site])), [plan])
+  // The service calls he is asked to confirm.
+  const asked = useMemo(() => askedCalls(plan?.entries ?? [], siteById, 'Offen', user.id), [plan, siteById, user.id])
 
   if (error) return <p className="error page">{error}</p>
   if (!plan) return null
@@ -364,6 +367,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       )}
       {/* Customers waiting for a visit, and new enquiries: for everyone who visits. */}
       {user.doesVisits && <VisitReminders employeeId={user.id} version={visitVersion} onPlan={() => setVisiting(true)} />}
+      {/* Service calls the planner asks him to confirm: answered here. */}
+      <ConfirmRequests asked={asked} onAnswered={() => setPlans(new Map())} />
 
       <Group gap="xs" mt="sm" wrap="nowrap">
         <ActionIcon variant="default" size="lg" onClick={() => go(addDays(shownWeek, -7))} aria-label="Vorherige Woche">
@@ -582,7 +587,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                   const Tile = site ? UnstyledButton : 'div'
                   return (
                     <Tile
-                      className={site ? 'my-entry my-entry-button' : 'my-entry'}
+                      className={[
+                        'my-entry',
+                        site ? 'my-entry-button' : '',
+                        entry.confirmation === 'Offen' ? 'awaiting' : entry.confirmation === 'Abgelehnt' ? 'refused' : '',
+                      ].filter(Boolean).join(' ')}
                       key={entry.id}
                       style={entryStyle(entry)}
                       {...(site ? { onClick: () => setDetails(entry), 'aria-label': `${entry.siteName}: Details öffnen` } : {})}
@@ -593,6 +602,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                         </span>
                       )}
                       <span className="when">{formatDayTime(entry)}</span>
+                      {entry.confirmation === 'Offen' && <span className="confirm-state">Wartet auf deine Bestätigung</span>}
+                      {entry.confirmation === 'Abgelehnt' && <span className="confirm-state refused">Von dir abgesagt</span>}
                       <span className="where">
                         <SiteName name={entry.siteName ?? ''} activity={entry.activity} siteId={entry.siteId} />
                       </span>

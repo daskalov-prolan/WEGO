@@ -34,6 +34,7 @@ import { VisitPlanner } from '../components/VisitPlanner'
 import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
 import type { MeetingWeek, OwnBusy } from '../api/types'
 import { busyTime, clashes, meetingClashes } from '../lib/busy'
+import { askedCalls, ConfirmationsSheet } from '../components/ServiceConfirmations'
 import { Sheet } from '../components/Sheet'
 import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
@@ -456,6 +457,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
     return result
   }, [plan])
   const [clashesOpen, setClashesOpen] = useState(false)
+  // The service calls a craftsman said no to (those still waiting show only dashed in the plan).
+  const [confirmationsOpen, setConfirmationsOpen] = useState(false)
   const [meetingWeek, setMeetingWeek] = useState<MeetingWeek | null>(null)
   const [meetingsOpen, setMeetingsOpen] = useState(false)
   // For a planner of group G: how many asked to be let off a week (they decide).
@@ -964,6 +967,8 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         ),
       ].sort((a, b) => a.date.localeCompare(b.date) || a.who.localeCompare(b.who))
     : []
+
+  const declinedCalls = canEdit ? askedCalls(plan.entries, siteById, 'Abgelehnt') : []
 
   // The steps of the offer after the enquiry, and their appointments in the plan: for the window of a step.
   const OFFER_STEPS = activitiesOfStatus('Angebot').filter((activity) => activity !== 'Anfrage')
@@ -1651,6 +1656,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                     {meetingRequests > 0 && <span className="visit-count phone-sign-count">{meetingRequests}</span>}
                   </ActionIcon>
                 )}
+                {declinedCalls.length > 0 && (
+                  <ActionIcon variant="filled" color="red" size="input-sm" radius="xl" className="phone-sign" aria-label="Vom Handwerker abgesagt"
+                    onClick={() => setConfirmationsOpen(true)}>
+                    ✋<span className="visit-count phone-sign-count">{declinedCalls.length}</span>
+                  </ActionIcon>
+                )}
                 {clashList.length > 0 && (
                   <ActionIcon variant="outline" color="red" size="input-sm" radius="xl" className="phone-sign" aria-label="Überschneidungen"
                     onClick={() => setClashesOpen(true)}>
@@ -1763,6 +1774,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             <Button size="sm" variant="default" className="meetings-button" onClick={() => setMeetingsOpen(true)}
               rightSection={meetingRequests > 0 ? <span className="visit-count">{meetingRequests}</span> : undefined}>
               ⟳ Wiederholungstermine
+            </Button>
+          )}
+          {/* Service calls a craftsman said no to: in red, with the number (also red dashed in the plan). */}
+          {declinedCalls.length > 0 && (
+            <Button size="sm" color="red" onClick={() => setConfirmationsOpen(true)}
+              rightSection={<span className="visit-count">{declinedCalls.length}</span>}>
+              ✋ Vom Handwerker abgesagt
             </Button>
           )}
           {/* Something planned while somebody is busy after his own calendar: in red, with the number. */}
@@ -2095,6 +2113,11 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             ))}
           </Stack>
         </Sheet>
+      )}
+      {confirmationsOpen && (
+        <ConfirmationsSheet declined={declinedCalls} onClose={() => setConfirmationsOpen(false)}
+          onChanged={() => api.plan(year).then(setPlan, fail)}
+          onGo={(entry) => { setConfirmationsOpen(false); jump(entry.date) }} />
       )}
       {meetingsOpen && (
         <MeetingsDialog people={people} decides={user?.role === 'PlanerG'} onClose={() => setMeetingsOpen(false)}
