@@ -43,6 +43,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('SitePage', () => {
+  it('shows why a declined customer said no, without planning and working days', async () => {
+    const declined = { ...site, status: 'Abgelehnt' as const, declineReason: 'Zu teuer', declineNote: 'anderer Anbieter' }
+    fetchMock.mockImplementation(async (url: string) =>
+      new Response(JSON.stringify(url === '/api/sites' ? [declined] : url.startsWith('/api/reports')
+        ? { siteId: 7, siteName: site.name, year: 2026, totalDays: 0, totalHours: 0, employees: [], entries: [] } : []), { status: 200 }))
+    renderWithProviders(<SitePage year={2026} siteId={7} />)
+    expect(await screen.findByText(/Zu teuer – anderer Anbieter/)).toBeInTheDocument()
+    expect(screen.queryByText(/Nächste freie Woche/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Arbeitstage gesamt')).not.toBeInTheDocument()
+  })
+
   it('sums up customer, address and planning', async () => {
     renderWithProviders(<SitePage year={2026} siteId={7} />)
     expect(await screen.findByText('Telefon')).toBeInTheDocument()

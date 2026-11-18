@@ -63,6 +63,8 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
 
   const site = sites.find((candidate) => candidate.id === siteId)
   const current = report && report.siteId === siteId ? report : null
+  // A declined customer: nothing to plan any more, but why he said no.
+  const declined = site?.status === 'Abgelehnt'
 
   // How far the job has come: employee days per activity, in the order of the job.
   const byActivity = ACTIVITIES.map((activity) => ({
@@ -130,7 +132,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
               <SiteStatusPanel
                 site={site}
                 canEdit
-                canFinish={canSeeEmployees}
+                withSummary={canSeeEmployees}
                 onChanged={(saved) => setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))}
               />
             </div>
@@ -171,6 +173,13 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
           withStatus={false}
           planner={planners.find((planner) => planner.id === site.responsiblePlannerId)?.name ?? null}
         />
+      )}
+
+      {declined && (
+        <Alert color="gray" variant="light" my="sm" title="Abgelehnt" className="site-declined">
+          {site.declineReason ?? 'Ohne Grund eingetragen.'}
+          {site.declineNote ? ` – ${site.declineNote}` : ''}
+        </Alert>
       )}
 
       {error && (
@@ -222,7 +231,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
         />
       )}
 
-      {site && (
+      {site && !declined && (
         <SiteMiniPlan key={planVersion} site={site} canEdit />
       )}
 
@@ -238,7 +247,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
         />
       )}
 
-      {current && (
+      {current && !declined && (
         <>
           <SiteCosting report={current} canCost={canSeeEmployees} />
 

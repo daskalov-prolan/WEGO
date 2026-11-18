@@ -2,17 +2,19 @@ import type { CSSProperties } from 'react'
 import { activityInfo } from '../lib/activities'
 import { formatDate } from '../lib/dates'
 import type { OfferStep } from '../lib/offerSteps'
+import { waitingText } from '../lib/visitReminders'
 
 const STATE: Record<OfferStep['state'], string> = { done: 'erledigt', planned: 'geplant', open: 'offen' }
 
 /**
  * How far a site is in the offer phase: one dot per step in its fixed order, filled in the colour of the step when
- * done, a ring when planned, grey when open; beside them how long it has been waiting, if it is.
+ * done, a ring when planned, grey when open; beside them how long it has been waiting, if it is: in full on the
+ * cards (long), short in the narrow calendar.
  */
-export function OfferSteps({ steps, waiting }: { steps: OfferStep[]; waiting: number | null }) {
+export function OfferSteps({ steps, waiting, long = false }: { steps: OfferStep[]; waiting: number | null; long?: boolean }) {
   const text = steps.map((step) => `${step.label}: ${STATE[step.state]}${step.date ? ` ${formatDate(step.date)}` : ''}`)
   return (
-    <span className="offer-steps" title={[...text, waiting !== null ? `wartet seit ${waiting} Tagen` : null].filter(Boolean).join('\n')}>
+    <span className="offer-steps" title={[...text, waiting !== null ? waitingText(waiting) : null].filter(Boolean).join('\n')}>
       {steps.map((step) => (
         <span
           key={step.activity}
@@ -21,7 +23,7 @@ export function OfferSteps({ steps, waiting }: { steps: OfferStep[]; waiting: nu
           aria-label={`${step.label} ${STATE[step.state]}`}
         />
       ))}
-      {waiting !== null && <span className="offer-waiting">wartet {waiting} T.</span>}
+      {waiting !== null && <span className={long ? 'offer-waiting long' : 'offer-waiting'}>{long ? `Wartet auf Termin · ${waiting} T.` : `wartet ${waiting} T.`}</span>}
     </span>
   )
 }

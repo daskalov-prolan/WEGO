@@ -18,9 +18,19 @@ describe('offerSteps', () => {
     expect(waitingDays(steps, '2026-11-10')).toBeNull()
   })
 
-  it('marks a site waiting when nothing happened for two weeks and nothing is planned', () => {
+  it('marks a site waiting when nothing happened for a week and nothing is planned', () => {
     const steps = offerSteps(site, [entry('Besichtigung', '2026-10-05')], '2026-11-10')
     expect(waitingDays(steps, '2026-11-10')).toBe(36)
     expect(waitingDays(offerSteps(site, [entry('Besichtigung', '2026-11-05')], '2026-11-10'), '2026-11-10')).toBeNull()
+    // Only the enquiry, the visit open: marked after 7 days.
+    const asked = (day: string) => offerSteps({ ...site, requestedOn: day }, [], '2026-11-10')
+    expect(waitingDays(asked('2026-11-04'), '2026-11-10')).toBeNull()
+    expect(waitingDays(asked('2026-11-03'), '2026-11-10')).toBe(7)
+  })
+
+  it('lets the Objektauswahl and the Angebotsübergabe wait 10 days before it is marked', () => {
+    const visited = (day: string) => offerSteps(site, [entry('Besichtigung', day)], '2026-11-20')
+    expect(waitingDays(visited('2026-11-11'), '2026-11-20')).toBeNull()
+    expect(waitingDays(visited('2026-11-10'), '2026-11-20')).toBe(10)
   })
 })

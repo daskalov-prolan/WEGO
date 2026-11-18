@@ -34,7 +34,7 @@ const offers: Offers = {
     step(6, 'Besichtigung', '2026-11-19'),
     step(6, 'Objektauswahl', '2026-11-30'),
     // Visited, the Objektauswahl ahead: in its column.
-    step(8, 'Besichtigung', '2026-11-04'),
+    { ...step(8, 'Besichtigung', '2026-11-04'), employeeName: 'Stefan Buder' },
     step(8, 'Objektauswahl', '2026-11-25'),
     // Listed first, but handed over after Übergeben.
     { ...step(7, 'Besichtigung', '2026-10-02'), entryId: 71 },
@@ -76,6 +76,12 @@ afterEach(() => {
 const column = (name: string) => screen.getByRole('region', { name })
 
 describe('OfferBoardPage', () => {
+  it('names who visited by his initials, so that the planners know whom to ask', async () => {
+    renderWithProviders(<OfferBoardPage />)
+    const who = await within(await screen.findByRole('region', { name: 'Objektauswahl' })).findByTitle('Stefan Buder')
+    expect(who).toHaveTextContent('· SB')
+  })
+
   it('puts each enquiry in the column of its step: the next to plan, or the one planned ahead', async () => {
     renderWithProviders(<OfferBoardPage />)
     await screen.findByText('Neu')
@@ -151,7 +157,7 @@ describe('OfferBoardPage', () => {
     await screen.findByText('Neu')
     // From the enquiry window, opened by a click on the card.
     await user.click(within(column('Anfrage')).getByRole('button', { name: 'Neu' }))
-    await user.click(await screen.findByRole('button', { name: 'Kunde hat abgesagt' }))
+    await user.click(await screen.findByRole('button', { name: 'Kunde sagt ab' }))
     const dialog = await screen.findByRole('dialog', { name: /Abgelehnt/ })
     const save = within(dialog).getByRole('button', { name: 'Abgelehnt' })
     expect(save).toBeDisabled()

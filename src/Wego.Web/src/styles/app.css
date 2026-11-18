@@ -496,6 +496,20 @@ a:hover {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* ⇅ on a column that can sort, faint; the arrow of the one that sorts. */
+.sort-sign {
+  opacity: 0.55;
+}
+
+.sort-button.active .sort-sign {
+  opacity: 1;
+}
+
+/* The heads of the list of sites on one line each, so that none is cut off. */
+.sites-table thead th {
+  white-space: nowrap;
+}
 /* Head of a site's page (not .site-head, the row heads of the plan by site): one narrow line that stays at the top while the page scrolls. */
 .site-page-head {
   position: sticky;
@@ -4029,4 +4043,40 @@ html.plan-full .shell-nav {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #f7fafb;
+}
+
+/* Who was at a step done (initials), on the cards of the offer phase. */
+.offer-who {
+  font-weight: 700;
+  color: var(--wego-teal-dark);
+}
+
+/* On the cards of the offer phase the waiting in words ("Wartet auf Termin · 9 T."), below the dots when narrow. */
+.offer-card .offer-steps {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.offer-waiting.long {
+  /* As big as the small buttons below it (e.g. "Besichtigung planen"). */
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: var(--mantine-radius-md);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Mein Plan: the customers waiting for a visit and the new enquiries; a waiting customer opens the planning. */
+.visit-reminder-row {
+  display: block;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.visit-reminder-row:hover {
+  text-decoration: underline;
 }

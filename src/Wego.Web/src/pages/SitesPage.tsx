@@ -6,7 +6,7 @@ import type { Planner, Site, SiteMapLocation, SiteStatus } from '../api/types'
 import { SiteForm } from '../components/SiteForm'
 import { LazySitesMap } from '../components/SiteMapLink'
 import { StatusBadge, StatusSlider, TentativeBadge } from '../components/SiteStatus'
-import { finishSite, showDoneHint } from '../lib/siteDone'
+import { finishSite } from '../lib/siteDone'
 import { isOpen, SITE_STATUSES } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
 import { emptySite, formatAddress } from '../lib/sites'
@@ -19,13 +19,8 @@ function PhoneLink({ phone }: { phone: string }) {
   return <CallButton phone={phone} size="compact-xs" />
 }
 
-type SortKey = 'name' | 'requestedOn' | 'plannedStart'
-
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'requestedOn', label: 'Anfrage am' },
-  { key: 'plannedStart', label: 'Geplanter Start' },
-]
+/** The columns the list can be sorted by: a click on the head, again for the other direction. */
+type SortKey = 'name' | 'requestedOn' | 'plannedStart' | 'planner'
 
 /**
  * Which sites the list shows: the active ones, all, those in one status, or those starting in a period (by
@@ -56,9 +51,9 @@ function shows(site: Site, show: Show, today: string): boolean {
 /** How the list is grouped: not at all, by the planner in charge, or by status. */
 type Grouping = 'none' | 'planner' | 'status'
 
-function compare(a: Site, b: Site, key: SortKey): number {
-  const left = a[key] ?? null
-  const right = b[key] ?? null
+function compare(a: Site, b: Site, valueOf: (site: Site) => string | null): number {
+  const left = valueOf(a)
+  const right = valueOf(b)
   // Sites without the value come last, whichever the direction.
   if (!left || !right) return left ? -1 : right ? 1 : a.name.localeCompare(b.name, 'de')
   return left.localeCompare(right, 'de') || a.name.localeCompare(b.name, 'de')
@@ -68,7 +63,8 @@ function compare(a: Site, b: Site, key: SortKey): number {
  * Planner-only: all construction sites with their status, the planner in charge, address and phone of the
  * customer, sorted by planned start by default; then the list opens where the sites begin that start after today.
  */
-export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
+/** withSummary: Planer G, who saves the summary of a site done as a PDF (with the wages). */
+export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
   const [sites, setSites] = useState<Site[]>([])
   // A new site with its Baubeginn: asked whether the standard flow goes into the plan.
   const [flowSite, setFlowSite] = useState<Site | null>(null)
@@ -130,11 +126,12 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
             .includes(needle),
         )
       : shown
-    const sorted = [...found].sort((a, b) => compare(a, b, sort.key))
+    const valueOf = (site: Site) => (sort.key === 'planner' ? plannerName(site) || null : (site[sort.key] ?? null))
+    const sorted = [...found].sort((a, b) => compare(a, b, valueOf))
     if (!sort.descending) return sorted
     // Descending, but still with the empty values at the end.
-    const withValue = sorted.filter((site) => site[sort.key])
-    return [...withValue.reverse(), ...sorted.filter((site) => !site[sort.key])]
+    const withValue = sorted.filter((site) => valueOf(site))
+    return [...withValue.reverse(), ...sorted.filter((site) => !valueOf(site))]
   }, [sites, needle, sort, show, today, plannerName])
 
   // The years to choose: this one, the next one and every year a site starts in, latest first.
@@ -142,14 +139,10 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
   const years = [...new Set([thisYear + 1, thisYear, ...sites.flatMap((site) => (site.plannedStart ? [Number(site.plannedStart.slice(0, 4))] : []))])]
     .sort((a, b) => b - a)
 
-  // Done (with the summary as a PDF) or back into the construction phase, right from the list: Planer G only.
+  // Done (for Planer G with the summary as a PDF) or back into the construction phase, right from the list.
   const setDone = async (site: Site, done: boolean) => {
-    if (!canFinish) {
-      showDoneHint()
-      return
-    }
     try {
-      const saved = done ? await finishSite(site) : await api.changeSiteStatus(site.id, 'Bauphase')
+      const saved = done ? await finishSite(site, withSummary) : await api.changeSiteStatus(site.id, 'Bauphase')
       if (!saved) return
       setSites((list) => list.map((candidate) => (candidate.id === saved.id ? saved : candidate)))
       if (!done) notifications.show({ message: `„${saved.name}“ ist wieder in der Bauphase.`, color: 'green' })
@@ -218,6 +211,15 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
 
   const sortBy = (key: SortKey) =>
     setSort((current) => ({ key, descending: current.key === key ? !current.descending : false }))
+  // The head of a column to sort by: ⇅ while another one sorts, the direction when it does.
+  const sortHead = (key: SortKey, label: string) => (
+    <Table.Th key={key}>
+      <UnstyledButton onClick={() => sortBy(key)} className={sort.key === key ? 'sort-button active' : 'sort-button'}>
+        {label}
+        <span aria-hidden className="sort-sign"> {sort.key === key ? (sort.descending ? '▼' : '▲') : '⇅'}</span>
+      </UnstyledButton>
+    </Table.Th>
+  )
 
   return (
     <div className="page">
@@ -339,18 +341,13 @@ export function SitesPage({ canFinish = false }: { canFinish?: boolean }) {
           <Table striped highlightOnHover withTableBorder stickyHeader className="brand-table sites-table">
             <Table.Thead>
               <Table.Tr>
-                {COLUMNS.map((column) => (
-                  <Table.Th key={column.key}>
-                    <UnstyledButton onClick={() => sortBy(column.key)} className="sort-button">
-                      {column.label}
-                      {sort.key === column.key && <span aria-hidden> {sort.descending ? '▼' : '▲'}</span>}
-                    </UnstyledButton>
-                  </Table.Th>
-                ))}
+                {sortHead('name', 'Name')}
+                {sortHead('requestedOn', 'Anfrage am')}
+                {sortHead('plannedStart', 'Geplanter Start')}
                 <Table.Th w={120}>Status</Table.Th>
-                <Table.Th>Zuständig</Table.Th>
+                {sortHead('planner', 'Zuständig')}
                 <Table.Th>Adresse</Table.Th>
-                <Table.Th>Telefon Kunde</Table.Th>
+                <Table.Th>Telefon</Table.Th>
                 <Table.Th>Status setzen</Table.Th>
               </Table.Tr>
             </Table.Thead>
