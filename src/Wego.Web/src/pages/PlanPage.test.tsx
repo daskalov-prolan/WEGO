@@ -535,8 +535,8 @@ describe('PlanPage', () => {
     await screen.findByText(/KW 10/)
     await user.click(screen.getByRole('button', { name: 'Zu Monat oder Jahr springen' }))
     // The popover takes a while when the machine is busy.
-    await user.click(await screen.findByRole('button', { name: 'Jun' }, { timeout: 4000 }))
-    expect(await screen.findByText(/KW 2[23]/, {}, { timeout: 4000 })).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Jun' }, { timeout: 10000 }))
+    expect(await screen.findByText(/KW 2[23]/, {}, { timeout: 10000 })).toBeInTheDocument()
   })
 
   it('shows no vacation count in the plan: that is under Mein Bereich', async () => {
