@@ -41,6 +41,9 @@ public static class SiteEndpoints
     public record ConfirmRequest(bool AsService);
     public record StatusChangeDto(SiteStatus? From, SiteStatus To, DateTime ChangedAt, string? ChangedBy);
 
+    /// <summary>A site set to done by somebody else than a Planer G, not seen by a Planer G yet.</summary>
+    public record DoneReportDto(int Id, int SiteId, string SiteName, DateTime ChangedAt, string? ChangedBy);
+
     public record MergeRequest(int TargetId);
 
     /// <summary>A planner who can be in charge of a site; <paramref name="IsMe"/> marks the signed-in one.</summary>
@@ -137,10 +140,13 @@ public static class SiteEndpoints
                 return ApiErrors.BadRequest($"Von „{site.Status}“ kann nicht zu „{request.Status}“ gewechselt werden.");
 
             var before = ToDto(site);
+            var now = DateTime.UtcNow;
             db.SiteStatusChanges.Add(new SiteStatusChange
             {
-                SiteId = id, From = site.Status, To = request.Status, ChangedAt = DateTime.UtcNow,
+                SiteId = id, From = site.Status, To = request.Status, ChangedAt = now,
                 ChangedBy = user.Identity?.Name,
+                // Done by a Planer G: he was asked for the summary already, nothing to tell him.
+                ReportSeenAt = request.Status == SiteStatus.Abgeschlossen && user.IsInRole(Roles.PlanerG) ? now : null,
             });
             site.Status = request.Status;
             // Entering a status brings its activities along.
@@ -236,6 +242,28 @@ public static class SiteEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(site));
         }).RequireAuthorization(Policies.Plan);
+
+        // The sites set to done by a Planer A that a Planer G has not seen yet: each once, the latest time it was
+        // set done, and only while it still is.
+        group.MapGet("/done-reports", async (WegoDbContext db) =>
+            (await db.SiteStatusChanges.AsNoTracking()
+                .Where(c => c.To == SiteStatus.Abgeschlossen && c.ReportSeenAt == null && c.Site.Status == SiteStatus.Abgeschlossen)
+                .Select(c => new DoneReportDto(c.Id, c.SiteId, c.Site.Name, c.ChangedAt, c.ChangedBy))
+                .ToListAsync())
+            .GroupBy(r => r.SiteId).Select(g => g.OrderByDescending(r => r.ChangedAt).First())
+            .OrderBy(r => r.ChangedAt).ToList()).RequireAuthorization(Policies.Admin);
+
+        // A Planer G saw that the site is done: every time it was set done so far counts as seen.
+        group.MapPost("/{id:int}/done-report/seen", async (int id, WegoDbContext db) =>
+        {
+            var changes = await db.SiteStatusChanges
+                .Where(c => c.SiteId == id && c.To == SiteStatus.Abgeschlossen && c.ReportSeenAt == null).ToListAsync();
+            if (changes.Count == 0) return Results.NotFound();
+            var now = DateTime.UtcNow;
+            foreach (var change in changes) change.ReportSeenAt = now;
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization(Policies.Admin);
 
         group.MapGet("/{id:int}/history", async (int id, WegoDbContext db) =>
             await db.SiteStatusChanges.Where(c => c.SiteId == id)

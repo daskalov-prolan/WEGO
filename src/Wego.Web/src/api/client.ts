@@ -1,4 +1,5 @@
 import type {
+  DoneReport,
   MyCalendar,
   Meeting,
   MeetingInput,
@@ -142,6 +143,10 @@ export const api = {
   declineReasons: (siteId: number) => request<{ step: string; reasons: string[] }>('GET', `/api/offers/${siteId}/decline-reasons`),
   discardDeclineReport: (siteId: number) => request<Offers>('POST', `/api/offers/${siteId}/decline-report/discard`),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
+  site: (id: number) => request<Site>('GET', `/api/sites/${id}`),
+  /** Sites set to done by a Planer A, not seen by a Planer G yet (Planer G only). */
+  doneReports: () => request<DoneReport[]>('GET', '/api/sites/done-reports'),
+  doneReportSeen: (siteId: number) => request<void>('POST', `/api/sites/${siteId}/done-report/seen`),
 
   /** One year, or without it the whole time of the site. */
   siteReport: (id: number, year?: number) =>

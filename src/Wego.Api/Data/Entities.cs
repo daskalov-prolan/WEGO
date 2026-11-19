@@ -177,6 +177,12 @@ public class SiteStatusChange
     public SiteStatus To { get; set; }
     public DateTime ChangedAt { get; set; }
     public string? ChangedBy { get; set; }
+
+    /// <summary>
+    /// A site set to done: when a Planer G saw it (and saved the summary, or not). Set at once when a Planer G
+    /// set it done himself: he was asked for the summary then. Null: still to be shown to Planer G.
+    /// </summary>
+    public DateTime? ReportSeenAt { get; set; }
 }
 
 /// <summary>Which field gives a construction site the name shown in the plan.</summary>

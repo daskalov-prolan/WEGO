@@ -1,7 +1,19 @@
 import { notifications } from '@mantine/notifications'
 import { api, messageOf } from '../api/client'
 import type { Site } from '../api/types'
-import { askPdfTarget, buildSitePdf, pdfFileName } from './sitePdf'
+import { askPdfTarget, buildSitePdf, pdfFileName, type PdfTarget } from './sitePdf'
+
+/** The summary of a site as a PDF (everything of the page of the site but its calendar, with the wages), written to target. */
+export async function writeSummary(site: Site, target: PdfTarget) {
+  const [report, planners, employees, siteRates, history] = await Promise.all([
+    api.siteReport(site.id),
+    api.planners(),
+    api.employees(),
+    api.siteHourlyRates(site.id),
+    api.siteHistory(site.id),
+  ])
+  await target.write(await buildSitePdf({ site, report, planners, employees, siteRates, history }))
+}
 
 /**
  * A planner sets a site to done: asked first. Planer G is then asked where the summary is saved as a PDF
@@ -24,14 +36,7 @@ export async function finishSite(site: Site, withSummary = true): Promise<Site |
     return saved
   }
   try {
-    const [report, planners, employees, siteRates, history] = await Promise.all([
-      api.siteReport(site.id),
-      api.planners(),
-      api.employees(),
-      api.siteHourlyRates(site.id),
-      api.siteHistory(site.id),
-    ])
-    await target.write(await buildSitePdf({ site: saved, report, planners, employees, siteRates, history }))
+    await writeSummary(saved, target)
     notifications.show({ message: `„${saved.name}“ ist erledigt. Die Zusammenfassung ist gespeichert.`, color: 'green' })
   } catch (e) {
     notifications.show({

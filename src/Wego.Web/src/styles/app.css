@@ -4233,3 +4233,9 @@ html.plan-full .shell-nav {
 .service-todo {
   white-space: pre-wrap;
 }
+
+/* A site set to done, for Planer G: in petrol, nothing wrong with it. */
+.clash-row.done-row {
+  border-left-color: var(--wego-teal);
+  background: #e7f2f5;
+}
