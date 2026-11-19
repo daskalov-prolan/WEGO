@@ -160,3 +160,17 @@ describe('DayEditor', () => {
     expect(onSave.mock.calls[0][0]).toEqual([expect.objectContaining({ siteId: 9, activity: 'Fliesen', startTime: null })])
   })
 })
+
+describe('DayEditor with a service call', () => {
+  it('shows what is to be done on it, as entered when it was created', async () => {
+    const service: Site = { ...site, id: 9, name: 'SE: Luetcke', client: 'Luetcke', isService: true, description: 'Spülkasten tauschen' }
+    const entry: Entry = { ...morning, siteId: 9, siteName: 'SE: Luetcke', activity: 'Sanitaer' }
+    const employee = { id: 3, name: 'Koko', mainActivity: 'Sanitaer' as const, additionalActivities: [] }
+    renderWithProviders(
+      <DayEditor employee={employee} date="2026-11-06" entries={[entry]} sites={[site, service]}
+        onCreateSite={vi.fn()} onClose={() => {}} onSave={vi.fn(async () => {})} />,
+    )
+    expect(await screen.findByText('Spülkasten tauschen')).toBeInTheDocument()
+    expect(screen.getByText('Was ist zu tun:')).toBeInTheDocument()
+  })
+})

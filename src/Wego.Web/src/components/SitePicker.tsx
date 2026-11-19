@@ -97,6 +97,13 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
               <span className="muted-inline">Telefon Kunde: </span>
               {clientPhones(chosen).join(' · ') || '–'}
             </Text>
+            {/* A service call: what is to be done, as entered when it was created. */}
+            {chosen.isService && chosen.description?.trim() && (
+              <Text size="sm" className="service-todo">
+                <span className="muted-inline">Was ist zu tun: </span>
+                {chosen.description}
+              </Text>
+            )}
           </div>
           <div className="site-contact-actions">
             <SiteWayButtons site={chosen} size="compact-xs" />
