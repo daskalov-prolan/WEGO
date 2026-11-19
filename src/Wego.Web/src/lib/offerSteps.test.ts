@@ -18,6 +18,12 @@ describe('offerSteps', () => {
     expect(waitingDays(steps, '2026-11-10')).toBeNull()
   })
 
+  it('counts a step done only once its day is over', () => {
+    const on = (today: string) => offerSteps(site, [entry('Objektauswahl', '2026-11-19')], today).find((s) => s.activity === 'Objektauswahl')?.state
+    expect(on('2026-11-19')).toBe('planned')
+    expect(on('2026-11-20')).toBe('done')
+  })
+
   it('marks a site waiting when nothing happened for a week and nothing is planned', () => {
     const steps = offerSteps(site, [entry('Besichtigung', '2026-10-05')], '2026-11-10')
     expect(waitingDays(steps, '2026-11-10')).toBe(36)

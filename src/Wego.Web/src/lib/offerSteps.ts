@@ -29,8 +29,9 @@ export function offerSteps(site: Site, entries: Entry[], today: string): OfferSt
       return { activity, label, state: date && date <= today ? 'done' : 'open', date }
     }
     const days = entries.filter((entry) => entry.siteId === site.id && entry.activity === activity).map((entry) => entry.date)
-    const past = days.filter((day) => day <= today).sort()
-    const ahead = days.filter((day) => day > today).sort()
+    // A step is done once its day is over: on the day itself it is still ahead.
+    const past = days.filter((day) => day < today).sort()
+    const ahead = days.filter((day) => day >= today).sort()
     if (ahead.length > 0) return { activity, label, state: 'planned', date: ahead[0] }
     if (past.length > 0) return { activity, label, state: 'done', date: past[past.length - 1] }
     return { activity, label, state: 'open', date: null }
