@@ -138,23 +138,6 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
-    public async Task Overlapping_time_windows_are_rejected()
-    {
-        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
-        var employeeId = await CreateEmployeeAsync(planer, "Overlap Tester", null, null);
-        var siteA = await CreateSiteAsync(planer, "A");
-        var siteB = await CreateSiteAsync(planer, "B");
-
-        var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-04-01", new object[]
-        {
-            new { type = "Baustelle", siteId = siteA, startTime = "08:00:00", endTime = "10:00:00" },
-            new { type = "Baustelle", siteId = siteB, startTime = "09:00:00", endTime = "11:00:00" },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
-    }
-
-    [Fact]
     public async Task Employee_without_planning_rights_can_read_but_not_change_the_plan()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
@@ -284,6 +267,45 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
         })).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("SE: Familie Kurz-Lang", changed.GetProperty("name").GetString());
         Assert.True(changed.GetProperty("isService").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_service_call_waits_for_the_craftsman_to_confirm_it_who_may_say_no()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var craftsmanId = await CreateEmployeeAsync(planer, "Bestätiger", "se.bestaetiger", "bestaetiger-pw-1");
+        var created = await (await planer.PostAsJsonAsync("/api/sites", new
+        {
+            client = "Familie Frage", nameSource = "Auftraggeber", status = "Bauphase", plannedStart = $"{Year}-07-14",
+            isService = true, needsConfirmation = true,
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetInt32();
+        Assert.Equal("Offen", created.GetProperty("confirmation").GetString());
+        await planer.PutAsJsonAsync($"/api/plan/{craftsmanId}/{Year}-07-14", new object[] { new { type = "Baustelle", siteId = id } });
+
+        // In the plan the entry says it waits.
+        var plan = await planer.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        var entry = plan.GetProperty("entries").EnumerateArray().Single(e => e.GetProperty("siteId").ValueKind == JsonValueKind.Number
+            && e.GetProperty("siteId").GetInt32() == id);
+        Assert.Equal("Offen", entry.GetProperty("confirmation").GetString());
+
+        // Only who has it in his plan answers: not the planner.
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await planer.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).StatusCode);
+        var craftsman = await LoginAsync("se.bestaetiger", "bestaetiger-pw-1");
+        var declined = await (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = false, note = "Bin beim Arzt" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Abgelehnt", declined.GetProperty("confirmation").GetString());
+        Assert.Equal("Bin beim Arzt", declined.GetProperty("confirmationNote").GetString());
+        Assert.Equal("Bestätiger", declined.GetProperty("confirmationBy").GetString());
+        // Answered once: no second answer until the planner asks again.
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).StatusCode);
+
+        var asked = await (await planer.PostAsJsonAsync($"/api/sites/{id}/confirmation", new { ask = true })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Offen", asked.GetProperty("confirmation").GetString());
+        var accepted = await (await craftsman.PostAsJsonAsync($"/api/me/confirmations/{id}", new { accept = true })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, accepted.GetProperty("confirmation").ValueKind);
     }
 
     [Fact]
@@ -946,18 +968,40 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Time_windows_of_a_day_may_overlap_the_plan_marks_them()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var employeeId = await CreateEmployeeAsync(planer, "Overlap Tester", null, null);
+        var first = await CreateSiteAsync(planer, "Familie Früh");
+        var second = await CreateSiteAsync(planer, "Familie Spät");
+
+        // E.g. an entry moved onto a day with one at that time: saved, the planner sets the times right afterwards.
+        var put = await planer.PutAsJsonAsync($"/api/plan/{employeeId}/{Year}-05-05", new object[]
+        {
+            new { type = "Baustelle", siteId = first, startTime = "07:30:00", endTime = "12:00:00" },
+            new { type = "Baustelle", siteId = second, startTime = "10:00:00", endTime = "14:00:00" },
+        });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+    }
+
+    [Fact]
     public async Task A_site_keeps_the_phone_number_of_the_customer()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
         var created = await g.PostAsJsonAsync("/api/sites",
-            new { client = "Familie Anruf", clientPhone = " 030 1234567 ", nameSource = "Auftraggeber" });
+            new { client = "Familie Anruf", clientPhone = " 030 1234567 ", clientPhone2 = " 0171 7654321 ", nameSource = "Auftraggeber" });
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
 
         var site = await g.GetFromJsonAsync<JsonElement>($"/api/sites/{id}");
         Assert.Equal("030 1234567", site.GetProperty("clientPhone").GetString());
+        // Many give the landline and the mobile.
+        Assert.Equal("0171 7654321", site.GetProperty("clientPhone2").GetString());
         var tooLong = await g.PutAsJsonAsync($"/api/sites/{id}",
             new { client = "Familie Anruf", clientPhone = new string('1', 51), nameSource = "Auftraggeber" });
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        var secondTooLong = await g.PutAsJsonAsync($"/api/sites/{id}",
+            new { client = "Familie Anruf", clientPhone2 = new string('1', 51), nameSource = "Auftraggeber" });
+        Assert.Equal(HttpStatusCode.BadRequest, secondTooLong.StatusCode);
     }
 
     [Fact]

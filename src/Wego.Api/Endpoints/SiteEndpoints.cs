@@ -12,7 +12,8 @@ public static class SiteEndpoints
         DateOnly? PlannedStart, DateOnly? PlannedEnd, SiteStatus Status, IReadOnlyList<TaskDto> Tasks,
         string? LabelProjectNumber, string? ClientPhone, int? ResponsiblePlannerId, bool IsService, bool IsTentative,
         DateOnly? RequestedOn = null, IReadOnlyList<string>? Scope = null,
-        string? DeclineReason = null, string? DeclineNote = null, string? Salutation = null);
+        string? DeclineReason = null, string? DeclineNote = null, string? Salutation = null, string? ClientPhone2 = null,
+        CraftsmanConfirmation? Confirmation = null, string? ConfirmationNote = null, string? ConfirmationBy = null);
 
     public record TaskDto(string Activity, int EstimatedDays, bool NotNeeded);
     public record TaskInput(int EstimatedDays, bool NotNeeded);
@@ -22,7 +23,14 @@ public static class SiteEndpoints
         DateOnly? PlannedStart = null, DateOnly? PlannedEnd = null, SiteStatus? Status = null,
         string? LabelProjectNumber = null, string? ClientPhone = null, int? ResponsiblePlannerId = null,
         bool? IsService = null, bool? IsTentative = null, DateOnly? RequestedOn = null,
-        IReadOnlyList<string>? Scope = null, string? Salutation = null);
+        IReadOnlyList<string>? Scope = null, string? Salutation = null, string? ClientPhone2 = null,
+        bool? NeedsConfirmation = null);
+
+    /// <summary>A planner asks the craftsman (again) to confirm a service call, or fixes it without.</summary>
+    public record ConfirmationRequest(bool Ask);
+
+    /// <summary>The answer of the craftsman: yes, or no with a few words why.</summary>
+    public record ConfirmationAnswer(bool Accept, string? Note = null);
 
     /// <summary>How the customer is addressed (Anrede).</summary>
     public static readonly string[] Salutations = ["Herr", "Frau", "Familie"];
@@ -85,6 +93,8 @@ public static class SiteEndpoints
             if (error is not null) return ApiErrors.BadRequest(error);
             // Without a choice, whoever creates the site is in charge of it.
             site.ResponsiblePlannerId = input.ResponsiblePlannerId ?? user.EmployeeId();
+            // A service call the craftsman is to confirm first: dashed in the plan until he says yes.
+            if (site.IsService && input.NeedsConfirmation == true) site.Confirmation = CraftsmanConfirmation.Offen;
             // The enquiry came in today, unless another day is given.
             if (!site.IsService) site.RequestedOn ??= DateOnly.FromDateTime(DateTime.Today);
 
@@ -177,6 +187,40 @@ public static class SiteEndpoints
             return Results.Ok(ToDto(site));
         }).RequireAuthorization(Policies.Plan);
 
+        // A planner asks the craftsman again (e.g. after a no, with another day or another craftsman), or fixes the
+        // service call without his confirmation.
+        group.MapPost("/{id:int}/confirmation", async (int id, ConfirmationRequest request, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
+            if (site is null) return Results.NotFound();
+            if (!site.IsService) return ApiErrors.BadRequest("Nur ein Serviceauftrag wird vom Handwerker bestätigt.");
+            site.Confirmation = request.Ask ? CraftsmanConfirmation.Offen : null;
+            site.ConfirmationNote = null;
+            site.ConfirmationBy = user.Identity?.Name;
+            site.ConfirmationAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(site));
+        }).RequireAuthorization(Policies.Plan);
+
+        // The craftsman answers in "Mein Plan": only one with the service call in his plan, while it is open.
+        app.MapPost("/api/me/confirmations/{id:int}", async (int id, ConfirmationAnswer answer, ClaimsPrincipal user, WegoDbContext db) =>
+        {
+            var employeeId = user.EmployeeId();
+            var site = await db.Sites.Include(s => s.Tasks).FirstOrDefaultAsync(s => s.Id == id);
+            if (site is null || !await db.PlanEntries.AnyAsync(e => e.SiteId == id && e.EmployeeId == employeeId))
+                return Results.NotFound();
+            if (site.Confirmation != CraftsmanConfirmation.Offen)
+                return ApiErrors.BadRequest("Dieser Einsatz wartet nicht mehr auf eine Bestätigung.");
+            var note = Clean(answer.Note);
+            if (note?.Length > 500) return ApiErrors.BadRequest("Die Begründung darf höchstens 500 Zeichen lang sein.");
+            site.Confirmation = answer.Accept ? null : CraftsmanConfirmation.Abgelehnt;
+            site.ConfirmationNote = answer.Accept ? null : note;
+            site.ConfirmationBy = (await db.Employees.FindAsync(employeeId))?.Name ?? user.Identity?.Name;
+            site.ConfirmationAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(site));
+        }).RequireAuthorization();
+
         group.MapPut("/{id:int}/tasks/{activity}", async (int id, string activity, TaskInput input,
             ClaimsPrincipal user, WegoDbContext db) =>
         {
@@ -250,6 +294,7 @@ public static class SiteEndpoints
             target.Client ??= site.Client;
             target.ResponsiblePlannerId ??= site.ResponsiblePlannerId;
             target.ClientPhone ??= site.ClientPhone;
+            target.ClientPhone2 ??= site.ClientPhone2;
             target.Salutation ??= site.Salutation;
             if (target.Street is null)
             {
@@ -344,7 +389,7 @@ public static class SiteEndpoints
         // In the order they were generated: that of the activities when the site entered the status.
         s.Tasks.OrderBy(t => t.Id).Select(t => new TaskDto(t.Activity, t.EstimatedDays, t.NotNeeded)).ToList(),
         s.LabelProjectNumber, s.ClientPhone, s.ResponsiblePlannerId, s.IsService, s.IsTentative, s.RequestedOn,
-        s.Scope, s.DeclineReason, s.DeclineNote, s.Salutation);
+        s.Scope, s.DeclineReason, s.DeclineNote, s.Salutation, s.ClientPhone2, s.Confirmation, s.ConfirmationNote, s.ConfirmationBy);
 
     private static async Task<string?> PlannerError(WegoDbContext db, int? plannerId) =>
         plannerId is { } id && !await db.Employees.AnyAsync(e => e.Id == id && (e.Role == Roles.PlanerA || e.Role == Roles.PlanerG))
@@ -365,6 +410,7 @@ public static class SiteEndpoints
             (Clean(input.AddressAddition), 200, "Der Adresszusatz"), (Clean(input.PostalCode), 10, "Die PLZ"),
             (Clean(input.City), 100, "Der Ort"), (Clean(input.Description), 1000, "Die Beschreibung"),
             (Clean(input.LabelProjectNumber), 50, "Die Projektnummer"), (Clean(input.ClientPhone), 50, "Die Telefonnummer"),
+            (Clean(input.ClientPhone2), 50, "Die zweite Telefonnummer"),
         };
         foreach (var (value, max, label) in fields)
         {
@@ -386,6 +432,7 @@ public static class SiteEndpoints
 
         site.Client = client;
         site.ClientPhone = Clean(input.ClientPhone);
+        site.ClientPhone2 = Clean(input.ClientPhone2);
         site.Salutation = Clean(input.Salutation);
         site.Street = street;
         site.HouseNumber = Clean(input.HouseNumber);

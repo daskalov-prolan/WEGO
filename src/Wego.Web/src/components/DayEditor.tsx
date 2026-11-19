@@ -20,7 +20,7 @@ import { formatDateLong, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
 import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
-import { ServiceForm, serviceTimes, type ServiceTime } from './ServiceForm'
+import { ServiceForm } from './ServiceForm'
 import { TimeSelect } from './TimeSelect'
 
 interface Props {
@@ -211,12 +211,12 @@ export function DayEditor(props: Props) {
   // A service call (or an appointment not confirmed yet, without an activity): created on the spot and put on the
   // day in place of rows still without a site; saved then.
   const [addingService, setAddingService] = useState<'service' | 'tentative' | null>(null)
-  const createService = async (input: SiteInput, time: ServiceTime, activity: Activity | null) => {
+  const createService = async (input: SiteInput, times: { start: string; end: string }, activity: Activity | null) => {
     const site = await createSite(input)
     setRows((current) =>
       withSecond(
         current.filter((row) => !(row.type === 'Baustelle' && row.siteId === null && !row.free)),
-        { ...emptyRow('Baustelle', site.id, input.isTentative ? null : (activity ?? defaultActivity(employee, 'Bauphase'))), ...serviceTimes(time) },
+        { ...emptyRow('Baustelle', site.id, input.isTentative ? null : (activity ?? defaultActivity(employee, 'Bauphase'))), ...times },
       ),
     )
     return site

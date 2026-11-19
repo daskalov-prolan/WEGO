@@ -1,4 +1,4 @@
-import { Alert, Button, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { Alert, Button, Chip, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { useRef, useState, type FormEvent } from 'react'
 import { api, messageOf } from '../api/client'
 import type { Activity, Site, SiteInput } from '../api/types'
@@ -6,9 +6,17 @@ import { activityLabel } from '../lib/activities'
 import { formatDateLong, HALF_DAYS } from '../lib/dates'
 import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
+import { TimeSelect } from './TimeSelect'
 
-/** When the service call is: the whole day or one half (see HALF_DAYS). */
-export type ServiceTime = 'day' | 'morning' | 'afternoon'
+/** When the service call is: the whole day, one half (see HALF_DAYS), or a time of its own (e.g. 14–16). */
+export type ServiceTime = 'day' | 'morning' | 'afternoon' | 'custom'
+
+const SERVICE_TIMES: { value: ServiceTime; label: string }[] = [
+  { value: 'day', label: 'Ganzer Tag' },
+  { value: 'morning', label: '½ vormittags' },
+  { value: 'afternoon', label: '½ nachmittags' },
+  { value: 'custom', label: 'Andere Zeit' },
+]
 
 export const serviceTimes = (time: ServiceTime) =>
   time === 'morning' ? HALF_DAYS[0] : time === 'afternoon' ? HALF_DAYS[1] : { start: '', end: '' }
@@ -18,10 +26,10 @@ interface Props {
   /** An appointment the customer has not confirmed yet, in place of a service call. */
   tentative?: boolean
   /** Creates the service call (a site marked as such) and puts it on the day. */
-  onCreate: (input: SiteInput, time: ServiceTime, activity: Activity | null) => Promise<Site>
+  onCreate: (input: SiteInput, times: { start: string; end: string }, activity: Activity | null) => Promise<Site>
   onClose: () => void
   /** The time chosen first: the afternoon when the day has a site already. */
-  initialTime?: ServiceTime
+  initialTime?: Exclude<ServiceTime, 'custom'>
   /** What the employee can do there (its colour in the plan); a service call asks for one of them. */
   activities?: Activity[]
   /** The one chosen first: the main activity of the employee. */
@@ -38,13 +46,17 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
     tentative ? { ...emptySite, status: 'Angebot', isTentative: true } : { ...emptySite, status: 'Bauphase', plannedStart: date, isService: true },
   )
   const [time, setTime] = useState<ServiceTime>(initialTime)
+  // A time of its own: from and to ("HH:mm").
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const customMissing = time === 'custom' && (!from || !to)
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   // The town filled in from the postal code; one typed by hand is not replaced.
   const filledCity = useRef<string | null>(null)
 
-  const field = (key: 'client' | 'clientPhone' | 'street' | 'city' | 'description') => ({
+  const field = (key: 'client' | 'clientPhone' | 'clientPhone2' | 'street' | 'city' | 'description') => ({
     value: service[key] ?? '',
     onChange: (event: { currentTarget: { value: string } }) => {
       const value = event.currentTarget.value
@@ -74,7 +86,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
     setBusy(true)
     setError('')
     try {
-      await onCreate(service, time, tentative ? null : activity)
+      await onCreate(service, time === 'custom' ? { start: from, end: to } : serviceTimes(time), tentative ? null : activity)
       onClose()
     } catch (e) {
       setError(messageOf(e))
@@ -101,7 +113,8 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
           </Text>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <TextInput label="Kunde" maxLength={200} required data-autofocus {...field('client')} />
-            <TextInput label="Telefon Kunde" type="tel" maxLength={50} {...field('clientPhone')} />
+            <TextInput label="Telefon Kunde (z. B. Handy)" type="tel" maxLength={50} {...field('clientPhone')} />
+            <TextInput label="Telefon 2 (z. B. Festnetz)" type="tel" maxLength={50} {...field('clientPhone2')} />
           </SimpleGrid>
           <TextInput label="Straße und Hausnummer" maxLength={200} {...field('street')} />
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
@@ -126,19 +139,43 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
               comboboxProps={{ withinPortal: true }}
             />
           )}
+          {/* Some service calls the craftsman confirms first: until then dashed in the plan. */}
+          {!tentative && (
+            <div className="confirm-question">
+              <Text size="sm" fw={700} mb={4}>
+                Muss der Handwerker den Einsatz bestätigen?
+              </Text>
+              <SegmentedControl
+                value={service.needsConfirmation ? 'ja' : 'nein'}
+                onChange={(value) => setService((current) => ({ ...current, needsConfirmation: value === 'ja' }))}
+                data={[
+                  { value: 'nein', label: 'Nein' },
+                  { value: 'ja', label: 'Ja, erst anfragen' },
+                ]}
+              />
+            </div>
+          )}
           <div>
             <Text size="sm" fw={500} mb={4}>
               Wann
             </Text>
-            <SegmentedControl
-              value={time}
-              onChange={(value) => setTime(value as ServiceTime)}
-              data={[
-                { value: 'day', label: 'Ganzer Tag' },
-                { value: 'morning', label: '½ vormittags' },
-                { value: 'afternoon', label: '½ nachmittags' },
-              ]}
-            />
+            {/* Choices that go on to a second line when the window is narrow: none of them cut short. */}
+            <Chip.Group value={time} onChange={(value) => setTime(value as ServiceTime)}>
+              <Group gap={6} className="service-times">
+                {SERVICE_TIMES.map(({ value, label }) => (
+                  <Chip key={value} value={value} variant="filled" radius="sm">
+                    {label}
+                  </Chip>
+                ))}
+              </Group>
+            </Chip.Group>
+            {time === 'custom' && (
+              <Group grow gap="xs" mt="xs">
+                <TimeSelect label="von" value={from} required
+                  onChange={(start) => { setFrom(start); if (to && start && to <= start) setTo('') }} />
+                <TimeSelect label="bis" value={to} required onChange={setTo} after={from} />
+              </Group>
+            )}
           </div>
           {error && (
             <Alert color="red" variant="light">
@@ -149,7 +186,7 @@ export function ServiceForm({ date, tentative = false, onCreate, onClose, initia
             <Button variant="default" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button type="submit" loading={busy} disabled={!service.client?.trim()}>
+            <Button type="submit" loading={busy} disabled={!service.client?.trim() || customMissing}>
               {tentative ? 'Termin eintragen' : 'Service eintragen'}
             </Button>
           </Group>

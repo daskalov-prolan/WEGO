@@ -16,7 +16,7 @@ import { addDays, CURRENT_YEAR, formatDate, todayIso } from '../lib/dates'
 import { FullViewButton } from '../components/FullViewButton'
 import { useFullView } from '../lib/fullView'
 import { offerSteps, waitingDays } from '../lib/offerSteps'
-import { customerName, emptySite, formatAddress, toSiteInput } from '../lib/sites'
+import { clientPhones, customerName, emptySite, formatAddress, toSiteInput } from '../lib/sites'
 
 /** Where an enquiry stands: its column, the step to plan next, or the appointments of the step ahead. */
 interface Stage {
@@ -221,14 +221,14 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
         <button type="button" className="offer-card-name" onClick={() => setEditing(site)} title="Anfrage öffnen">
           {customerName(site)}
         </button>
-        {(address || site.clientPhone) && (
+        {(address || clientPhones(site).length > 0) && (
           <div className="offer-meta">
             {address && <span>{address}</span>}
-            {site.clientPhone && (
-              <a href={`tel:${site.clientPhone.replace(/[^\d+]/g, '')}`} className="offer-phone">
-                ☎ {site.clientPhone}
+            {clientPhones(site).map((phone) => (
+              <a key={phone} href={`tel:${phone.replace(/[^\d+]/g, '')}`} className="offer-phone">
+                ☎ {phone}
               </a>
-            )}
+            ))}
           </div>
         )}
         {/* What the customer would like done: the scope as small labels, the details below. */}

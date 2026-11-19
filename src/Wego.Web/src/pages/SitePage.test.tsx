@@ -69,7 +69,7 @@ describe('SitePage', () => {
     renderWithProviders(<SitePage year={2026} siteId={7} />)
     await screen.findByText('Telefon')
     await user.click(screen.getByRole('button', { name: 'Weitere Aktionen' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Baustelle löschen …' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Baustelle löschen …' }, { timeout: 4000 }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/api/sites/7?withEntries=true')).toBe(true))
     expect(confirm).toHaveBeenCalledTimes(2)

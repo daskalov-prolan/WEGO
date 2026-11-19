@@ -35,3 +35,13 @@ export function clashes(busy: OwnBusy, entries: Entry[], meetings: MeetingWeek[]
   for (const week of meetings) if (overlaps(busy, week)) names.push(week.title)
   return names
 }
+
+/** An entry of work (a site or a step of the offer) with a time window: what can be in the way of another. */
+type Timed = { type: string; siteId: number | null; activity: string | null; startTime: string | null; endTime: string | null }
+const timedWork = (entry: Timed) => entry.type === 'Baustelle' && !(entry.siteId === null && entry.activity === null) && !!entry.startTime && !!entry.endTime
+
+/** Two entries of one day planned at the same time: both are in the way of each other. */
+export function overlapping<T extends Timed>(entries: T[]): T[] {
+  const timed = entries.filter(timedWork)
+  return timed.filter((entry) => timed.some((other) => other !== entry && overlaps(entry, other)))
+}

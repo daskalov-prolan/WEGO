@@ -23,6 +23,8 @@ interface Props {
   marked?: boolean
   /** An entry of the site searched for in the plan. */
   found?: boolean
+  /** Planned at the same time as another entry of the day: framed in red. */
+  clash?: boolean
   /** A reserved day of an offer site (see isReservation): framed in black on white. */
   reserved?: boolean
   /** Ends of a marked stretch: dragging them makes it longer or shorter. */
@@ -72,21 +74,27 @@ export function SiteName({ name, activity, siteId }: { name: string; activity?: 
   )
 }
 
-export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, found = false, reserved = false, stretch, drop }: Props) {
+export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick, label, draggable = false, marked = false, found = false, reserved = false, stretch, drop, clash = false }: Props) {
   // The whole working day goes without saying: only part of a day shows its time.
   const time = entry.startTime?.startsWith(WHOLE_DAY.start) && entry.endTime?.startsWith(WHOLE_DAY.end) ? '' : formatTimeRange(entry)
   // An appointment not confirmed yet: without colour, framed in dashes.
   const tentative = entry.type === 'Baustelle' && tentativeName(entry.siteName ?? '') !== null
-  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '']
+  // A service call the craftsman has not confirmed yet: striped in its colour; said no to: striped in red.
+  const asking = entry.confirmation === 'Offen' ? 'awaiting' : entry.confirmation === 'Abgelehnt' ? 'refused' : ''
+  const className = ['chip', `chip-${entry.type.toLowerCase()}`, dimmed ? 'dimmed' : '', reserved ? 'reserved' : '', tentative ? 'tentative' : '', asking]
     .filter(Boolean)
     .join(' ')
   const siteId = entry.siteId
   return (
     <span
-      className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : ''].filter(Boolean).join(' ')}
+      className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : '', clash ? 'overlap' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
       // With a note, pointing at the entry shows the note instead of site and activity.
-      title={entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry)}
+      title={
+        (clash ? 'Überschneidung mit einem anderen Einsatz: bitte Zeiten anpassen · ' : '') +
+        (asking === 'awaiting' ? 'Wartet auf Bestätigung des Handwerkers · ' : asking === 'refused' ? 'Vom Handwerker abgesagt · ' : '') +
+        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry))
+      }
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable && entry.type === 'Baustelle')}
       {...drop}
@@ -112,6 +120,8 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
             <SiteName name={entryName(entry)} activity={entry.activity} siteId={siteId} />
           )}
         </span>
+        {clash && <span className="overlap-mark" aria-label="Überschneidung">⚠</span>}
+        {asking === 'refused' && <span className="refused-mark" aria-label="abgesagt">✕</span>}
         {entry.note && <NoteMark important={entry.noteImportant} />}
       </span>
       {withActivity && entry.activity && !isFree(entry) && <span className="activity">{activityLabel(entry.activity)}</span>}

@@ -1,13 +1,13 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, MeetingWeek, NamedItem, OwnBusy, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { BusyChip } from './BusyChip'
-import { clashes, meetingClashes } from '../lib/busy'
+import { clashes, meetingClashes, overlapping } from '../lib/busy'
 import { MeetingChip } from './MeetingDialogs'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
-import { formatDateLong, HALF_DAYS, isoWeek, MONTHS } from '../lib/dates'
+import { formatDateLong, formatTimeRange, isoWeek, MONTHS } from '../lib/dates'
 import { BirthdayIcon } from './BirthdayIcon'
-import { activityLabel, serviceName, entryName, entryStyle, entryTitle, isFree, isMarkedStep, onlyHalfDay } from '../lib/activities'
+import { activityLabel, serviceName, entryName, entryStyle, entryTitle, freeGaps, isFree, isMarkedStep } from '../lib/activities'
 import { ActivityIcon } from './ActivityIcon'
 import { cellKey } from '../lib/ui'
 import { dragSource } from '../lib/dragPlan'
@@ -526,34 +526,46 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const now = () => context.current!
   const props = () => now().props
   const first = entries[0]
-  // Only half a day on sites: the other half is free. One entry dragged onto it moves there.
-  // The visits of the day count as one entry (see VisitChip).
-  const halves = visitsAsOne(entries)
-  const free = cell.showsFree && onlyHalfDay(halves)
-  const afternoon = free && (halves[0].startTime ?? '') >= '12:00'
+  // Free time of an hour or more between the work of the day (e.g. the other half, or 11:30–14:00 between two
+  // jobs): "verfügbar" where it is. The visits of the day count as one entry (see VisitChip).
+  const gaps = cell.showsFree ? freeGaps(visitsAsOne(entries)) : []
   const firstVisit = entries.findIndex(isVisit)
   const visits = visitGroup(entries)
-  const freeChip = (
+  // Two entries at the same time (e.g. after one was moved here): both in red until the times are set right.
+  const overlaps = new Set(overlapping(entries).map((entry) => entry.id))
+  const freeChip = (gap: { start: string; end: string }) => {
+    const time = formatTimeRange({ startTime: `${gap.start}:00`, endTime: `${gap.end}:00` })
+    return (
     <span
+      key={`free${gap.start}`}
       className="chip chip-baustelle chip-half-free"
       style={entryStyle({ type: 'Baustelle', activity: null, siteName: null })}
-      title={cell.opensFree ? 'verfügbar: klicken, um hier eine Baustelle einzutragen' : 'verfügbar: dieser Teil des Tages ist frei'}
+      title={cell.opensFree ? `verfügbar ${time}: klicken, um hier etwas einzutragen` : `verfügbar ${time}`}
       {...(entries.length === 1 ? lateDrop(() => props().dropOnFree?.(first)) : {})}
       onClick={
         cell.opensFree
           ? (event) => {
-              // The free half opens, not the marking of the cell.
+              // The free time opens, not the marking of the cell.
               event.stopPropagation()
-              props().onOpenFree?.(employee, day.iso, afternoon ? HALF_DAYS[0] : HALF_DAYS[1])
+              props().onOpenFree?.(employee, day.iso, gap)
             }
           : undefined
       }
     >
       <span className="chip-line">
+        <span className="time">{time}</span>
         <span className="chip-name">verfügbar</span>
       </span>
     </span>
-  )
+    )
+  }
+  // Each free time before the first entry that begins after it; the rest after the last.
+  let gapsShown = 0
+  const gapsBefore = (start: string | null) => {
+    const shown: ReactNode[] = []
+    while (start && gapsShown < gaps.length && gaps[gapsShown].start < start.slice(0, 5)) shown.push(freeChip(gaps[gapsShown++]))
+    return shown
+  }
   // The selection of the plan, asked for when the event comes.
   const on = (name: string) => (event: unknown) =>
     (now().handlers(employeeIndex, dayIndex) as unknown as Record<string, Handler>)[name](event)
@@ -604,10 +616,9 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
         onDoubleClick={on('onDoubleClick')}
       >
         <span className="cell-full">
-          {/* Work in the afternoon only: the free morning comes first. */}
-          {free && afternoon && freeChip}
           {entries.map((entry, index) => (
             <Fragment key={entry.id}>
+            {gapsBefore(entry.startTime)}
             {/* Without times an entry takes the whole day: what has a time comes after it. */}
             {extrasBefore(entry.startTime ?? '00:00')}
             {isVisit(entry) ? (
@@ -630,6 +641,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
               drop={cell.draggable ? lateDrop(() => props().dropOnEntry?.(entry)) : undefined}
               marked={marked?.ids.has(entry.id)}
               found={cell.found?.has(entry.id)}
+              clash={overlaps.has(entry.id)}
               stretch={
                 cell.stretches && marked && (marked.first === entry.id || marked.last === entry.id)
                   ? {
@@ -646,7 +658,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
             </Fragment>
           ))}
           {extrasLeft()}
-          {free && !afternoon && freeChip}
+          {gaps.slice(gapsShown).map(freeChip)}
         </span>
         {first && (
           <Compact

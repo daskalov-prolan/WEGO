@@ -321,11 +321,11 @@ function Customer({ enquiry, plan, run, actions, children }: {
         </div>
       </Group>
       <Group gap={6} mt={6}>
-        {enquiry.phone && (
-          <Button component="a" href={`tel:${enquiry.phone.replace(/[^\d+]/g, '')}`} size="compact-sm" variant="light">
-            Anrufen {enquiry.phone}
+        {[enquiry.phone, enquiry.phone2].filter((phone): phone is string => !!phone).map((phone) => (
+          <Button key={phone} component="a" href={`tel:${phone.replace(/[^\d+]/g, '')}`} size="compact-sm" variant="light">
+            Anrufen {phone}
           </Button>
-        )}
+        ))}
         <Button size="compact-sm" variant="default" onClick={() => run(api.notReached(plan.employeeId, enquiry.siteId))}>
           Nicht erreicht
         </Button>

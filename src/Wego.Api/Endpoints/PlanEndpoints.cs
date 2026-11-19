@@ -19,7 +19,7 @@ public static class PlanEndpoints
     public record SchoolHolidayDto(int Id, string Name, HolidayKind Kind, DateOnly StartDate, DateOnly EndDate);
     public record EntryDto(int Id, int EmployeeId, string EmployeeName, DateOnly Date, EntryType Type,
         int? SiteId, string? SiteName, string? Activity, TimeOnly? StartTime, TimeOnly? EndTime,
-        string? Note, bool NoteImportant);
+        string? Note, bool NoteImportant, CraftsmanConfirmation? Confirmation = null);
     /// <summary>
     /// <paramref name="Planners"/>: the active planners not shown in the plan otherwise, for the offer phase.
     /// <paramref name="OfferPhase"/>: whether the viewer may see the offer phase (see <see cref="OfferAccess"/>);
@@ -322,7 +322,7 @@ public static class PlanEndpoints
             EmployeeEndpoints.Birthday(e.BirthDate));
 
     public static EntryDto ToDto(PlanEntry e) => new(e.Id, e.EmployeeId, e.Employee.Name, e.Date, e.Type,
-        e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant);
+        e.SiteId, e.Site?.Name, e.Activity, e.StartTime, e.EndTime, e.Note, e.NoteImportant, e.Site?.Confirmation);
 
     public static List<EntryDto> Sort(IEnumerable<EntryDto> entries) => entries
         .OrderBy(e => e.Date)
@@ -350,12 +350,8 @@ public static class PlanEndpoints
             if (input.Note?.Length > 500) return "Die Notiz darf höchstens 500 Zeichen lang sein.";
         }
 
-        var timed = inputs.Where(i => i.StartTime is not null).OrderBy(i => i.StartTime).ToList();
-        for (var i = 1; i < timed.Count; i++)
-        {
-            if (timed[i].StartTime < timed[i - 1].EndTime)
-                return "Die Zeitfenster eines Tages dürfen sich nicht überschneiden.";
-        }
+        // Time windows of a day may overlap (e.g. an entry moved onto a day that has one at that time): the plan
+        // marks them in red and the planner sets the times right.
 
         return null;
     }

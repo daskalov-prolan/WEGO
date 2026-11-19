@@ -81,7 +81,8 @@ export function VisitMap({ enquiries, visits, branches, onPlan }: {
       popup.innerHTML =
         `<strong>${escape(enquiry.name)}</strong>` +
         (enquiry.address ? `<br>${escape(enquiry.address)}` : '') +
-        (enquiry.phone ? `<br><a href="tel:${escape(enquiry.phone.replace(/[^\d+]/g, ''))}">${escape(enquiry.phone)}</a>` : '') +
+        [enquiry.phone, enquiry.phone2].filter((phone): phone is string => !!phone)
+          .map((phone) => `<br><a href="tel:${escape(phone.replace(/[^\d+]/g, ''))}">${escape(phone)}</a>`).join('') +
         (enquiry.requestedOn ? `<br><span class="visit-popup-waiting">${waiting(enquiry.requestedOn)}</span>` : '')
       const button = document.createElement('button')
       button.type = 'button'

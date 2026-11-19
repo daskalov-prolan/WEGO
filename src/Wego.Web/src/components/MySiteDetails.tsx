@@ -4,7 +4,7 @@ import type { Entry, Plan, Site } from '../api/types'
 import { SiteName } from './Chip'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { formatDate, formatDateLong, formatDayTime } from '../lib/dates'
-import { clientName, formatAddress } from '../lib/sites'
+import { clientName, clientPhones, formatAddress } from '../lib/sites'
 import { CallButton, SiteWayButtons } from './SiteActions'
 
 interface Props {
@@ -72,13 +72,15 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
           </Row>
         )}
 
-        {(site.client || site.clientPhone) && (
+        {(site.client || clientPhones(site).length > 0) && (
           <Row label="Kunde">
             {site.client && <Text fw={600}>{clientName(site)}</Text>}
-            {site.clientPhone && (
-              <Group mt={6}>
-                <CallButton phone={site.clientPhone} />
-              </Group>
+            {clientPhones(site).length > 0 && (
+              <Stack gap={6} mt={6}>
+                {clientPhones(site).map((phone) => (
+                  <CallButton key={phone} phone={phone} />
+                ))}
+              </Stack>
             )}
           </Row>
         )}

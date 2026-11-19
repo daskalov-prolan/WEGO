@@ -4141,3 +4141,90 @@ html.plan-full .shell-nav {
     font-size: 12px;
   }
 }
+
+/* The numbers of a customer in the list of sites: the landline and the mobile one below the other. */
+.sites-table .phones {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A service call the craftsman has not confirmed yet: striped in the colour of its activity (as "belegt"), full once
+   he says yes. */
+.timeline .chip.awaiting,
+.mini-cell .chip.awaiting,
+.chip.awaiting {
+  border-left-color: var(--entry-fill, var(--entry-strong, #5f7378));
+  background: repeating-linear-gradient(135deg, var(--entry-bg, #e9eff1) 0 6px, #fff 6px 12px);
+  color: #14232a;
+}
+
+.timeline .chip.awaiting .time,
+.timeline .chip.awaiting .activity,
+.mini-cell .chip.awaiting .time {
+  color: #14232a;
+}
+
+/* One he said no to: striped in red, with a cross, until the planner asks again or fixes it. */
+.timeline .chip.refused,
+.mini-cell .chip.refused,
+.chip.refused {
+  border-left-color: var(--wego-red);
+  background: repeating-linear-gradient(135deg, #fbc4c6 0 6px, #fff 6px 12px);
+  color: #14232a;
+}
+
+.timeline .chip.refused .time,
+.timeline .chip.refused .activity,
+.mini-cell .chip.refused .time {
+  color: #14232a;
+}
+
+.refused-mark {
+  flex: none;
+  color: var(--wego-red);
+  font-weight: 800;
+}
+
+/* Mein Plan: the same, in the tiles of his days. */
+.my-entry.awaiting {
+  background: repeating-linear-gradient(135deg, var(--entry-bg, #e9eff1) 0 7px, #fff 7px 14px);
+}
+
+.my-entry.refused {
+  border-left-color: var(--wego-red);
+  background: repeating-linear-gradient(135deg, #fde0e1 0 7px, #fff 7px 14px);
+}
+
+/* The question in the form of a service call, seen at once: whether the craftsman confirms it first. */
+.confirm-question {
+  padding: 10px 12px;
+  border: 1px solid #77b2c3;
+  border-left: 5px solid var(--wego-teal);
+  border-radius: 8px;
+  background: #c8e1e8;
+}
+
+.my-entry .confirm-state {
+  color: var(--wego-red);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.confirm-request {
+  padding: 10px 12px;
+  border: 1px solid #d5dfe2;
+  border-radius: 8px;
+}
+
+/* Two entries of a day at the same time (e.g. one moved there): framed in red with a sign until the times fit. */
+.chip.overlap {
+  outline: 2px solid var(--wego-red);
+  outline-offset: -2px;
+}
+
+.overlap-mark {
+  flex: none;
+  color: var(--wego-red);
+  font-weight: 800;
+}

@@ -203,6 +203,9 @@ public class Site
     /// <summary>Telephone number of the customer, to call before a visit or the start of the work.</summary>
     public string? ClientPhone { get; set; }
 
+    /// <summary>A second number of the customer: many give the landline and the mobile.</summary>
+    public string? ClientPhone2 { get; set; }
+
     /// <summary>Number of the project in Label, the merchandise management software of the company.</summary>
     public string? LabelProjectNumber { get; set; }
 
@@ -280,6 +283,19 @@ public class Site
     public string? ReportedDeclineBy { get; set; }
     public DateTime? ReportedDeclineAt { get; set; }
 
+    /// <summary>
+    /// A service call the craftsman is to confirm first (asked when it is entered): Offen until he answers in
+    /// "Mein Plan", Abgelehnt when he said no; null when confirmed or never asked.
+    /// </summary>
+    public CraftsmanConfirmation? Confirmation { get; set; }
+
+    /// <summary>Why the craftsman said no (a few words, may be empty).</summary>
+    public string? ConfirmationNote { get; set; }
+
+    /// <summary>Who answered last, and when.</summary>
+    public string? ConfirmationBy { get; set; }
+    public DateTime? ConfirmationAt { get; set; }
+
     /// <summary>What is done there: kind of conversion, tiles, remarks.</summary>
     public string? Description { get; set; }
 
@@ -336,6 +352,13 @@ public class PlanEntry
 
     /// <summary>The note is very important: the plan shows a red exclamation mark.</summary>
     public bool NoteImportant { get; set; }
+}
+
+/// <summary>Where the confirmation of a service call by the craftsman stands (see Site.Confirmation).</summary>
+public enum CraftsmanConfirmation
+{
+    Offen,
+    Abgelehnt,
 }
 
 public enum HolidayKind

@@ -9,7 +9,7 @@ import { StatusBadge, StatusSlider, TentativeBadge } from '../components/SiteSta
 import { finishSite } from '../lib/siteDone'
 import { isOpen, SITE_STATUSES, tentativeName } from '../lib/activities'
 import { addDays, formatDate, todayIso } from '../lib/dates'
-import { emptySite, formatAddress } from '../lib/sites'
+import { clientPhones, emptySite, formatAddress } from '../lib/sites'
 import { useIsPhone } from '../lib/useIsPhone'
 import { StandardFlowDialog } from '../components/StandardFlowDialog'
 import { CallButton, SiteWayButtons } from '../components/SiteActions'
@@ -123,7 +123,7 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
     const shown = sites.filter((site) => shows(site, show, today))
     const found = needle
       ? shown.filter((site) =>
-          [site.name, site.client, site.labelProjectNumber, formatAddress(site), site.clientPhone, plannerName(site)]
+          [site.name, site.client, site.labelProjectNumber, formatAddress(site), site.clientPhone, site.clientPhone2, plannerName(site)]
             .join(' ')
             .toLowerCase()
             .includes(needle),
@@ -329,7 +329,7 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
                   {formatAddress(site) && <div>{formatAddress(site)}</div>}
                   <SiteWayButtons site={site} size="compact-xs" />
                   <div className="site-card-meta">
-                    {site.clientPhone && <PhoneLink phone={site.clientPhone} />}
+                    {clientPhones(site).map((phone) => <PhoneLink key={phone} phone={phone} />)}
                     {plannerName(site) && <span>Zuständig: {plannerName(site)}</span>}
                     {site.plannedStart && <span>Start {formatDate(site.plannedStart)}</span>}
                     {doneSwitch(site) && <span className="site-card-done">{doneSwitch(site)}</span>}
@@ -382,7 +382,9 @@ export function SitesPage({ withSummary = false }: { withSummary?: boolean }) {
                         </Table.Td>
                         <Table.Td>{plannerName(site)}</Table.Td>
                         <Table.Td>{formatAddress(site)}</Table.Td>
-                        <Table.Td>{site.clientPhone && <PhoneLink phone={site.clientPhone} />}</Table.Td>
+                        <Table.Td>
+                          <div className="phones">{clientPhones(site).map((phone) => <PhoneLink key={phone} phone={phone} />)}</div>
+                        </Table.Td>
                         <Table.Td>{doneSwitch(site)}</Table.Td>
                       </Table.Tr>
                     )

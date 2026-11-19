@@ -30,6 +30,8 @@ describe('SiteForm', () => {
     await user.type(input(/^Auftraggeber/), 'Hausverwaltung Nord')
     await user.type(input(/^Straße und Hausnummer/), 'Hauptstraße 12')
     await user.type(input(/^Telefon Kunde/), '030 1234567')
+    // Many customers give the mobile as well.
+    await user.type(input(/^Telefon 2/), '0171 7654321')
     expect(screen.getByText('Hausverwaltung Nord', { selector: 'strong' })).toBeInTheDocument()
     // Neither the number in Label nor a planned end, nor an address addition; the Anrede of the customer.
     expect(screen.queryByLabelText(/Projektnummer/)).not.toBeInTheDocument()
@@ -48,6 +50,7 @@ describe('SiteForm', () => {
         street: 'Hauptstraße 12',
         houseNumber: null,
         clientPhone: '030 1234567',
+        clientPhone2: '0171 7654321',
         salutation: 'Frau',
         nameSource: 'Strasse',
         status: 'Angebot',

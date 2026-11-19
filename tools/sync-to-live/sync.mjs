@@ -24,7 +24,7 @@ const years = (args.find((a) => a.startsWith('--years='))?.slice(8).split(',').m
 
 const EMPLOYEE_FIELDS = ['name', 'sortOrder', 'isActive', 'showInPlan', 'vacationDaysPerYear', 'mainActivity',
   'additionalActivities', 'phone', 'hourlyRate']
-const SITE_FIELDS = ['client', 'clientPhone', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
+const SITE_FIELDS = ['client', 'clientPhone', 'clientPhone2', 'street', 'houseNumber', 'addressAddition', 'postalCode', 'city', 'nameSource',
   'description', 'plannedStart', 'plannedEnd', 'labelProjectNumber']
 const MAX_DAYS_PER_BATCH = 400
 

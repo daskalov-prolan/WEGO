@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { Activity, ActivityDef, Entry, SiteStatus } from '../api/types'
-import { formatTimeRange } from './dates'
+import { formatTimeRange, HALF_DAYS, WHOLE_DAY } from './dates'
 
 export interface Colours {
   /** The full colour, as in the Excel sheet: legend, colour bar, year view. */
@@ -185,6 +185,46 @@ export function onlyHalfDay(entries: Pick<Entry, 'type' | 'activity' | 'siteName
     hours += endH + endM / 60 - (startH + startM / 60)
   }
   return hours <= 4.5
+}
+
+/** Free time shorter than this between the work of a day is not offered as "verfügbar". */
+export const MIN_GAP_MINUTES = 60
+
+const toMinutes = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+const toTime = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+
+/** A free time that holds a half of the day and is at most half an hour longer at either end. */
+const nearly = (gap: { start: string; end: string }, half: { start: string; end: string }) =>
+  gap.start <= half.start && half.end <= gap.end &&
+  toMinutes(half.start) - toMinutes(gap.start) <= 30 && toMinutes(gap.end) - toMinutes(half.end) <= 30
+
+/**
+ * The free time of a working day (WHOLE_DAY) between its entries, an hour or more each ("HH:mm"): before the
+ * first, between two and after the last. Nothing when the day is empty (all of it is free, plain to see), or
+ * something takes it without times (a whole day, Urlaub, Krank). Time kept free ("verfügbar") counts as taken:
+ * it shows already.
+ */
+export function freeGaps(entries: Pick<Entry, 'type' | 'startTime' | 'endTime'>[]): { start: string; end: string }[] {
+  if (entries.length === 0) return []
+  const spans: [number, number][] = []
+  for (const entry of entries) {
+    if (entry.type !== 'Baustelle' || !entry.startTime || !entry.endTime) return []
+    spans.push([toMinutes(entry.startTime), toMinutes(entry.endTime)])
+  }
+  spans.sort((a, b) => a[0] - b[0])
+  const gaps: { start: string; end: string }[] = []
+  let from = toMinutes(WHOLE_DAY.start)
+  for (const [start, end] of spans) {
+    if (start - from >= MIN_GAP_MINUTES) gaps.push({ start: toTime(from), end: toTime(start) })
+    from = Math.max(from, end)
+  }
+  const dayEnd = toMinutes(WHOLE_DAY.end)
+  if (dayEnd - from >= MIN_GAP_MINUTES) gaps.push({ start: toTime(from), end: toTime(dayEnd) })
+  // Little more than a half of the day (e.g. 11:30–16:00 after the morning): offered as that half, in its usual times.
+  return gaps.map((gap) => HALF_DAYS.find((half) => nearly(gap, half)) ?? gap)
 }
 
 /** What an entry is called in the plan: its site, or (planned before the site is known) its activity. */
