@@ -1,4 +1,4 @@
-import { Button, Group, Select, Text } from '@mantine/core'
+import { ActionIcon, Button, Group, Select, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
@@ -18,10 +18,15 @@ interface Props {
   newSite?: SiteInput
   label?: string
   required?: boolean
+  /**
+   * Small, for the day editor: the field without a heading, address, phone and what is to be done in short lines
+   * with a sign in front, the ways to the site as round buttons beside them.
+   */
+  compact?: boolean
 }
 
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
-export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required }: Props) {
+export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required, compact = false }: Props) {
   const [creating, setCreating] = useState(false)
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
@@ -33,7 +38,8 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
     <>
       <Group gap={6} align="flex-end" wrap="nowrap">
         <Select
-          label={label ?? kind}
+          label={compact ? undefined : label ?? kind}
+          aria-label={compact ? label ?? kind : undefined}
           placeholder="Baustelle suchen"
           searchable
           clearable
@@ -85,7 +91,45 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           + Neue Baustelle
         </Button>
       </Group>
-      {chosen && (
+      {chosen && compact && (
+        <div className="site-contact compact">
+          <div className="site-contact-info">
+            {chosenAddress && <Text size="xs" className="site-line site-address">{chosenAddress}</Text>}
+            {clientPhones(chosen).length > 0 && <Text size="xs" className="site-line site-phone">{clientPhones(chosen).join(' · ')}</Text>}
+            {/* A service call: what is to be done, as entered when it was created. */}
+            {chosen.isService && chosen.description?.trim() && (
+              <Text size="xs" className="site-line site-todo service-todo">{chosen.description}</Text>
+            )}
+          </div>
+          <Group gap={6} wrap="nowrap" className="site-contact-icons">
+            {chosenAddress && (
+              <Tooltip label="Navigation starten">
+                <ActionIcon component="a" variant="light" radius="xl" aria-label="Navigation starten" target="_blank" rel="noreferrer"
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(chosenAddress)}`}>
+                  🧭
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {chosenAddress && chosen.street && (
+              <Tooltip label="Auf Karte anzeigen">
+                <ActionIcon component="a" variant="light" radius="xl" aria-label="Auf Karte anzeigen" target="_blank" rel="noreferrer"
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chosenAddress)}`}>
+                  🗺
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {onGoToSite && (
+              <Tooltip label={kind === 'Baustelle' ? 'Zur Baustelle' : kind === 'Termin' ? 'Zum Termin' : 'Zum Serviceauftrag'}>
+                <ActionIcon variant="light" radius="xl" onClick={() => onGoToSite(chosen.id)}
+                  aria-label={kind === 'Baustelle' ? 'Zur Baustelle' : kind === 'Termin' ? 'Zum Termin' : 'Zum Serviceauftrag'}>
+                  ↗
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </Group>
+        </div>
+      )}
+      {chosen && !compact && (
         <div className="site-contact">
           {/* At the left what is known, at the right all buttons together: calmer than a button behind every line. */}
           <div className="site-contact-info">

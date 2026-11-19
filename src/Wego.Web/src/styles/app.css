@@ -4239,3 +4239,67 @@ html.plan-full .shell-nav {
   border-left-color: var(--wego-teal);
   background: #e7f2f5;
 }
+
+/* The day editor, compact: address, phone and what is to be done in short lines with a sign in front; the ways
+   to the site as round buttons at the right, beside them also on a phone. */
+.site-contact.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+}
+
+.site-contact.compact .site-line {
+  display: flex;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.site-contact.compact .site-line::before {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+}
+
+.site-contact.compact .site-address::before {
+  content: "📍";
+}
+
+.site-contact.compact .site-phone::before {
+  content: "📞";
+}
+
+.site-contact.compact .site-todo::before {
+  content: "🛠";
+}
+
+/* A folded entry: one line; the click on its title opens it. */
+.day-row-folded {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.day-row-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-row-note {
+  padding-left: 2px;
+  opacity: 0.85;
+}
+
+.day-row-note.important {
+  color: var(--wego-red);
+  font-weight: 600;
+  opacity: 1;
+}
+
+/* The smart board: the round buttons big enough for a finger. */
+@media (any-pointer: coarse) and (min-width: 1800px) {
+  .site-contact.compact .site-contact-icons .mantine-ActionIcon-root {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 18px;
+  }
+}

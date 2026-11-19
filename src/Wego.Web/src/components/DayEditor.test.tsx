@@ -171,7 +171,7 @@ describe('DayEditor with a service call', () => {
         onCreateSite={vi.fn()} onClose={() => {}} onSave={vi.fn(async () => {})} />,
     )
     expect(await screen.findByText('Spülkasten tauschen')).toBeInTheDocument()
-    expect(screen.getByText('Was ist zu tun:')).toBeInTheDocument()
+    expect(document.querySelector('.site-todo')).toHaveTextContent('Spülkasten tauschen')
   })
 })
 
@@ -188,5 +188,33 @@ describe('DayEditor after deleting the work of a day', () => {
     await user.click(screen.getByRole('button', { name: 'Speichern' }))
     await waitFor(() => expect(onSave).toHaveBeenCalled())
     expect(onSave.mock.calls[0][0]).toEqual([])
+  })
+})
+
+describe('DayEditor, entries folded', () => {
+  it('opens with every entry open; one folds to a line with its time and note, and opens again', async () => {
+    const user = userEvent.setup()
+    const noted: Entry = { ...morning, note: 'Schlüssel beim Nachbarn', noteImportant: false }
+    const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})
+    renderWithProviders(
+      <DayEditor employee={{ id: 3, name: 'Koko', mainActivity: 'Fliesen', additionalActivities: [] }} date="2026-11-06"
+        entries={[noted]} sites={[site]} onCreateSite={async () => site} onClose={() => {}} onSave={onSave} />,
+    )
+    // Open: the note can be written.
+    expect(screen.getByRole('textbox', { name: 'Notiz' })).toHaveValue('Schlüssel beim Nachbarn')
+
+    await user.click(screen.getByRole('button', { name: 'Eintrag 1 zuklappen' }))
+    expect(screen.queryByRole('textbox', { name: 'Notiz' })).not.toBeInTheDocument()
+    expect(screen.getByText('7:30–11:30 Uhr')).toBeInTheDocument()
+    expect(screen.getByText(/Schlüssel beim Nachbarn/)).toBeInTheDocument()
+
+    // Folded or not, it is saved as it is.
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    await user.click(await screen.findByRole('button', { name: 'OK, speichern' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalled())
+    expect(onSave.mock.calls[0][0][0]).toEqual(expect.objectContaining({ siteId: 7, note: 'Schlüssel beim Nachbarn' }))
+
+    await user.click(screen.getAllByRole('button', { name: 'Eintrag 1 aufklappen' })[0])
+    expect(screen.getByRole('textbox', { name: 'Notiz' })).toBeInTheDocument()
   })
 })
