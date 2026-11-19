@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Entry, MeetingWeek } from '../api/types'
-import { meetingClashes, overlapping } from './busy'
+import { meetingClashes, overlapping, withoutCoveredFree } from './busy'
 
 const week = { meetingId: 1, title: 'Bauberatung', date: '2026-12-16', originalDate: '2026-12-16', startTime: '09:00:00', endTime: '10:30:00',
   employeeIds: [6], moved: false, requested: [], names: {} } as MeetingWeek
@@ -27,5 +27,19 @@ describe('overlapping', () => {
     const free = at(null, '12:00:00', '16:00:00', null)
     expect(overlapping([morning, moved, afternoon, free])).toEqual([morning, moved])
     expect(overlapping([morning, afternoon, free])).toEqual([])
+  })
+})
+
+describe('withoutCoveredFree', () => {
+  const at = (siteId: number | null, startTime: string, endTime: string, activity: string | null = 'Sanitaer') =>
+    ({ type: 'Baustelle', siteId, activity, startTime, endTime })
+
+  it('leaves out the time kept free that a service call asked of the craftsman took since, not the rest', () => {
+    const keptFree = at(null, '07:30:00', '11:30:00', null)
+    const asked = at(7, '07:30:00', '11:30:00')
+    expect(withoutCoveredFree([keptFree, asked])).toEqual([asked])
+    const afternoonFree = at(null, '12:00:00', '16:00:00', null)
+    const entries = [asked, afternoonFree]
+    expect(withoutCoveredFree(entries)).toBe(entries)
   })
 })

@@ -135,16 +135,16 @@ describe('PlanPage', () => {
   it('folds weekends to narrow strips unless switched off', async () => {
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)
     // The first plan of the file takes a while to draw on a busy machine.
-    await screen.findByText(/KW 10/, undefined, { timeout: 5000 })
+    await screen.findByText(/KW 10/, undefined, { timeout: 15000 })
     const table = () => document.querySelector('table.timeline')!
 
     expect(table()).toHaveClass('fold-weekends')
     // Under "Ansicht", with the size.
     await userEvent.click(screen.getByRole('button', { name: /^Ansicht/ }))
-    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }, { timeout: 5000 }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Wochenenden ausblenden' }, { timeout: 10000 }))
     expect(table()).not.toHaveClass('fold-weekends')
     expect(localStorage.getItem('wego.plan.showWeekends')).toBe('true')
-  }, 15000)
+  }, 40000)
 
   it('on a phone only pages by week with ‹ Heute ›, weekends narrow', async () => {
     const wide = window.matchMedia
@@ -535,8 +535,8 @@ describe('PlanPage', () => {
     await screen.findByText(/KW 10/)
     await user.click(screen.getByRole('button', { name: 'Zu Monat oder Jahr springen' }))
     // The popover takes a while when the machine is busy.
-    await user.click(await screen.findByRole('button', { name: 'Jun' }, { timeout: 4000 }))
-    expect(await screen.findByText(/KW 2[23]/, {}, { timeout: 4000 })).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Jun' }, { timeout: 10000 }))
+    expect(await screen.findByText(/KW 2[23]/, {}, { timeout: 10000 })).toBeInTheDocument()
   })
 
   it('shows no vacation count in the plan: that is under Mein Bereich', async () => {

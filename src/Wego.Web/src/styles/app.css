@@ -4228,3 +4228,8 @@ html.plan-full .shell-nav {
   color: var(--wego-red);
   font-weight: 800;
 }
+
+/* What is to be done on a service call, in the day: its lines as entered. */
+.service-todo {
+  white-space: pre-wrap;
+}
