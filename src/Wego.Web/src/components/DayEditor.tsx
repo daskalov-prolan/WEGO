@@ -272,7 +272,10 @@ export function DayEditor(props: Props) {
       ? [...rows.filter((row) => row.siteId !== null), { ...emptyRow('Baustelle'), free: true, ...other }].sort((a, b) =>
           a.start.localeCompare(b.start),
         )
-      : rows
+      : // Nothing left but time kept free (the work deleted): the day is saved empty, white again.
+        rows.some((row) => row.type !== 'Baustelle' || isWork(row))
+        ? rows
+        : rows.filter((row) => !row.free)
     setFreeHalf(null)
     setBusy(true)
     setError('')
