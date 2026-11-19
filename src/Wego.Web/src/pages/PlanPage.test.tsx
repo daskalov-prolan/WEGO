@@ -405,12 +405,12 @@ describe('PlanPage', () => {
     expect(screen.queryByText('Baustellen dieser Wochen')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Tätigkeit')).not.toBeInTheDocument()
     expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Urlaub' })).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText('hier wichtige Hinweise oder Notizen eintragen')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Notiz' })).toBeInTheDocument()
     await user.click(input(/^Baustelle/))
     await user.click(await screen.findByRole('option', { name: /Familie Schulze/, hidden: true }))
     // Bernd's main activity (Verwaltung) is Sanitär.
     expect(screen.getByText('1 · Sanitär · Familie Schulze')).toBeInTheDocument()
-    expect(document.querySelector('.site-contact')).toHaveTextContent('Adresse: Hauptstraße 12, 13125 Berlin')
+    expect(document.querySelector('.site-contact')).toHaveTextContent('Hauptstraße 12, 13125 Berlin')
     // At the desk no button that dials.
     expect(screen.queryByRole('link', { name: 'Anrufen: 030 123 45' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Speichern' }))

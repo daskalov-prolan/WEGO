@@ -1,4 +1,4 @@
-import { Button, Group, Select, Text } from '@mantine/core'
+import { ActionIcon, Button, Group, Select, Text, Tooltip, type ComboboxItem, type ComboboxParsedItemGroup } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
@@ -18,22 +18,52 @@ interface Props {
   newSite?: SiteInput
   label?: string
   required?: boolean
+  /**
+   * Small, for the day editor: the field without a heading, address, phone and what is to be done in short lines
+   * with a sign in front, the ways to the site as round buttons beside them.
+   */
+  compact?: boolean
 }
 
+/** The heading of the sites still in the offer, at the end of the list. */
+export const OFFER_GROUP = 'Noch im Angebot (nur reservieren)'
+
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
-export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required }: Props) {
+export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required, compact = false }: Props) {
   const [creating, setCreating] = useState(false)
   const byId = new Map(sites.map((site) => [String(site.id), site]))
   const chosen = value === null ? undefined : byId.get(String(value))
   const chosenAddress = chosen && formatAddress(chosen)
   // What the chosen one is: the field and the button to its page are named after it.
   const kind = chosen?.isTentative ? 'Termin' : chosen?.isService ? 'Serviceauftrag' : 'Baustelle'
+  // Done and cancelled sites are not offered for new work, nor service calls (each is for its one day); one
+  // chosen before stays visible. Sites still in the offer come last, under a heading of their own: they can only
+  // be reserved for a customer who has not said yes.
+  const offered = sites.filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
+  const inOffer = (site: Site) => site.status === 'Angebot' && !site.isTentative
+  const item = (site: Site) => ({ value: String(site.id), label: inOffer(site) ? `${site.name} (Angebot)` : site.name })
+  const working = offered.filter((site) => !inOffer(site)).map(item)
+  const reserving = offered.filter(inOffer).map(item)
+  const data = reserving.length === 0 ? working : [
+    ...(working.length > 0 ? [{ group: 'Baustellen', items: working }] : []),
+    { group: OFFER_GROUP, items: reserving },
+  ]
+  // What is typed searches name, client, project number and address; the names that begin with it come first.
+  const search = (items: ComboboxItem[], needle: string) => {
+    const matches = items.filter((option) => {
+      const site = byId.get(option.value)
+      return !needle || [site?.name, site?.client, site?.labelProjectNumber, site && formatAddress(site)].join(' ').toLowerCase().includes(needle)
+    })
+    const begins = (option: ComboboxItem) => byId.get(option.value)?.name.toLowerCase().startsWith(needle) ?? false
+    return needle ? [...matches.filter(begins), ...matches.filter((option) => !begins(option))] : matches
+  }
 
   return (
     <>
       <Group gap={6} align="flex-end" wrap="nowrap">
         <Select
-          label={label ?? kind}
+          label={compact ? undefined : label ?? kind}
+          aria-label={compact ? label ?? kind : undefined}
           placeholder="Baustelle suchen"
           searchable
           clearable
@@ -42,28 +72,15 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           style={{ flex: 1 }}
           value={value === null ? null : String(value)}
           onChange={(next) => onChange(next === null ? null : Number(next))}
-          // Done and cancelled sites are not offered for new work, nor service calls (each is for its one day);
-          // one chosen before stays visible.
-          data={sites
-            .filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
-            .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' && !site.isTentative ? `${site.name} (Angebot)` : site.name }))}
-          filter={({ options, search }) => {
-            const needle = search.trim().toLowerCase()
-            const matches = options.filter((option) => {
-              if (!('value' in option)) return true
-              const site = byId.get(option.value)
-              return (
-                !needle ||
-                [site?.name, site?.client, site?.labelProjectNumber, site && formatAddress(site)]
-                  .join(' ')
-                  .toLowerCase()
-                  .includes(needle)
-              )
-            })
-            // Names that begin with what is typed come first: one letter jumps to the sites with it.
-            const begins = (option: (typeof options)[number]) =>
-              'value' in option && (byId.get(option.value)?.name.toLowerCase().startsWith(needle) ?? false)
-            return needle ? [...matches.filter(begins), ...matches.filter((option) => !begins(option))] : matches
+          data={data}
+          filter={({ options, search: typed }) => {
+            const needle = typed.trim().toLowerCase()
+            const plain = options.filter((option): option is ComboboxItem => 'value' in option)
+            const groups = options
+              .filter((option): option is ComboboxParsedItemGroup => 'group' in option)
+              .map((group) => ({ ...group, items: search(group.items, needle) }))
+              .filter((group) => group.items.length > 0)
+            return [...search(plain, needle), ...groups]
           }}
           renderOption={({ option }) => {
             const site = byId.get(option.value)
@@ -85,7 +102,45 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           + Neue Baustelle
         </Button>
       </Group>
-      {chosen && (
+      {chosen && compact && (
+        <div className="site-contact compact">
+          <div className="site-contact-info">
+            {chosenAddress && <Text size="xs" className="site-line site-address">{chosenAddress}</Text>}
+            {clientPhones(chosen).length > 0 && <Text size="xs" className="site-line site-phone">{clientPhones(chosen).join(' · ')}</Text>}
+            {/* A service call: what is to be done, as entered when it was created. */}
+            {chosen.isService && chosen.description?.trim() && (
+              <Text size="xs" className="site-line site-todo service-todo">{chosen.description}</Text>
+            )}
+          </div>
+          <Group gap={6} wrap="nowrap" className="site-contact-icons">
+            {chosenAddress && (
+              <Tooltip label="Navigation starten">
+                <ActionIcon component="a" variant="light" radius="xl" aria-label="Navigation starten" target="_blank" rel="noreferrer"
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(chosenAddress)}`}>
+                  🧭
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {chosenAddress && chosen.street && (
+              <Tooltip label="Auf Karte anzeigen">
+                <ActionIcon component="a" variant="light" radius="xl" aria-label="Auf Karte anzeigen" target="_blank" rel="noreferrer"
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chosenAddress)}`}>
+                  🗺
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {onGoToSite && (
+              <Tooltip label={kind === 'Baustelle' ? 'Zur Baustelle' : kind === 'Termin' ? 'Zum Termin' : 'Zum Serviceauftrag'}>
+                <ActionIcon variant="light" radius="xl" onClick={() => onGoToSite(chosen.id)}
+                  aria-label={kind === 'Baustelle' ? 'Zur Baustelle' : kind === 'Termin' ? 'Zum Termin' : 'Zum Serviceauftrag'}>
+                  ↗
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </Group>
+        </div>
+      )}
+      {chosen && !compact && (
         <div className="site-contact">
           {/* At the left what is known, at the right all buttons together: calmer than a button behind every line. */}
           <div className="site-contact-info">

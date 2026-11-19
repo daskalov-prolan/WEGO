@@ -12,18 +12,21 @@ interface Props {
   quarter?: boolean
   /** Without the cross to empty it (a time is needed). */
   required?: boolean
+  /** The label only for screen readers (and tests), not shown: where the place is short. */
+  hideLabel?: boolean
 }
 
 /** A time chosen from the full and half hours, or from every quarter hour. */
-export function TimeSelect({ label, value, onChange, after, quarter = false, required = false }: Props) {
+export function TimeSelect({ label, value, onChange, after, quarter = false, required = false, hideLabel = false }: Props) {
   const times = quarter ? QUARTER_HOURS : HALF_HOURS
   const offered = after ? times.filter((time) => time > after) : times
   // A time from before (e.g. 08:15) stays visible and selected.
   const data = value && !offered.includes(value) ? [...offered, value].sort() : offered
   return (
     <Select
-      label={label}
-      placeholder="–"
+      label={hideLabel ? undefined : label}
+      aria-label={hideLabel ? label : undefined}
+      placeholder={hideLabel ? label : '–'}
       data={data}
       value={value || null}
       onChange={(next) => onChange(next ?? '')}

@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { messageOf } from '../api/client'
 import type { Activity, DayEntryInput, Entry, EntryType, MeetingWeek, PlanEmployee, Site, SiteInput } from '../api/types'
 import { activityLabel, allowedActivities, defaultActivity, entryStyle, isFree, isOpen, onlyHalfDay } from '../lib/activities'
-import { formatDateLong, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
+import { formatDateLong, formatTimeRange, HALF_DAYS, WHOLE_DAY } from '../lib/dates'
 import { emptySite } from '../lib/sites'
 import { Sheet } from './Sheet'
 import { SitePicker } from './SitePicker'
@@ -66,6 +66,8 @@ interface Row {
   end: string
   note: string
   important: boolean
+  /** Folded to one line by the planner (all are open when the day opens). */
+  collapsed?: boolean
 }
 
 const emptyRow = (type: EntryType, siteId: number | null = null, activity: Activity | null = null): Row => ({
@@ -355,17 +357,54 @@ export function DayEditor(props: Props) {
               // A row kept free in the green of "verfügbar".
               style={entryStyle(row.free ? { ...row, activity: null, siteName: null } : row)}
             >
-              <Stack gap="xs">
+              {row.collapsed ? (
+                // Folded: one line with what and when (and the note), a click opens it again.
+                <Stack gap={2}>
+                  <Group justify="space-between" wrap="nowrap" gap="xs">
+                    <Text fw={700} size="sm" className="day-row-title day-row-folded" truncate
+                      role="button" tabIndex={0} aria-label={`Eintrag ${index + 1} aufklappen`}
+                      onClick={() => update(index, { collapsed: false })}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') update(index, { collapsed: false }) }}>
+                      {index + 1} · {row.type === 'Baustelle' ? rowTitle(row) : row.type}
+                    </Text>
+                    <Group gap={4} wrap="nowrap">
+                      <Text size="sm" className="day-row-time">
+                        {formatTimeRange({ startTime: row.start ? `${row.start}:00` : null, endTime: row.end ? `${row.end}:00` : null }) || 'ganzer Tag'}
+                      </Text>
+                      <ActionIcon variant="subtle" radius="xl" size="sm" aria-label={`Eintrag ${index + 1} aufklappen`} onClick={() => update(index, { collapsed: false })}>
+                        ▼
+                      </ActionIcon>
+                      {(row.type === 'Baustelle' || canAbsence) && (
+                        <CloseButton size="sm" aria-label={`Eintrag ${index + 1} entfernen`}
+                          onClick={() => setRows((current) => current.filter((_, i) => i !== index))} />
+                      )}
+                    </Group>
+                  </Group>
+                  {row.note.trim() && (
+                    <Text size="xs" className={row.important ? 'day-row-note important' : 'day-row-note'}>
+                      ✎ {row.important ? 'WICHTIG: ' : ''}{row.note}
+                    </Text>
+                  )}
+                </Stack>
+              ) : (
+              <Stack gap={6}>
                 <Group justify="space-between" wrap="nowrap">
                   <Text fw={700} size="sm" className="day-row-title">
                     {index + 1} · {row.type === 'Baustelle' ? rowTitle(row) : row.type}
                   </Text>
-                  {(row.type === 'Baustelle' || canAbsence) && (
-                    <CloseButton
-                      aria-label={`Eintrag ${index + 1} entfernen`}
-                      onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                    />
-                  )}
+                  <Group gap={4} wrap="nowrap">
+                    <Tooltip label="Zuklappen">
+                      <ActionIcon variant="subtle" radius="xl" size="sm" aria-label={`Eintrag ${index + 1} zuklappen`} onClick={() => update(index, { collapsed: true })}>
+                        ▲
+                      </ActionIcon>
+                    </Tooltip>
+                    {(row.type === 'Baustelle' || canAbsence) && (
+                      <CloseButton
+                        aria-label={`Eintrag ${index + 1} entfernen`}
+                        onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                      />
+                    )}
+                  </Group>
                 </Group>
                 {/* Urlaub and Krank are changed under Verwaltung, not here. */}
                 {row.type !== 'Baustelle' && !canAbsence && (
@@ -424,6 +463,7 @@ export function DayEditor(props: Props) {
                     }}
                     onCreate={createSite}
                     onGoToSite={onGoToSite}
+                    compact
                     // A new site for the start of the construction (Abriss / Baubeginn) begins on this day.
                     // Created in the plan of the Bauphase, it begins as Bauphase.
                     newSite={{
@@ -438,11 +478,12 @@ export function DayEditor(props: Props) {
                 <Group grow gap="xs">
                   <TimeSelect
                     label="von"
+                    hideLabel
                     value={row.start}
                     // An end that is no longer after the start is chosen anew.
                     onChange={(start) => update(index, { start, ...(row.end && start && row.end <= start ? { end: '' } : {}) })}
                   />
-                  <TimeSelect label="bis" value={row.end} onChange={(end) => update(index, { end })} after={row.start} />
+                  <TimeSelect label="bis" hideLabel value={row.end} onChange={(end) => update(index, { end })} after={row.start} />
                 </Group>
                 {/* Quick times: half a day in the morning or the afternoon, or the whole day (a half kept free goes then). */}
                 <Group gap={6}>
@@ -473,10 +514,10 @@ export function DayEditor(props: Props) {
                     </Button>
                   )}
                 </Group>
-                <Group gap="sm" align="flex-end" wrap="nowrap">
+                <Group gap="sm" align="center" wrap="nowrap">
                   <TextInput
-                    label="Notiz"
-                    placeholder="hier wichtige Hinweise oder Notizen eintragen"
+                    aria-label="Notiz"
+                    placeholder="Notiz: wichtige Hinweise eintragen"
                     value={row.note}
                     onChange={(e) => update(index, { note: e.currentTarget.value })}
                     maxLength={500}
@@ -485,19 +526,19 @@ export function DayEditor(props: Props) {
                   <Checkbox
                     label="Sehr wichtig"
                     color="red"
-                    mb={8}
                     disabled={row.note.trim() === ''}
                     checked={row.important && row.note.trim() !== ''}
                     onChange={(e) => update(index, { important: e.currentTarget.checked })}
                   />
                 </Group>
               </Stack>
+              )}
             </Paper>,
             // Between two entries: change their order.
             index < rows.length - 1 && (
               <Group key={`swap-${index}`} justify="center" my={-6}>
                 <Tooltip label="Reihenfolge tauschen (die Uhrzeiten bleiben)">
-                  <ActionIcon variant="light" radius="xl" aria-label={`Eintrag ${index + 1} und ${index + 2} tauschen`} onClick={() => swap(index)}>
+                  <ActionIcon variant="light" radius="xl" size="sm" aria-label={`Eintrag ${index + 1} und ${index + 2} tauschen`} onClick={() => swap(index)}>
                     ⇅
                   </ActionIcon>
                 </Tooltip>
