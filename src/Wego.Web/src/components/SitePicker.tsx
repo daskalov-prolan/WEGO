@@ -1,4 +1,4 @@
-import { Button, Group, Select, Text } from '@mantine/core'
+import { Button, Group, Select, Text, type ComboboxItem, type ComboboxParsedItemGroup } from '@mantine/core'
 import { useState } from 'react'
 import type { Site, SiteInput } from '../api/types'
 import { isOpen } from '../lib/activities'
@@ -20,6 +20,9 @@ interface Props {
   required?: boolean
 }
 
+/** The heading of the sites still in the offer, at the end of the list. */
+export const OFFER_GROUP = 'Noch im Angebot (nur reservieren)'
+
 /** Choice of a construction site, searchable by name, client and address; new sites are created on the spot. */
 export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSite = emptySite, label, required }: Props) {
   const [creating, setCreating] = useState(false)
@@ -28,6 +31,27 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
   const chosenAddress = chosen && formatAddress(chosen)
   // What the chosen one is: the field and the button to its page are named after it.
   const kind = chosen?.isTentative ? 'Termin' : chosen?.isService ? 'Serviceauftrag' : 'Baustelle'
+  // Done and cancelled sites are not offered for new work, nor service calls (each is for its one day); one
+  // chosen before stays visible. Sites still in the offer come last, under a heading of their own: they can only
+  // be reserved for a customer who has not said yes.
+  const offered = sites.filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
+  const inOffer = (site: Site) => site.status === 'Angebot' && !site.isTentative
+  const item = (site: Site) => ({ value: String(site.id), label: inOffer(site) ? `${site.name} (Angebot)` : site.name })
+  const working = offered.filter((site) => !inOffer(site)).map(item)
+  const reserving = offered.filter(inOffer).map(item)
+  const data = reserving.length === 0 ? working : [
+    ...(working.length > 0 ? [{ group: 'Baustellen', items: working }] : []),
+    { group: OFFER_GROUP, items: reserving },
+  ]
+  // What is typed searches name, client, project number and address; the names that begin with it come first.
+  const search = (items: ComboboxItem[], needle: string) => {
+    const matches = items.filter((option) => {
+      const site = byId.get(option.value)
+      return !needle || [site?.name, site?.client, site?.labelProjectNumber, site && formatAddress(site)].join(' ').toLowerCase().includes(needle)
+    })
+    const begins = (option: ComboboxItem) => byId.get(option.value)?.name.toLowerCase().startsWith(needle) ?? false
+    return needle ? [...matches.filter(begins), ...matches.filter((option) => !begins(option))] : matches
+  }
 
   return (
     <>
@@ -42,28 +66,15 @@ export function SitePicker({ sites, value, onChange, onCreate, onGoToSite, newSi
           style={{ flex: 1 }}
           value={value === null ? null : String(value)}
           onChange={(next) => onChange(next === null ? null : Number(next))}
-          // Done and cancelled sites are not offered for new work, nor service calls (each is for its one day);
-          // one chosen before stays visible.
-          data={sites
-            .filter((site) => (isOpen(site.status) && !site.isService) || site.id === value)
-            .map((site) => ({ value: String(site.id), label: site.status === 'Angebot' && !site.isTentative ? `${site.name} (Angebot)` : site.name }))}
-          filter={({ options, search }) => {
-            const needle = search.trim().toLowerCase()
-            const matches = options.filter((option) => {
-              if (!('value' in option)) return true
-              const site = byId.get(option.value)
-              return (
-                !needle ||
-                [site?.name, site?.client, site?.labelProjectNumber, site && formatAddress(site)]
-                  .join(' ')
-                  .toLowerCase()
-                  .includes(needle)
-              )
-            })
-            // Names that begin with what is typed come first: one letter jumps to the sites with it.
-            const begins = (option: (typeof options)[number]) =>
-              'value' in option && (byId.get(option.value)?.name.toLowerCase().startsWith(needle) ?? false)
-            return needle ? [...matches.filter(begins), ...matches.filter((option) => !begins(option))] : matches
+          data={data}
+          filter={({ options, search: typed }) => {
+            const needle = typed.trim().toLowerCase()
+            const plain = options.filter((option): option is ComboboxItem => 'value' in option)
+            const groups = options
+              .filter((option): option is ComboboxParsedItemGroup => 'group' in option)
+              .map((group) => ({ ...group, items: search(group.items, needle) }))
+              .filter((group) => group.items.length > 0)
+            return [...search(plain, needle), ...groups]
           }}
           renderOption={({ option }) => {
             const site = byId.get(option.value)

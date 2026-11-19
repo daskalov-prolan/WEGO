@@ -31,6 +31,21 @@ describe('SitePicker', () => {
     expect(names).toEqual(['Mertens', 'Müller', 'Albers'])
   })
 
+  it('lists the sites still in the offer last, under a heading of their own, also when searching', async () => {
+    const user = userEvent.setup()
+    // As the server gives them: by name.
+    const sites = [{ ...site(1, 'Aera', 'Aera', null), status: 'Angebot' as const }, site(3, 'Althöfer', 'Althöfer', null), site(2, 'Buhl', 'Buhl', null)]
+    renderWithProviders(<SitePicker sites={sites} value={null} onChange={() => {}} onCreate={async () => sites[0]} />)
+    const input = screen.getAllByLabelText(/^Baustelle/).find((element) => element.tagName === 'INPUT')!
+    await user.click(input)
+    const list = () => document.getElementById(input.getAttribute('aria-controls')!)!
+    const names = () => within(list()).getAllByRole('option', { hidden: true }).map((option) => option.querySelector('p, .mantine-Text-root')?.textContent)
+    expect(names()).toEqual(['Althöfer', 'Buhl', 'Aera (Angebot)'])
+    expect(list()).toHaveTextContent('Noch im Angebot (nur reservieren)')
+    await user.type(input, 'a')
+    expect(names()).toEqual(['Althöfer', 'Aera (Angebot)'])
+  })
+
   it('goes from the day straight to the page of the chosen site, to add or correct its details', async () => {
     const user = userEvent.setup()
     const sites = [{ ...site(1, 'Samarai', 'Samarai', 'Stockumer Straße 23'), clientPhone: null }]
