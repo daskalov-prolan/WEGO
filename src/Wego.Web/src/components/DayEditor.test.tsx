@@ -174,3 +174,19 @@ describe('DayEditor with a service call', () => {
     expect(screen.getByText('Was ist zu tun:')).toBeInTheDocument()
   })
 })
+
+describe('DayEditor after deleting the work of a day', () => {
+  it('saves the day empty, without the half kept free', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn<(entries: DayEntryInput[]) => Promise<void>>(async () => {})
+    const free: Entry = { ...morning, id: 2, siteId: null, siteName: null, activity: null, startTime: '12:00:00', endTime: '16:00:00' }
+    renderWithProviders(
+      <DayEditor employee={{ id: 3, name: 'Koko', mainActivity: 'Fliesen', additionalActivities: [] }} date="2026-11-06"
+        entries={[morning, free]} sites={[site]} onCreateSite={async () => site} onClose={() => {}} onSave={onSave} />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Eintrag 1 entfernen' }))
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalled())
+    expect(onSave.mock.calls[0][0]).toEqual([])
+  })
+})

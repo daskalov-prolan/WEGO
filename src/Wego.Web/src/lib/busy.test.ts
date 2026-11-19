@@ -42,4 +42,9 @@ describe('withoutCoveredFree', () => {
     const entries = [asked, afternoonFree]
     expect(withoutCoveredFree(entries)).toBe(entries)
   })
+
+  it('leaves a day empty that has nothing but time kept free (the rest deleted)', () => {
+    expect(withoutCoveredFree([at(null, '12:00:00', '16:00:00', null)])).toEqual([])
+    expect(withoutCoveredFree([at(null, '07:30:00', '11:30:00', null), at(null, '12:00:00', '16:00:00', null)])).toEqual([])
+  })
 })

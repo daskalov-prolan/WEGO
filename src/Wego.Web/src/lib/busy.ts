@@ -42,12 +42,14 @@ const timedWork = (entry: Timed) => entry.type === 'Baustelle' && !(entry.siteId
 
 /**
  * The entries of a day without the time kept free ("verfügbar") that something else took since: a site, a
- * service call asked of the craftsman, an appointment not confirmed yet, Urlaub or Krank at that time.
+ * service call asked of the craftsman, an appointment not confirmed yet, Urlaub or Krank at that time. Nothing
+ * but time kept free (the rest of the day deleted): the day is empty, white like any free day.
  */
 export function withoutCoveredFree<T extends Timed>(entries: T[]): T[] {
   const keptFree = (entry: T) => entry.type === 'Baustelle' && entry.siteId === null && entry.activity === null
   if (!entries.some(keptFree)) return entries
   const others = entries.filter((entry) => !keptFree(entry))
+  if (others.length === 0) return []
   const left = entries.filter((entry) => !keptFree(entry) || !others.some((other) => overlaps(entry, other)))
   return left.length === entries.length ? entries : left
 }
