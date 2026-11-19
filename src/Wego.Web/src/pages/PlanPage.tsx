@@ -32,9 +32,10 @@ import { isVisit, VISIT } from '../lib/visitGroup'
 import { DeclineDialog, StepDialog, type StepDraft } from './OfferBoardPage'
 import { VisitPlanner } from '../components/VisitPlanner'
 import { MeetingsDialog, MeetingWeekDialog } from '../components/MeetingDialogs'
-import type { MeetingWeek, OwnBusy } from '../api/types'
+import type { DoneReport, MeetingWeek, OwnBusy } from '../api/types'
 import { busyTime, clashes, meetingClashes, overlapping } from '../lib/busy'
 import { askedCalls, ConfirmationsSheet } from '../components/ServiceConfirmations'
+import { DoneReportsSheet } from '../components/DoneReports'
 import { Sheet } from '../components/Sheet'
 import { useLiveChanges } from '../lib/useLiveChanges'
 import { PhaseActivities, type Phase } from '../components/ActivityPicker'
@@ -463,6 +464,15 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
   const [meetingsOpen, setMeetingsOpen] = useState(false)
   // For a planner of group G: how many asked to be let off a week (they decide).
   const meetingRequests = user?.role === 'PlanerG' ? (plan?.meetings ?? []).reduce((n, week) => n + week.requested.length, 0) : 0
+  // For a planner of group G: the sites a Planer A set to done since he last looked (with their summary to save).
+  const isPlanerG = user?.role === 'PlanerG'
+  const [doneReports, setDoneReports] = useState<DoneReport[]>([])
+  const [doneOpen, setDoneOpen] = useState(false)
+  const loadDoneReports = useCallback(() => {
+    if (isPlanerG) api.doneReports().then((reports) => setDoneReports(Array.isArray(reports) ? reports : []), () => {})
+  }, [isPlanerG])
+  // Again whenever the plan comes anew: somebody may have set a site done meanwhile.
+  useEffect(loadDoneReports, [loadDoneReports, plan])
   const people = useMemo(
     () => [...(plan?.employees ?? []), ...(plan?.planners ?? [])].map((e) => ({ id: e.id, name: e.name })),
     [plan],
@@ -1681,6 +1691,12 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
                     ✋<span className="visit-count phone-sign-count">{declinedCalls.length}</span>
                   </ActionIcon>
                 )}
+                {doneReports.length > 0 && (
+                  <ActionIcon variant="light" size="input-sm" radius="xl" className="phone-sign" aria-label="Erledigte Baustellen"
+                    onClick={() => setDoneOpen(true)}>
+                    📄<span className="visit-count phone-sign-count">{doneReports.length}</span>
+                  </ActionIcon>
+                )}
                 {clashList.length > 0 && (
                   <ActionIcon variant="outline" color="red" size="input-sm" radius="xl" className="phone-sign" aria-label="Überschneidungen"
                     onClick={() => setClashesOpen(true)}>
@@ -1800,6 +1816,13 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
             <Button size="sm" color="red" onClick={() => setConfirmationsOpen(true)}
               rightSection={<span className="visit-count">{declinedCalls.length}</span>}>
               ✋ Vom Handwerker abgesagt
+            </Button>
+          )}
+          {/* For Planer G: sites a Planer A set to done, with their summary to save. */}
+          {doneReports.length > 0 && (
+            <Button size="sm" variant="light" onClick={() => setDoneOpen(true)}
+              rightSection={<span className="visit-count">{doneReports.length}</span>}>
+              📄 Erledigte Baustellen
             </Button>
           )}
           {/* Something planned while somebody is busy after his own calendar: in red, with the number. */}
@@ -2137,6 +2160,9 @@ export function PlanPage({ year, phase: chosenPhase = 'Bauphase', canEdit, canAb
         <ConfirmationsSheet declined={declinedCalls} onClose={() => setConfirmationsOpen(false)}
           onChanged={() => api.plan(year).then(setPlan, fail)}
           onGo={(entry) => { setConfirmationsOpen(false); jump(entry.date) }} />
+      )}
+      {doneOpen && (
+        <DoneReportsSheet reports={doneReports} onClose={() => setDoneOpen(false)} onChanged={loadDoneReports} />
       )}
       {meetingsOpen && (
         <MeetingsDialog people={people} decides={user?.role === 'PlanerG'} onClose={() => setMeetingsOpen(false)}

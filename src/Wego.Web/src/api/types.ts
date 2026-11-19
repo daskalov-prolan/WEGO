@@ -20,6 +20,16 @@ export type ActivityInput = Pick<ActivityDef, 'label' | 'phase' | 'color'>
 /** Abgelehnt: the customer said no to the offer, with a reason. */
 export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert' | 'Abgelehnt'
 
+/** A site set to done by a Planer A that no Planer G has seen yet. */
+export interface DoneReport {
+  id: number
+  siteId: number
+  siteName: string
+  /** ISO date and time (UTC) */
+  changedAt: string
+  changedBy: string | null
+}
+
 export interface StatusChange {
   from: SiteStatus | null
   to: SiteStatus

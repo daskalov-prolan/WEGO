@@ -708,6 +708,9 @@ namespace Wego.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime?>("ReportSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("SiteId")
                         .HasColumnType("integer");
 

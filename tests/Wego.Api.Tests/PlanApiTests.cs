@@ -309,6 +309,34 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task A_site_a_Planer_A_sets_done_is_shown_to_Planer_G_until_he_saw_it()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Anton Planer", "report.planer.a", "report-a-pw-1", "PlanerA");
+        var a = await LoginAsync("report.planer.a", "report-a-pw-1");
+        var byA = await CreateSiteAsync(g, "Fertig durch A");
+        var byG = await CreateSiteAsync(g, "Fertig durch G");
+        foreach (var id in new[] { byA, byG })
+            await g.PostAsJsonAsync($"/api/sites/{id}/status", new { status = "Bauphase" });
+        await a.PostAsJsonAsync($"/api/sites/{byA}/status", new { status = "Abgeschlossen" });
+        // Done by a Planer G himself: he was asked for the summary then.
+        await g.PostAsJsonAsync($"/api/sites/{byG}/status", new { status = "Abgeschlossen" });
+
+        // Only Planer G sees the list.
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.GetAsync("/api/sites/done-reports")).StatusCode);
+        var reports = await g.GetFromJsonAsync<JsonElement>("/api/sites/done-reports");
+        var mine = reports.EnumerateArray().Where(r => r.GetProperty("siteId").GetInt32() is var s && (s == byA || s == byG)).ToList();
+        Assert.Single(mine);
+        Assert.Equal(byA, mine[0].GetProperty("siteId").GetInt32());
+        Assert.Equal("Anton Planer", mine[0].GetProperty("changedBy").GetString());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await g.PostAsync($"/api/sites/{byA}/done-report/seen", null)).StatusCode);
+        reports = await g.GetFromJsonAsync<JsonElement>("/api/sites/done-reports");
+        Assert.DoesNotContain(reports.EnumerateArray(), r => r.GetProperty("siteId").GetInt32() == byA);
+        Assert.Equal(HttpStatusCode.NotFound, (await g.PostAsync($"/api/sites/{byA}/done-report/seen", null)).StatusCode);
+    }
+
+    [Fact]
     public async Task Site_status_follows_the_job_and_every_change_is_logged()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
