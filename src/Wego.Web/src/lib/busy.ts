@@ -40,6 +40,18 @@ export function clashes(busy: OwnBusy, entries: Entry[], meetings: MeetingWeek[]
 type Timed = { type: string; siteId: number | null; activity: string | null; startTime: string | null; endTime: string | null }
 const timedWork = (entry: Timed) => entry.type === 'Baustelle' && !(entry.siteId === null && entry.activity === null) && !!entry.startTime && !!entry.endTime
 
+/**
+ * The entries of a day without the time kept free ("verfügbar") that something else took since: a site, a
+ * service call asked of the craftsman, an appointment not confirmed yet, Urlaub or Krank at that time.
+ */
+export function withoutCoveredFree<T extends Timed>(entries: T[]): T[] {
+  const keptFree = (entry: T) => entry.type === 'Baustelle' && entry.siteId === null && entry.activity === null
+  if (!entries.some(keptFree)) return entries
+  const others = entries.filter((entry) => !keptFree(entry))
+  const left = entries.filter((entry) => !keptFree(entry) || !others.some((other) => overlaps(entry, other)))
+  return left.length === entries.length ? entries : left
+}
+
 /** Two entries of one day planned at the same time: both are in the way of each other. */
 export function overlapping<T extends Timed>(entries: T[]): T[] {
   const timed = entries.filter(timedWork)

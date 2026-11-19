@@ -1,7 +1,7 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import type { CalendarNote, Entry, MeetingWeek, NamedItem, OwnBusy, PlanEmployee, SchoolHoliday, Site } from '../api/types'
 import { BusyChip } from './BusyChip'
-import { clashes, meetingClashes, overlapping } from '../lib/busy'
+import { clashes, meetingClashes, overlapping, withoutCoveredFree } from '../lib/busy'
 import { MeetingChip } from './MeetingDialogs'
 import { CellNotes } from './CalendarNotes'
 import type { Day } from '../lib/dates'
@@ -743,7 +743,8 @@ export function TimelineMatrix(props: MatrixProps) {
           </th>
           {liveStart > 0 && <td colSpan={liveStart} className="live-gap" />}
           {days.slice(liveStart, liveEnd).map((day, index) => {
-            const all = entriesOf(employee.id, day.iso)
+            // Time kept free that something else took since (e.g. a service call asked of the craftsman) is gone.
+            const all = withoutCoveredFree(entriesOf(employee.id, day.iso))
             // Without "verfügbar" (the offer phase): a half kept free is left out of the field as well.
             const listed = props.showsFree === false && all.some(isFree) ? all.filter((entry) => !isFree(entry)) : all
             const entries = listed.length > 0 ? listed : NO_ENTRIES

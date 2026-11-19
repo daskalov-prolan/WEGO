@@ -7,7 +7,7 @@ import { api, messageOf } from '../api/client'
 import type { CalendarNote, Entry, MeetingWeek, Plan, User } from '../api/types'
 import { meetingTime, MeetingWeekDialog } from '../components/MeetingDialogs'
 import { canPlanRole } from '../lib/roles'
-import { busyTime, clashes } from '../lib/busy'
+import { busyTime, clashes, withoutCoveredFree } from '../lib/busy'
 import { rememberSites } from '../lib/siteInfo'
 import { ActivityIcon } from '../components/ActivityIcon'
 import { MySiteDetails } from '../components/MySiteDetails'
@@ -415,7 +415,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           const holiday = holidayByDate.get(day.iso)
           // A public holiday is free: vacation entered on it (e.g. by a company closure) is no vacation.
           const publicHoliday = holiday?.kind === 'Feiertag' && holiday.startDate === holiday.endDate
-          const entries = withFreeHalf((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub')))
+          const entries = withFreeHalf(withoutCoveredFree((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))))
           const born = birthdays.get(day.iso.slice(5))
           const notes = notesByDate.get(day.iso) ?? []
           const meetings = meetingsByDate.get(day.iso) ?? []
