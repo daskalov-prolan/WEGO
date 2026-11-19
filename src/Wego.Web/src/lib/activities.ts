@@ -188,7 +188,7 @@ export function onlyHalfDay(entries: Pick<Entry, 'type' | 'activity' | 'siteName
 }
 
 /** Free time shorter than this between the work of a day is not offered as "verfügbar". */
-export const MIN_GAP_MINUTES = 60
+export const MIN_GAP_MINUTES = 120
 
 const toMinutes = (time: string) => {
   const [h, m] = time.split(':').map(Number)
@@ -202,7 +202,7 @@ const nearly = (gap: { start: string; end: string }, half: { start: string; end:
   toMinutes(half.start) - toMinutes(gap.start) <= 30 && toMinutes(gap.end) - toMinutes(half.end) <= 30
 
 /**
- * The free time of a working day (WHOLE_DAY) between its entries, an hour or more each ("HH:mm"): before the
+ * The free time of a working day (WHOLE_DAY) between its entries, two hours or more each ("HH:mm"): before the
  * first, between two and after the last. Nothing when the day is empty (all of it is free, plain to see), or
  * something takes it without times (a whole day, Urlaub, Krank). Time kept free ("verfügbar") counts as taken:
  * it shows already.

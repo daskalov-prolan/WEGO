@@ -118,7 +118,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
    * stored as an entry of its own).
    */
   const withFreeHalf = (entries: Entry[]): Entry[] => {
-    // Free time of an hour or more between his work (the visits of the day count as one entry): "verfügbar".
+    // Free time of two hours or more between his work (the visits of the day count as one entry): "verfügbar".
     const gaps = freeGaps(visitsAsOne(entries))
     if (gaps.length === 0) return entries
     const free: Entry[] = gaps.map((gap, i) => ({

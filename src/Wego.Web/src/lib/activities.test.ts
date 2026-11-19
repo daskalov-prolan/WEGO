@@ -18,7 +18,7 @@ describe('allowedActivities', () => {
 describe('freeGaps', () => {
   const at = (startTime: string | null, endTime: string | null, type: Entry['type'] = 'Baustelle') => ({ type, startTime, endTime })
 
-  it('offers the free time of an hour or more between the work of a day', () => {
+  it('offers the free time of two hours or more between the work of a day', () => {
     // Sünkler in the morning, a service call in the afternoon: 11:30–14:00 is free.
     expect(freeGaps([at('07:00:00', '11:30:00'), at('14:00:00', '16:00:00')])).toEqual([{ start: '11:30', end: '14:00' }])
     // Half a day: the other half, in its usual times.
@@ -26,8 +26,10 @@ describe('freeGaps', () => {
     expect(freeGaps([at('12:00:00', '16:00:00')])).toEqual([{ start: '07:30', end: '11:30' }])
   })
 
-  it('offers nothing shorter than an hour, on an empty day or one taken without times', () => {
+  it('offers nothing shorter than two hours, on an empty day or one taken without times', () => {
     expect(freeGaps([at('07:00:00', '11:30:00'), at('12:00:00', '16:00:00')])).toEqual([])
+    // An hour and a half between two jobs is too little.
+    expect(freeGaps([at('07:00:00', '11:30:00'), at('13:00:00', '16:00:00')])).toEqual([])
     expect(freeGaps([])).toEqual([])
     expect(freeGaps([at(null, null)])).toEqual([])
     expect(freeGaps([at(null, null, 'Urlaub')])).toEqual([])

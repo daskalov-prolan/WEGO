@@ -47,7 +47,7 @@ export function NoteMark({ important }: { important: boolean }) {
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
 /**
- * The name of a site; a service call with the sign of its tool in place of "SE:": a grout float for tiling, else a
+ * The name of a site; a service call with the sign of its tool in place of "SE:": four tiles for tiling, else a
  * wrench.
  */
 export function SiteName({ name, activity, siteId }: { name: string; activity?: Activity | null; siteId?: number | null }) {
@@ -67,7 +67,7 @@ export function SiteName({ name, activity, siteId }: { name: string; activity?: 
     <>
       {/* Pointed at: what the service call is about (its description). */}
       <span className="service-sign" title={serviceDescription(siteId) ?? 'Serviceauftrag'}>
-        <ServiceIcon tool={activity === 'Fliesen' ? 'float' : 'wrench'} />
+        <ServiceIcon tool={activity === 'Fliesen' ? 'tiles' : 'wrench'} />
       </span>
       {service}
     </>
@@ -89,11 +89,11 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
     <span
       className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : '', clash ? 'overlap' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
-      // With a note, pointing at the entry shows the note instead of site and activity.
+      // With a note, pointing at the entry shows the note; otherwise who does what (the customer is on the chip already).
       title={
         (clash ? 'Überschneidung mit einem anderen Einsatz: bitte Zeiten anpassen · ' : '') +
         (asking === 'awaiting' ? 'Wartet auf Bestätigung des Handwerkers · ' : asking === 'refused' ? 'Vom Handwerker abgesagt · ' : '') +
-        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry))
+        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle({ ...entry, siteName: entry.employeeName.split(' ')[0] }))
       }
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable && entry.type === 'Baustelle')}
