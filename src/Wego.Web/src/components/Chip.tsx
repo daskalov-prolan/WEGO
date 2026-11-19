@@ -47,7 +47,7 @@ export function NoteMark({ important }: { important: boolean }) {
 
 /** One plan entry, tinted in the colour of its activity: site, time window and note, or Urlaub / Krank. */
 /**
- * The name of a site; a service call with the sign of its tool in place of "SE:": a grout float for tiling, else a
+ * The name of a site; a service call with the sign of its tool in place of "SE:": four tiles for tiling, else a
  * wrench.
  */
 export function SiteName({ name, activity, siteId }: { name: string; activity?: Activity | null; siteId?: number | null }) {
@@ -67,7 +67,7 @@ export function SiteName({ name, activity, siteId }: { name: string; activity?: 
     <>
       {/* Pointed at: what the service call is about (its description). */}
       <span className="service-sign" title={serviceDescription(siteId) ?? 'Serviceauftrag'}>
-        <ServiceIcon tool={activity === 'Fliesen' ? 'float' : 'wrench'} />
+        <ServiceIcon tool={activity === 'Fliesen' ? 'tiles' : 'wrench'} />
       </span>
       {service}
     </>
