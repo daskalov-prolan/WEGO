@@ -89,11 +89,11 @@ export function Chip({ entry, dimmed = false, withActivity = false, onSiteClick,
     <span
       className={[className, draggable && entry.type === 'Baustelle' ? 'drag-source' : '', marked ? 'marked' : '', found ? 'found' : '', clash ? 'overlap' : ''].filter(Boolean).join(' ')}
       style={entryStyle(entry)}
-      // With a note, pointing at the entry shows the note instead of site and activity.
+      // With a note, pointing at the entry shows the note; otherwise who does what (the customer is on the chip already).
       title={
         (clash ? 'Überschneidung mit einem anderen Einsatz: bitte Zeiten anpassen · ' : '') +
         (asking === 'awaiting' ? 'Wartet auf Bestätigung des Handwerkers · ' : asking === 'refused' ? 'Vom Handwerker abgesagt · ' : '') +
-        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle(entry))
+        (entry.note ? `${entry.noteImportant ? 'WICHTIG: ' : ''}${entry.note}` : reserved ? `${entry.siteName}: reserviert (Angebot, noch kein Baubeginn)` : entryTitle({ ...entry, siteName: entry.employeeName }))
       }
       data-entry-id={entry.id}
       {...dragSource({ kind: 'entry', entry }, draggable && entry.type === 'Baustelle')}
