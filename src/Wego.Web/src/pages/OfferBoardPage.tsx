@@ -38,8 +38,9 @@ function stageOf(site: Site, steps: OfferStep[], order: Activity[], today: strin
   for (const [index, activity] of order.entries()) {
     const own = steps.filter((step) => step.siteId === site.id && step.activity === activity)
     if (own.length === 0) return { column: index === 0 ? 'Anfrage' : activity, next: activity, planned: null }
-    // The next appointment ahead (a step may have several, e.g. a second Objektauswahl).
-    const ahead = own.filter((step) => step.date > today)
+    // The next appointment ahead (a step may have several, e.g. a second Objektauswahl). An appointment of today
+    // is still ahead: the card moves on the day after, once the day is over.
+    const ahead = own.filter((step) => step.date >= today)
     if (ahead.length > 0) return { column: activity, next: null, planned: ahead.filter((step) => step.date === ahead[0].date) }
   }
   return { column: WAITING, next: null, planned: null }
@@ -209,8 +210,8 @@ export function OfferBoardPage({ head }: { head?: ReactNode }) {
       const ofStep = appointments.filter((a) => a.activity === activity)
       return `${activityLabel(activity)}${ofStep.length > 1 ? ` ${ofStep.findIndex((a) => a.date === date) + 1}` : ''}`
     }
-    const done = appointments.filter((a) => a.date <= today)
-    const ahead = appointments.filter((a) => a.date > today)
+    const done = appointments.filter((a) => a.date < today)
+    const ahead = appointments.filter((a) => a.date >= today)
     return (
       <article
         key={site.id}
