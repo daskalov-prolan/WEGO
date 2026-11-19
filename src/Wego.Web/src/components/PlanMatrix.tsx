@@ -526,7 +526,7 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const now = () => context.current!
   const props = () => now().props
   const first = entries[0]
-  // Free time of an hour or more between the work of the day (e.g. the other half, or 11:30–14:00 between two
+  // Free time of two hours or more between the work of the day (e.g. the other half, or 11:30–14:00 between two
   // jobs): "verfügbar" where it is. The visits of the day count as one entry (see VisitChip).
   const gaps = cell.showsFree ? freeGaps(visitsAsOne(entries)) : []
   const firstVisit = entries.findIndex(isVisit)
