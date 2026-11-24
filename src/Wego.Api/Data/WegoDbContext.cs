@@ -10,6 +10,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteStatusChange> SiteStatusChanges => Set<SiteStatusChange>();
     public DbSet<SiteTask> SiteTasks => Set<SiteTask>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
+    public DbSet<SiteDocument> SiteDocuments => Set<SiteDocument>();
     public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
@@ -106,6 +107,16 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             // A deleted activity is no task of any site any more.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.Activity).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.Activity }).IsUnique();
+        });
+
+        modelBuilder.Entity<SiteDocument>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(100);
+            e.Property(x => x.FileName).HasMaxLength(200);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+            e.Property(x => x.ClientKey).HasMaxLength(100);
+            e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SiteId, x.ClientKey }).IsUnique();
         });
 
         modelBuilder.Entity<SiteStatusChange>(e =>

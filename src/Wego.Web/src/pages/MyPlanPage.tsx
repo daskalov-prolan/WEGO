@@ -24,6 +24,7 @@ import { VisitPlanner } from '../components/VisitPlanner'
 import { VisitReminders } from '../components/VisitReminders'
 import { askedCalls, ConfirmRequests } from '../components/ServiceConfirmations'
 import { useLiveChanges } from '../lib/useLiveChanges'
+import { OutboxNotice } from '../components/OutboxNotice'
 
 /** Mein Plan begins with 2026, the first year planned with WEGO. */
 const FIRST_YEAR = 2026
@@ -364,6 +365,8 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
       )}
       {/* Customers waiting for a visit, and new enquiries: for everyone who visits. */}
       {user.doesVisits && <VisitReminders employeeId={user.id} version={visitVersion} onPlan={() => setVisiting(true)} />}
+      {/* PDFs of finished visits that still wait for internet (the tablet at the customer). */}
+      {user.doesVisits && <OutboxNotice />}
       {/* Service calls the planner asks him to confirm: answered here. */}
       <ConfirmRequests asked={asked} onAnswered={() => setPlans(new Map())} />
 

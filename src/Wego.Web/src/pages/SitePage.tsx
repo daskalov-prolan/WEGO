@@ -20,6 +20,7 @@ import { SiteStatusPanel } from '../components/SiteStatus'
 import { SiteSummary } from '../components/SiteSummary'
 import { Sheet } from '../components/Sheet'
 import { SiteCosting } from '../components/SiteCosting'
+import { SiteDocuments } from '../components/SiteDocuments'
 import { ACTIVITIES, activityLabel } from '../lib/activities'
 import { formatDate, formatTimeRange } from '../lib/dates'
 import { toSiteInput } from '../lib/sites'
@@ -246,6 +247,9 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
           }}
         />
       )}
+
+      {/* The protocol of the visit and the confirmation signed by the customer, sent from the tablet. */}
+      <SiteDocuments siteId={siteId} />
 
       {current && !declined && (
         <>

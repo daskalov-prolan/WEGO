@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { theme } from './theme'
+import { startOutbox } from './lib/tabletStore'
 
 // Zoomed in with two fingers: marked on the page, so that the plan does not snap into place meanwhile. Where the
 // part in view lies and how big it is drawn go along: a window (a note, a day) opens over just that part at its
@@ -55,6 +56,18 @@ window.addEventListener('load', () => {
     }
   }, 10_000)
 })
+
+// The PDFs of visits made without internet go to their sites as soon as the tablet is online.
+startOutbox()
+
+// Offline on the tablet (at a customer without internet): the app still opens, with the plan as last loaded.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Without it the app works as before, only not offline.
+    })
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

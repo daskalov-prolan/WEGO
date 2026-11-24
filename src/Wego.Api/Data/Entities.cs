@@ -341,6 +341,27 @@ public class SiteHourlyRate
 /// One entry in a day cell of an employee. A day can hold several entries
 /// (split day), each with an optional time window.
 /// </summary>
+/// <summary>
+/// A document kept with a site, e.g. the protocol of the visit made on the tablet and the confirmation the customer
+/// signed there: a PDF, made in the browser of the tablet and sent once it was online.
+/// </summary>
+public class SiteDocument
+{
+    public int Id { get; set; }
+    public int SiteId { get; set; }
+    public Site Site { get; set; } = null!;
+    /// <summary>What it is, e.g. "Besichtigungsprotokoll" or "Bestätigung Besichtigung".</summary>
+    public required string Kind { get; set; }
+    public required string FileName { get; set; }
+    public required byte[] Content { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    /// <summary>
+    /// Given by the tablet: sent a second time (the answer lost on a weak connection), the document is not kept twice.
+    /// </summary>
+    public required string ClientKey { get; set; }
+}
+
 public class PlanEntry
 {
     public int Id { get; set; }

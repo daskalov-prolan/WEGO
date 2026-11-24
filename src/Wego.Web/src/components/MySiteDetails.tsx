@@ -1,11 +1,16 @@
-import { Badge, Group, Modal, Stack, Text } from '@mantine/core'
+import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
+import { useEffect, useState } from 'react'
 import type { Entry, Plan, Site } from '../api/types'
 import { SiteName } from './Chip'
 import { activityLabel, entryStyle } from '../lib/activities'
 import { formatDate, formatDateLong, formatDayTime } from '../lib/dates'
 import { clientName, clientPhones, formatAddress } from '../lib/sites'
 import { CallButton, SiteWayButtons } from './SiteActions'
+import { SiteDocuments } from './SiteDocuments'
+import { VisitProtocol } from './VisitProtocol'
+import { loadDraft } from '../lib/tabletStore'
+import { protocolKey } from '../lib/visitProtocol'
 
 interface Props {
   /** The entry tapped: its day, time and note. */
@@ -38,6 +43,21 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
   const small = useMediaQuery('(max-width: 600px)')
   const address = formatAddress(site)
   const planner = [...(plan.planners ?? []), ...plan.employees].find((p) => p.id === site.responsiblePlannerId)
+  // A visit: its protocol made here on the tablet (started, finished or not yet).
+  const isVisit = entry.activity === 'Besichtigung'
+  const [protocolOpen, setProtocolOpen] = useState(false)
+  const [protocolState, setProtocolState] = useState<'none' | 'started' | 'finished'>('none')
+  useEffect(() => {
+    if (!isVisit || protocolOpen) return
+    let cancelled = false
+    void loadDraft(protocolKey(site.id, entry.date)).then((draft) => {
+      if (!cancelled) setProtocolState(!draft ? 'none' : draft.finishedAt ? 'finished' : 'started')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isVisit, protocolOpen, site.id, entry.date])
+  const visitor = [...plan.employees, ...(plan.planners ?? [])].find((p) => p.id === employeeId)?.name ?? ''
   const myDays = plan.entries
     .filter((e) => e.employeeId === employeeId && e.siteId === site.id)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
@@ -49,6 +69,12 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
         </Text>
       }>
       <Stack gap="md">
+        {isVisit && (
+          <Button size="lg" fullWidth color={protocolState === 'finished' ? 'green' : undefined} variant={protocolState === 'finished' ? 'light' : 'filled'}
+            onClick={() => setProtocolOpen(true)}>
+            {protocolState === 'finished' ? '✓ Besichtigung abgeschlossen – ansehen' : protocolState === 'started' ? '📝 Besichtigung fortsetzen' : '📝 Besichtigung starten'}
+          </Button>
+        )}
         <div className="my-entry" style={entryStyle(entry)}>
           <span className="when">
             {formatDateLong(entry.date)} · {formatDayTime(entry)}
@@ -129,7 +155,9 @@ export function MySiteDetails({ entry, site, plan, employeeId, colleagues, onClo
             ))}
           </Stack>
         </Row>
+        {isVisit && <SiteDocuments siteId={site.id} />}
       </Stack>
+      {protocolOpen && <VisitProtocol site={site} entry={entry} visitor={visitor} onClose={() => setProtocolOpen(false)} />}
     </Modal>
   )
 }

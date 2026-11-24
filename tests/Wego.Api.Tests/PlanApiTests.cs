@@ -309,6 +309,42 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task The_visitor_sends_the_PDFs_of_his_visit_to_the_site_once_and_the_planners_open_them()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var visitorId = await CreateEmployeeAsync(planer, "Besichtiger Tablet", "tablet.besichtiger", "tablet-pw-1");
+        await CreateEmployeeAsync(planer, "Anderer Handwerker", "tablet.anderer", "tablet-pw-2");
+        var siteId = await CreateSiteAsync(planer, "Tablet-Kunde");
+        await planer.PutAsJsonAsync($"/api/plan/{visitorId}/{Year}-07-15", new object[]
+            { new { type = "Baustelle", siteId, activity = "Besichtigung", startTime = "10:00", endTime = "11:00" } });
+        var visitor = await LoginAsync("tablet.besichtiger", "tablet-pw-1");
+        var other = await LoginAsync("tablet.anderer", "tablet-pw-2");
+        var pdf = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 Besichtigung"));
+        var input = new { kind = "Besichtigungsprotokoll", fileName = "Besichtigung Tablet-Kunde.pdf", contentBase64 = pdf, clientKey = "k-1" };
+
+        // Only who has the visit in his plan (or a planner) sends it.
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync($"/api/sites/{siteId}/documents", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await visitor.PostAsJsonAsync($"/api/sites/{siteId}/documents", input)).StatusCode);
+        // Sent again (the answer got lost on the way): kept once.
+        Assert.Equal(HttpStatusCode.OK, (await visitor.PostAsJsonAsync($"/api/sites/{siteId}/documents", input)).StatusCode);
+        // Nothing but a PDF.
+        Assert.Equal(HttpStatusCode.BadRequest, (await visitor.PostAsJsonAsync($"/api/sites/{siteId}/documents",
+            new { kind = "x", fileName = "x.pdf", contentBase64 = Convert.ToBase64String([1, 2, 3, 4, 5, 6]), clientKey = "k-2" })).StatusCode);
+
+        // The planners and the visitor of the site read them; another craftsman does not.
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync($"/api/sites/{siteId}/documents")).StatusCode);
+        Assert.Equal(1, (await visitor.GetFromJsonAsync<JsonElement>($"/api/sites/{siteId}/documents")).GetArrayLength());
+        var documents = await planer.GetFromJsonAsync<JsonElement>($"/api/sites/{siteId}/documents");
+        Assert.Equal(1, documents.GetArrayLength());
+        Assert.Equal("Besichtiger Tablet", documents[0].GetProperty("createdBy").GetString());
+        var file = await planer.GetAsync($"/api/sites/documents/{documents[0].GetProperty("id").GetInt32()}");
+        Assert.Equal("application/pdf", file.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("%PDF", await file.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await other.GetAsync($"/api/sites/documents/{documents[0].GetProperty("id").GetInt32()}")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_site_a_Planer_A_sets_done_is_shown_to_Planer_G_until_he_saw_it()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

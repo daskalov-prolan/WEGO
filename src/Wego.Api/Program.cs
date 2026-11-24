@@ -166,6 +166,7 @@ app.MapLocationEndpoints();
 app.MapChangeEndpoints();
 app.MapMeetingEndpoints();
 app.MapCalendarEndpoints();
+app.MapDocumentEndpoints();
 
 app.Run();
 
