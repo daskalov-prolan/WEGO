@@ -44,6 +44,13 @@ const mondayOf = (iso: string) => weekOf(iso)[0].iso
  * where they have to be, when, and who else is on the same construction site that day. The head (title,
  * year, the week in view, Heute) stays on top.
  */
+/** Where something of a day stands in its column: by its start (minutes of the day); the whole day first. */
+const byTime = (start: string | null | undefined) => {
+  if (!start) return 0
+  const [h, m] = start.split(':').map(Number)
+  return h * 60 + m
+}
+
 export function MyPlanPage({ year, user, onYearChange }: Props) {
   const today = todayIso()
   // One list from 2026 on to the year after the current one (or the year chosen): it scrolls on over the turn of
@@ -489,10 +496,11 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
               )}
 
               <Stack gap="xs">
+                {/* Busy times, meetings and work together by their time (placed by the order of the column). */}
                 {busy.map((b, i) => {
                   const clash = clashes(b, entries, meetings)
                   return (
-                    <div key={`busy${i}`} className={clash.length > 0 ? 'my-entry my-busy clash' : 'my-entry my-busy'}>
+                    <div key={`busy${i}`} className={clash.length > 0 ? 'my-entry my-busy clash' : 'my-entry my-busy'} style={{ order: byTime(b.startTime) }}>
                       <span className="when">{busyTime(b)}</span>
                       <span className="where">{clash.length > 0 ? '⚠ ' : ''}Privat belegt (eigener Kalender)</span>
                       {clash.length > 0 && <span className="what">Überschneidung mit {clash.join(', ')}</span>}
@@ -504,7 +512,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                   const asked = week.requested.includes(user.id)
                   return (
                     <UnstyledButton key={`${week.meetingId}|${week.originalDate}`} className={asked ? 'my-entry my-meeting asked' : 'my-entry my-meeting'}
-                      onClick={() => setMeetingWeek(week)} aria-label={`${week.title}: öffnen`}>
+                      style={{ order: byTime(week.startTime) }} onClick={() => setMeetingWeek(week)} aria-label={`${week.title}: öffnen`}>
                       <span className="my-entry-more" aria-hidden>›</span>
                       <span className="when">{meetingTime(week.startTime, week.endTime)}</span>
                       <span className="where">{asked ? '? ' : '⟳ '}{week.title}</span>
@@ -522,7 +530,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                       return site ? formatAddress(site) : null
                     })
                     return (
-                      <div className="my-entry my-visit" key="visits" style={entryStyle({ type: 'Baustelle', activity: VISIT })}>
+                      <div className="my-entry my-visit" key="visits" style={{ ...entryStyle({ type: 'Baustelle', activity: VISIT }), order: byTime(group.visits[0]?.startTime ?? entry.startTime) }}>
                           {time && <span className="when">{time}</span>}
                           <span className="where">
                             <ActivityIcon activity={VISIT} size={15} /> {customers(group.visits.length)}
@@ -567,7 +575,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                   }
                   if (entry.type !== 'Baustelle') {
                     return (
-                      <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
+                      <div className="my-entry" key={entry.id} style={{ ...entryStyle(entry), order: byTime(entry.startTime) }}>
                         <span className="where">
                           <ActivityIcon type={entry.type} size={15} /> {entry.type}
                         </span>
@@ -577,7 +585,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                   // Free (the other half of the day): "verfügbar", in green, without site or colleagues.
                   if (isFree(entry)) {
                     return (
-                      <div className="my-entry" key={entry.id} style={entryStyle(entry)}>
+                      <div className="my-entry" key={entry.id} style={{ ...entryStyle(entry), order: byTime(entry.startTime) }}>
                         <span className="when">{formatDayTime(entry)}</span>
                         <span className="where">verfügbar</span>
                       </div>
@@ -596,7 +604,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                         entry.confirmation === 'Offen' ? 'awaiting' : entry.confirmation === 'Abgelehnt' ? 'refused' : '',
                       ].filter(Boolean).join(' ')}
                       key={entry.id}
-                      style={entryStyle(entry)}
+                      style={{ ...entryStyle(entry), order: byTime(entry.startTime) }}
                       {...(site ? { onClick: () => setDetails(entry), 'aria-label': `${entry.siteName}: Details öffnen` } : {})}
                     >
                       {site && (
