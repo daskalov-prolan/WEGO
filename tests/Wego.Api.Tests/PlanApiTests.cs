@@ -319,6 +319,11 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
             { new { type = "Baustelle", siteId, activity = "Besichtigung", startTime = "10:00", endTime = "11:00" } });
         var visitor = await LoginAsync("tablet.besichtiger", "tablet-pw-1");
         var other = await LoginAsync("tablet.anderer", "tablet-pw-2");
+        // A craftsman who visits sees the customer of his visit (still in the offer phase), another one does not.
+        Assert.Equal(HttpStatusCode.OK, (await visitor.GetAsync($"/api/sites/{siteId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/sites/{siteId}")).StatusCode);
+        var visitorPlan = await visitor.GetFromJsonAsync<JsonElement>($"/api/plan?year={Year}");
+        Assert.Contains(visitorPlan.GetProperty("sites").EnumerateArray(), s => s.GetProperty("id").GetInt32() == siteId);
         var pdf = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 Besichtigung"));
         var input = new { kind = "Besichtigungsprotokoll", fileName = "Besichtigung Tablet-Kunde.pdf", contentBase64 = pdf, clientKey = "k-1" };
 

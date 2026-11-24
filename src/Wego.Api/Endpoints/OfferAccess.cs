@@ -6,16 +6,21 @@ namespace Wego.Api.Endpoints;
 
 /// <summary>
 /// Who may see the offer phase: the planners, who do all of its activities. Craftsmen get neither the sites in
-/// the offer phase nor the offer work of others.
+/// the offer phase nor the offer work of others, only the sites in their own plan (e.g. the customers they visit).
 /// </summary>
 public static class OfferAccess
 {
-    public record Rules(bool SeesOffers, int EmployeeId, IReadOnlySet<string> OfferActivities);
+    public record Rules(bool SeesOffers, int EmployeeId, IReadOnlySet<string> OfferActivities, IReadOnlySet<int> OwnSites);
 
     public static async Task<Rules> ForAsync(ClaimsPrincipal user, WegoDbContext db)
     {
         var offerActivities = await OfferActivitiesAsync(db);
-        return new Rules(user.CanPlan(), user.EmployeeId(), offerActivities);
+        var me = user.EmployeeId();
+        var sees = user.CanPlan();
+        // The sites in his own plan: a visitor needs his customers (address, phone, the protocol of the visit).
+        var own = sees ? [] : (await db.PlanEntries.Where(e => e.EmployeeId == me && e.SiteId != null)
+            .Select(e => e.SiteId!.Value).Distinct().ToListAsync()).ToHashSet();
+        return new Rules(sees, me, offerActivities, own);
     }
 
     /// <summary>For the signed-in user: whether the menu offers the plan of the offer phase.</summary>
@@ -26,7 +31,7 @@ public static class OfferAccess
 
     /// <summary>A declined offer stays as hidden as the offer was.</summary>
     public static bool Shows(this Rules rules, Site site) =>
-        rules.SeesOffers || site.Status is not (SiteStatus.Angebot or SiteStatus.Abgelehnt);
+        rules.SeesOffers || rules.OwnSites.Contains(site.Id) || site.Status is not (SiteStatus.Angebot or SiteStatus.Abgelehnt);
 
     /// <summary>An entry of somebody else that is offer work: by its activity, or (without one) by its site.</summary>
     public static bool Shows(this Rules rules, PlanEntry entry, IReadOnlyDictionary<int, SiteStatus> siteStatus)
