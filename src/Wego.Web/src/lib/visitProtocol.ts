@@ -75,6 +75,7 @@ export const CHECKLIST: Section[] = [
         hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
       },
       { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt'] },
+      { id: 'waendeTapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Tapete' } },
     ],
   },
   {
@@ -82,7 +83,7 @@ export const CHECKLIST: Section[] = [
     questions: [
       { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
       { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
-      { id: 'tapeteAb', label: 'Tapete abmachen?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
+      { id: 'tapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
       { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
       { id: 'maler', label: 'Malerarbeiten gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
