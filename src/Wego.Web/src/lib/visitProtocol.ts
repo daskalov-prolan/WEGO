@@ -74,7 +74,7 @@ export const CHECKLIST: Section[] = [
         id: 'waende', label: 'Beschaffenheit der Wände (Trockenbau, Mauerwerk etc.)', kind: 'text',
         hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
       },
-      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt'] },
+      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt', 'Holzpaneele'] },
       { id: 'waendeTapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Tapete' } },
     ],
   },
