@@ -40,7 +40,7 @@ export const CHECKLIST: Section[] = [
         id: 'aufmerksam', label: 'Wie ist der Kunde auf uns aufmerksam geworden?', kind: 'choice', bold: true,
         options: [
           'Empfehlung (Familie, Freunde, Nachbarn)', 'Google / Internetsuche', 'Unsere Website', 'Social Media',
-          'Badcenter / Ausstellung', 'Zeitung / Werbung', 'Fahrzeug / Baustellenschild', 'Stammkunde', 'Hausverwaltung / Vermieter', 'Sonstiges',
+          'Badcenter / Ausstellung', 'Fahrzeug', 'Stammkunde', 'Sonstiges',
         ],
       },
       { id: 'aufmerksamWie', label: 'Wie genau?', kind: 'text', when: { id: 'aufmerksam', is: 'Sonstiges' } },
@@ -49,10 +49,6 @@ export const CHECKLIST: Section[] = [
   {
     title: 'Raum',
     questions: [
-      {
-        id: 'waende', label: 'Beschaffenheit der Wände (Trockenbau, Mauerwerk etc.)', kind: 'text',
-        hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
-      },
       { id: 'raumhoehe', label: 'Raumhöhe', kind: 'number', unit: 'm' },
       { id: 'unterkellert', label: 'Bad unterkellert', kind: 'choice', options: JA_NEIN },
       { id: 'eigenerKeller', label: 'bei MFH – eigener Keller?', kind: 'choice', options: JA_NEIN, when: { id: 'art', is: 'MFH / Eigentumswohnung' } },
@@ -64,30 +60,52 @@ export const CHECKLIST: Section[] = [
       { id: 'badewanne', label: 'Vorhandene Badewanne', kind: 'choice', options: ['auf Füßen', 'einbetoniert'] },
       { id: 'dusche', label: 'Einbau bodengleicher Dusche möglich', kind: 'choice', options: JA_NEIN },
       { id: 'duscheHoehe', label: 'Voraussichtliche Höhe der Dusche (Einstieg)', kind: 'number', unit: 'cm', when: { id: 'dusche', is: 'nein' } },
+      { id: 'jalousie', label: 'Jalousiekasten vorhanden?', kind: 'choice', options: JA_NEIN },
+      { id: 'lueftung', label: 'Lüftung vorhanden?', kind: 'choice', options: JA_NEIN },
+      { id: 'lueftungGewuenscht', label: 'Lüftung gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'lueftung', is: 'nein' } },
+      { id: 'lueftungArt', label: 'Art der Lüftung', kind: 'choice', options: ['manuell', 'elektrisch'], when: { id: 'lueftungGewuenscht', is: 'ja' } },
     ],
   },
   {
-    title: 'Elektroinstallation',
+    title: 'Wände',
     questions: [
-      { id: 'fussbodenTemp', label: 'el. Fußbodentemperierung gewünscht?', kind: 'choice', options: JA_NEIN },
-      { id: 'kleinarbeiten', label: 'Kleinarbeiten nach Aufwand', kind: 'choice', options: JA_NEIN },
-      { id: 'elektriker', label: 'Besichtigung durch Elektrofirma gewünscht?', kind: 'choice', options: JA_NEIN },
+      {
+        id: 'waende', label: 'Beschaffenheit der Wände (Trockenbau, Mauerwerk etc.)', kind: 'text',
+        hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
+      },
+      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt'] },
+    ],
+  },
+  {
+    title: 'Decke',
+    questions: [
+      { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
+      { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
+      { id: 'tapeteAb', label: 'Tapete abmachen?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
+      { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
+      { id: 'maler', label: 'Malerarbeiten gewünscht?', kind: 'choice', options: JA_NEIN },
+    ],
+  },
+  {
+    title: 'Tür',
+    hint: 'Bei Öffnung nach innen bitte die Kunden auf eine evtl. erforderliche Kürzung hinweisen.',
+    questions: [
+      { id: 'tuer', label: 'Neue Tür/Zarge einbauen', kind: 'choice', options: JA_NEIN },
+      { id: 'anschlag', label: 'Anschlag ändern', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
     title: 'Fliesen',
     questions: [
       { id: 'fliesenhoeheIst', label: 'Fliesenhöhe momentan', kind: 'number', unit: 'm' },
-      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt'] },
       { id: 'fliesenhoeheSoll', label: 'Gewünschte Fliesenhöhe', kind: 'number', unit: 'm' },
       { id: 'fliesAufFliese', label: 'Fliese auf Fliese möglich?', kind: 'choice', options: ['ja', 'nein', 'teilweise'] },
-      { id: 'jalousie', label: 'Jalousiekasten vorhanden?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
-    title: 'Vorhandene WC-Anlage',
+    title: 'Sanitär',
     questions: [
-      { id: 'wc', label: 'WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
+      { id: 'wc', label: 'Vorhandenes WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
       { id: 'bidet', label: 'Bidet', kind: 'choice', options: ['wandhängend', 'stehend', 'keins'] },
       { id: 'urinal', label: 'Urinal', kind: 'choice', options: JA_NEIN },
     ],
@@ -104,29 +122,11 @@ export const CHECKLIST: Section[] = [
     ],
   },
   {
-    title: 'Tür',
-    hint: 'Bei Öffnung nach innen bitte die Kunden auf eine evtl. erforderliche Kürzung hinweisen.',
+    title: 'Elektroinstallation',
     questions: [
-      { id: 'tuer', label: 'Neue Tür/Zarge einbauen', kind: 'choice', options: JA_NEIN },
-      { id: 'anschlag', label: 'Anschlag ändern', kind: 'choice', options: JA_NEIN },
-    ],
-  },
-  {
-    title: 'Lüftung',
-    questions: [
-      { id: 'lueftung', label: 'Lüftung vorhanden?', kind: 'choice', options: JA_NEIN },
-      { id: 'lueftungGewuenscht', label: 'Lüftung gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'lueftung', is: 'nein' } },
-      { id: 'lueftungArt', label: 'Art der Lüftung', kind: 'choice', options: ['manuell', 'elektrisch'], when: { id: 'lueftungGewuenscht', is: 'ja' } },
-    ],
-  },
-  {
-    title: 'Decke',
-    questions: [
-      { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
-      { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
-      { id: 'tapeteAb', label: 'Tapete abmachen?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
-      { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
-      { id: 'maler', label: 'Malerarbeiten gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'fussbodenTemp', label: 'el. Fußbodentemperierung gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'kleinarbeiten', label: 'Kleinarbeiten nach Aufwand', kind: 'choice', options: JA_NEIN },
+      { id: 'elektriker', label: 'Besichtigung durch Elektrofirma gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
