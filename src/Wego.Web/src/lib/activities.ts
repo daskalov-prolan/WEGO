@@ -205,14 +205,22 @@ const nearly = (gap: { start: string; end: string }, half: { start: string; end:
  * The free time of a working day (WHOLE_DAY) between its entries, two hours or more each ("HH:mm"): before the
  * first, between two and after the last. Nothing when the day is empty (all of it is free, plain to see), or
  * something takes it without times (a whole day, Urlaub, Krank). Time kept free ("verfügbar") counts as taken:
- * it shows already.
+ * it shows already. Taken as well: the meetings he takes part in (e.g. the Bauberatung) and the times busy after
+ * his own calendar; without times one of them takes the whole day.
  */
-export function freeGaps(entries: Pick<Entry, 'type' | 'startTime' | 'endTime'>[]): { start: string; end: string }[] {
+export function freeGaps(
+  entries: Pick<Entry, 'type' | 'startTime' | 'endTime'>[],
+  taken: { startTime: string | null; endTime: string | null }[] = [],
+): { start: string; end: string }[] {
   if (entries.length === 0) return []
   const spans: [number, number][] = []
   for (const entry of entries) {
     if (entry.type !== 'Baustelle' || !entry.startTime || !entry.endTime) return []
     spans.push([toMinutes(entry.startTime), toMinutes(entry.endTime)])
+  }
+  for (const time of taken) {
+    if (!time.startTime || !time.endTime) return []
+    spans.push([toMinutes(time.startTime), toMinutes(time.endTime)])
   }
   spans.sort((a, b) => a[0] - b[0])
   const gaps: { start: string; end: string }[] = []

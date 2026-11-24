@@ -529,6 +529,21 @@ describe('PlanPage', () => {
     expect(screen.queryByRole('button', { name: 'Urlaub' })).not.toBeInTheDocument()
   })
 
+  it('counts the times busy after the own calendar as taken: free only what is left, among them by time', async () => {
+    // Anna on 2 March: 8–10 and 11–13 on sites; busy 13:00–13:30 after her own calendar. Free: 13:30–16.
+    const withBusy: Plan = { ...plan, busy: [{ employeeId: 1, date: '2026-03-02', startTime: '13:00:00', endTime: '13:30:00' }] }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withBusy), { status: 200 })))
+    renderWithProviders(<PlanPage year={2026} canEdit={false} />)
+    await screen.findByText(byText('KW 10–11 · 02.03.–15.03.2026'))
+    const monday = cell(/Anna, Montag, 02.03.2026/)
+    expect(within(monday).getAllByTitle(/^verfügbar/).map((chip) => chip.title)).toEqual(['verfügbar 13:30–16 Uhr'])
+    // The busy time first, then the free time after it.
+    const chips = [...monday.querySelectorAll('.chip, .busy-chip, [class*=busy]')].map((chip) => chip.textContent ?? '')
+    const busyAt = chips.findIndex((text) => text.includes('belegt'))
+    expect(busyAt).toBeGreaterThanOrEqual(0)
+    expect(busyAt).toBeLessThan(chips.findIndex((text) => text.includes('verfügbar')))
+  })
+
   it('jumps to a month chosen from the time in view', async () => {
     const user = userEvent.setup()
     renderWithProviders(<PlanPage year={2026} canEdit={false} />)

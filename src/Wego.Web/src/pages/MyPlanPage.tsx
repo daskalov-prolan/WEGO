@@ -117,9 +117,10 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
    * Work on a site for half a day only: the other half shows as "verfügbar", as in the plan (where it is not
    * stored as an entry of its own).
    */
-  const withFreeHalf = (entries: Entry[]): Entry[] => {
+  const withFreeHalf = (entries: Entry[], taken: { startTime: string | null; endTime: string | null }[]): Entry[] => {
     // Free time of two hours or more between his work (the visits of the day count as one entry): "verfügbar".
-    const gaps = freeGaps(visitsAsOne(entries))
+    // His meetings (e.g. the Bauberatung) and the times busy after his own calendar are taken too.
+    const gaps = freeGaps(visitsAsOne(entries), taken)
     if (gaps.length === 0) return entries
     const free: Entry[] = gaps.map((gap, i) => ({
       ...entries[0],
@@ -415,12 +416,15 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
           const holiday = holidayByDate.get(day.iso)
           // A public holiday is free: vacation entered on it (e.g. by a company closure) is no vacation.
           const publicHoliday = holiday?.kind === 'Feiertag' && holiday.startDate === holiday.endDate
-          const entries = withFreeHalf(withoutCoveredFree((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))))
-          const born = birthdays.get(day.iso.slice(5))
-          const notes = notesByDate.get(day.iso) ?? []
           const meetings = meetingsByDate.get(day.iso) ?? []
           // Busy after his own calendar (e.g. Apple's): the times only.
           const busy = (plan.busy ?? []).filter((b) => b.employeeId === user.id && b.date === day.iso)
+          const entries = withFreeHalf(
+            withoutCoveredFree((ownByDate.get(day.iso) ?? []).filter((entry) => !(publicHoliday && entry.type === 'Urlaub'))),
+            [...meetings, ...busy],
+          )
+          const born = birthdays.get(day.iso.slice(5))
+          const notes = notesByDate.get(day.iso) ?? []
           // Empty weekends only take up space; today always shows, it is where the list begins.
           if (day.isWeekend && entries.length === 0 && notes.length === 0 && meetings.length === 0 && day.iso !== today && !born) return null
 

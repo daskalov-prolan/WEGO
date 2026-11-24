@@ -528,7 +528,8 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
   const first = entries[0]
   // Free time of two hours or more between the work of the day (e.g. the other half, or 11:30–14:00 between two
   // jobs): "verfügbar" where it is. The visits of the day count as one entry (see VisitChip).
-  const gaps = cell.showsFree ? freeGaps(visitsAsOne(entries)) : []
+  // The Bauberatung and other meetings, and the times busy after his own calendar, are taken too.
+  const gaps = cell.showsFree ? freeGaps(visitsAsOne(entries), [...meetings, ...busy]) : []
   const firstVisit = entries.findIndex(isVisit)
   const visits = visitGroup(entries)
   // Two entries at the same time (e.g. after one was moved here): both in red until the times are set right.
@@ -590,7 +591,10 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
     while (placed < extras.length && extras[placed].start < start) nodes.push(extras[placed++].node)
     return nodes
   }
-  const extrasLeft = () => extras.slice(placed).map((extra) => extra.node)
+  const extrasAndGapsLeft = () =>
+    [...extras.slice(placed), ...gaps.slice(gapsShown).map((gap) => ({ start: `${gap.start}:00`, node: freeChip(gap) }))]
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .map((extra) => extra.node)
   return (
     <td
       className={dayClass(day, cell.holiday, cell.today)}
@@ -657,8 +661,8 @@ const EmployeeCell = memo(function EmployeeCell(cell: EmployeeCellProps) {
             )}
             </Fragment>
           ))}
-          {extrasLeft()}
-          {gaps.slice(gapsShown).map(freeChip)}
+          {/* After the last entry: meetings, busy times and free time together, by their time. */}
+          {extrasAndGapsLeft()}
         </span>
         {first && (
           <Compact
