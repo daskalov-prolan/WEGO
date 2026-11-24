@@ -61,6 +61,7 @@ export const CHECKLIST: Section[] = [
       { id: 'dusche', label: 'Einbau bodengleicher Dusche möglich', kind: 'choice', options: JA_NEIN },
       { id: 'duscheHoehe', label: 'Voraussichtliche Höhe der Dusche (Einstieg)', kind: 'number', unit: 'cm', when: { id: 'dusche', is: 'nein' } },
       { id: 'jalousie', label: 'Jalousiekasten vorhanden?', kind: 'choice', options: JA_NEIN },
+      { id: 'revisionsklappe', label: 'Revisionsklappe vorhanden?', kind: 'choice', options: JA_NEIN, when: { id: 'jalousie', is: 'ja' } },
       { id: 'lueftung', label: 'Lüftung vorhanden?', kind: 'choice', options: JA_NEIN },
       { id: 'lueftungGewuenscht', label: 'Lüftung gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'lueftung', is: 'nein' } },
       { id: 'lueftungArt', label: 'Art der Lüftung', kind: 'choice', options: ['manuell', 'elektrisch'], when: { id: 'lueftungGewuenscht', is: 'ja' } },
