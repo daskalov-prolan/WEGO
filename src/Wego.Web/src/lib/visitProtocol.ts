@@ -85,7 +85,15 @@ export const CHECKLIST: Section[] = [
       { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
       { id: 'tapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
       { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
-      { id: 'maler', label: 'Malerarbeiten gewünscht?', kind: 'choice', options: JA_NEIN },
+    ],
+  },
+  {
+    title: 'Malerarbeiten',
+    questions: [
+      { id: 'malerWand', label: 'Malerarbeiten Wand gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'spachtelWand', label: 'Spachtelung der Wand erforderlich?', kind: 'choice', options: JA_NEIN, when: { id: 'malerWand', is: 'ja' } },
+      { id: 'malerDecke', label: 'Malerarbeiten Decke gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'spachtelDecke', label: 'Spachtelung der Decke erforderlich?', kind: 'choice', options: JA_NEIN, when: { id: 'malerDecke', is: 'ja' } },
     ],
   },
   {
