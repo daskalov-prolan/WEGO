@@ -76,12 +76,14 @@ export const CHECKLIST: Section[] = [
       },
       { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt', 'Holzpaneele'] },
       { id: 'waendeTapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Tapete' } },
+      { id: 'waendePaneeleAb', label: 'Entfernung der Holzpaneele gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Holzpaneele' } },
     ],
   },
   {
     title: 'Decke',
     questions: [
       { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
+      { id: 'deckePaneeleAb', label: 'Entfernung der Holzpaneele gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'decke', is: 'Holzpaneele' } },
       { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
       { id: 'tapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
       { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
