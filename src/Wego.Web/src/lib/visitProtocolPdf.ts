@@ -214,19 +214,22 @@ function confirmationPage(pdf: Pdf, protocol: Protocol, autoTable: (typeof impor
   autoTable(pdf, {
     startY: 83,
     margin: { left: LEFT, right: 15 },
-    head: [['Pos.', 'Menge', 'Bezeichnung', 'Preis']],
-    body: [['1', '1,00 psch', `${CONFIRMATION.text}\n\n${CONFIRMATION.credit}`, CONFIRMATION.price]],
+    head: [['Pos.', 'Bezeichnung', 'Preis']],
+    body: [['1', CONFIRMATION.text, CONFIRMATION.price]],
     theme: 'plain',
     styles: { fontSize: 10, cellPadding: 2 },
     headStyles: { fontStyle: 'bold', lineWidth: { bottom: 0.4 }, lineColor: 20 },
-    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 22 }, 3: { cellWidth: 28, halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 28, halign: 'right', fontStyle: 'bold' } },
   })
   const y = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
   pdf.setDrawColor(20)
   pdf.line(LEFT, y - 3, LEFT + WIDTH, y - 3)
   pdf.setFontSize(10)
-  pdf.text(CONFIRMATION.confirm, LEFT, y + 6)
-  signatureBlock(pdf, protocol, y + 12)
+  pdf.setFont('helvetica', 'bold')
+  pdf.text(pdf.splitTextToSize(CONFIRMATION.confirm, WIDTH), LEFT, y + 6)
+  pdf.setFont('helvetica', 'normal')
+  pdf.text(pdf.splitTextToSize(CONFIRMATION.credit, WIDTH), LEFT, y + 14)
+  signatureBlock(pdf, protocol, y + 22)
 }
 
 /** The confirmation alone: the customer gets it later with the invoice. */

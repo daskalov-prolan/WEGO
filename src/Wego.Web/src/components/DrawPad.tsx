@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { Button, Group } from '@mantine/core'
+import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   /** What was drawn before (PNG), drawn again when the pad opens. */
@@ -14,34 +15,53 @@ interface Props {
   lineWidth?: number
   /** Squared paper behind it (only shown: the ink stays on its own). */
   grid?: boolean
+  /** "Zurück" and "Vor": a stroke taken back, and brought back again. */
+  steps?: boolean
   label: string
 }
 
+/** Strokes kept to go back to: enough for a drawing, without filling the tablet. */
+const MAX_STEPS = 40
+
 /** A pad to draw on with a finger or a pen: the drawings of a visit and the signature of the customer. */
-export function DrawPad({ value, onChange, width, height, color = '#14232a', erase = false, lineWidth = 3, grid = false, label }: Props) {
+export function DrawPad({ value, onChange, width, height, color = '#14232a', erase = false, lineWidth = 3, grid = false, steps = false, label }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
-  const drawn = useRef(false)
+  // What the pad showed after each stroke (null: empty), and where in it the pad stands now.
+  const history = useRef<(string | null)[]>([value])
+  const [at, setAt] = useState(0)
+  const [count, setCount] = useState(1)
+
+  const show = (png: string | null) => {
+    const ctx = canvas.current?.getContext('2d')
+    if (!ctx) return
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.clearRect(0, 0, width, height)
+    if (!png) return
+    const img = new Image()
+    img.onload = () => ctx.drawImage(img, 0, 0, width, height)
+    img.src = png
+  }
 
   // What was drawn before: drawn once when the pad opens (another sheet opens a pad of its own).
   useEffect(() => {
-    const ctx = canvas.current?.getContext('2d')
-    if (!ctx || !value) return
-    const img = new Image()
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, width, height)
-      drawn.current = true
-    }
-    img.src = value
+    show(value)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const go = (to: number) => {
+    const png = history.current[to] ?? null
+    setAt(to)
+    show(png)
+    onChange(png)
+  }
 
   const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     return [((event.clientX - rect.left) / rect.width) * width, ((event.clientY - rect.top) / rect.height) * height] as const
   }
 
-  return (
+  const pad = (
     <canvas
       ref={canvas}
       width={width}
@@ -78,17 +98,32 @@ export function DrawPad({ value, onChange, width, height, color = '#14232a', era
       onPointerUp={(event) => {
         if (!drawing.current) return
         drawing.current = false
-        drawn.current = true
-        onChange(event.currentTarget.toDataURL('image/png'))
+        const png = event.currentTarget.toDataURL('image/png')
+        // A new stroke after going back: what was taken back is gone.
+        const kept = [...history.current.slice(0, at + 1), png].slice(-MAX_STEPS)
+        history.current = kept
+        setAt(kept.length - 1)
+        setCount(kept.length)
+        onChange(png)
       }}
       onPointerCancel={() => {
         drawing.current = false
       }}
     />
   )
-}
 
-/** Wipes a pad: what it showed is gone, and it tells so. */
-export function clearPad(pad: HTMLCanvasElement | null) {
-  pad?.getContext('2d')?.clearRect(0, 0, pad.width, pad.height)
+  if (!steps) return pad
+  return (
+    <>
+      <Group gap={6} mb={6}>
+        <Button variant="default" radius="xl" disabled={at === 0} onClick={() => go(at - 1)} aria-label="Zurück: letzten Strich zurücknehmen">
+          ↶ Zurück
+        </Button>
+        <Button variant="default" radius="xl" disabled={at >= count - 1} onClick={() => go(at + 1)} aria-label="Vor: Strich wiederholen">
+          ↷ Vor
+        </Button>
+      </Group>
+      {pad}
+    </>
+  )
 }

@@ -36,7 +36,14 @@ export const CHECKLIST: Section[] = [
       { id: 'bauart', label: 'Umbau oder Neubau', kind: 'choice', options: ['Umbau', 'Neubau'] },
       { id: 'schubkarre', label: 'Schubkarre beim Abriss erforderlich?', kind: 'choice', options: JA_NEIN },
       { id: 'container', label: 'Entfernung Aufstellort Bauschuttcontainer zum Haus', kind: 'number', unit: 'm' },
-      { id: 'aufmerksam', label: 'Wie ist der Kunde auf uns aufmerksam geworden?', kind: 'text', bold: true },
+      {
+        id: 'aufmerksam', label: 'Wie ist der Kunde auf uns aufmerksam geworden?', kind: 'choice', bold: true,
+        options: [
+          'Empfehlung (Familie, Freunde, Nachbarn)', 'Google / Internetsuche', 'Unsere Website', 'Social Media',
+          'Badcenter / Ausstellung', 'Zeitung / Werbung', 'Fahrzeug / Baustellenschild', 'Stammkunde', 'Hausverwaltung / Vermieter', 'Sonstiges',
+        ],
+      },
+      { id: 'aufmerksamWie', label: 'Wie genau?', kind: 'text', when: { id: 'aufmerksam', is: 'Sonstiges' } },
     ],
   },
   {
@@ -56,6 +63,7 @@ export const CHECKLIST: Section[] = [
       { id: 'entsorgenWas', label: 'Welche Objekte?', kind: 'text', when: { id: 'entsorgen', is: 'teilweise' } },
       { id: 'badewanne', label: 'Vorhandene Badewanne', kind: 'choice', options: ['auf Füßen', 'einbetoniert'] },
       { id: 'dusche', label: 'Einbau bodengleicher Dusche möglich', kind: 'choice', options: JA_NEIN },
+      { id: 'duscheHoehe', label: 'Voraussichtliche Höhe der Dusche (Einstieg)', kind: 'number', unit: 'cm', when: { id: 'dusche', is: 'nein' } },
     ],
   },
   {
@@ -63,7 +71,7 @@ export const CHECKLIST: Section[] = [
     questions: [
       { id: 'fussbodenTemp', label: 'el. Fußbodentemperierung gewünscht?', kind: 'choice', options: JA_NEIN },
       { id: 'kleinarbeiten', label: 'Kleinarbeiten nach Aufwand', kind: 'choice', options: JA_NEIN },
-      { id: 'elektriker', label: 'Besichtigung durch Elektriker erforderlich', kind: 'choice', options: JA_NEIN },
+      { id: 'elektriker', label: 'Besichtigung durch Elektrofirma gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
@@ -210,11 +218,11 @@ export const CALCULATION: CalcGroup[] = [
 export const CONFIRMATION = {
   title: 'Bestätigung Besichtigung',
   text:
-    'Vor-Ort-Termin zur Durchführung einer Besichtigung – Inaugenscheinnahme der Sanitäranlagen und technischen ' +
-    'Gegebenheiten, Erstellung eines Aufmaßes mit Ist- und Soll-Situation, Kundenberatung und Aufwandschätzung.',
+    'Durchführung einer Besichtigung – Inaugenscheinnahme der Sanitäranlagen und technischen Gegebenheiten, ' +
+    'Erstellung eines Aufmaßes mit Ist- und Soll-Situation, Kundenberatung und Aufwandschätzung',
   price: '89,00 EUR',
+  confirm: 'Hiermit bestätige ich, dass die Besichtigung durchgeführt wurde und ich die Kosten dafür übernehme.',
   credit: 'Der Preis für die Besichtigung in Höhe von 89,00 EUR brutto wird nach Auftragserteilung wieder gutgeschrieben.',
-  confirm: 'Hiermit bestätige ich, dass die Besichtigung durchgeführt wurde.',
 }
 
 /** A drawing (its ink, on squared paper) or a photo. */
