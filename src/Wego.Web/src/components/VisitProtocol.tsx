@@ -343,7 +343,7 @@ export function VisitProtocol({ site, entry, visitor, onClose }: Props) {
               sheet.image ? <img src={sheet.image} alt={sheet.name} className="draw-pad grid" /> : <Text c="dimmed">Leer.</Text>
             ) : (
               <DrawPad key={`${sheet.id}-${padKey}`} value={sheet.image} onChange={(image) => setSheet(sheet.id, { image })}
-                {...DRAWING} color={pen} erase={erase} grid label={sheet.name} />
+                {...DRAWING} color={pen} erase={erase} grid steps label={sheet.name} />
             )
           )}
           {sheet?.kind === 'photo' && sheet.image && (
@@ -364,11 +364,11 @@ export function VisitProtocol({ site, entry, visitor, onClose }: Props) {
             <Text fw={800} size="lg">{CONFIRMATION.title}</Text>
             <Text size="sm" c="dimmed" mb="sm">{protocol.client} · {protocol.address} · {formatDateLong(protocol.date)}</Text>
             <div className="protocol-position">
-              <span>1,00 psch</span>
-              <span>{CONFIRMATION.text}<br /><br />{CONFIRMATION.credit}</span>
+              <span>{CONFIRMATION.text}</span>
               <strong>{CONFIRMATION.price}</strong>
             </div>
-            <Text size="sm" mt="md" mb={6}>{CONFIRMATION.confirm}</Text>
+            <Text size="sm" mt="md" fw={600}>{CONFIRMATION.confirm}</Text>
+            <Text size="sm" mt={6} mb={6}>{CONFIRMATION.credit}</Text>
             {done ? (
               protocol.signature && <img src={protocol.signature} alt="Unterschrift" className="sign-pad" />
             ) : (

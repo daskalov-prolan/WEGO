@@ -36,16 +36,19 @@ export const CHECKLIST: Section[] = [
       { id: 'bauart', label: 'Umbau oder Neubau', kind: 'choice', options: ['Umbau', 'Neubau'] },
       { id: 'schubkarre', label: 'Schubkarre beim Abriss erforderlich?', kind: 'choice', options: JA_NEIN },
       { id: 'container', label: 'Entfernung Aufstellort Bauschuttcontainer zum Haus', kind: 'number', unit: 'm' },
-      { id: 'aufmerksam', label: 'Wie ist der Kunde auf uns aufmerksam geworden?', kind: 'text', bold: true },
+      {
+        id: 'aufmerksam', label: 'Wie ist der Kunde auf uns aufmerksam geworden?', kind: 'choice', bold: true,
+        options: [
+          'Empfehlung (Familie, Freunde, Nachbarn)', 'Google / Internetsuche', 'Unsere Website', 'Social Media',
+          'Badcenter / Ausstellung', 'Fahrzeug', 'Stammkunde', 'Sonstiges',
+        ],
+      },
+      { id: 'aufmerksamWie', label: 'Wie genau?', kind: 'text', when: { id: 'aufmerksam', is: 'Sonstiges' } },
     ],
   },
   {
     title: 'Raum',
     questions: [
-      {
-        id: 'waende', label: 'Beschaffenheit der Wände (Trockenbau, Mauerwerk etc.)', kind: 'text',
-        hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
-      },
       { id: 'raumhoehe', label: 'Raumhöhe', kind: 'number', unit: 'm' },
       { id: 'unterkellert', label: 'Bad unterkellert', kind: 'choice', options: JA_NEIN },
       { id: 'eigenerKeller', label: 'bei MFH – eigener Keller?', kind: 'choice', options: JA_NEIN, when: { id: 'art', is: 'MFH / Eigentumswohnung' } },
@@ -56,32 +59,68 @@ export const CHECKLIST: Section[] = [
       { id: 'entsorgenWas', label: 'Welche Objekte?', kind: 'text', when: { id: 'entsorgen', is: 'teilweise' } },
       { id: 'badewanne', label: 'Vorhandene Badewanne', kind: 'choice', options: ['auf Füßen', 'einbetoniert'] },
       { id: 'dusche', label: 'Einbau bodengleicher Dusche möglich', kind: 'choice', options: JA_NEIN },
+      { id: 'duscheHoehe', label: 'Voraussichtliche Höhe der Dusche (Einstieg)', kind: 'number', unit: 'cm', when: { id: 'dusche', is: 'nein' } },
+      { id: 'jalousie', label: 'Jalousiekasten vorhanden?', kind: 'choice', options: JA_NEIN },
+      { id: 'revisionsklappe', label: 'Revisionsklappe vorhanden?', kind: 'choice', options: JA_NEIN, when: { id: 'jalousie', is: 'ja' } },
+      { id: 'lueftung', label: 'Lüftung vorhanden?', kind: 'choice', options: JA_NEIN },
+      { id: 'lueftungGewuenscht', label: 'Lüftung gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'lueftung', is: 'nein' } },
+      { id: 'lueftungArt', label: 'Art der Lüftung', kind: 'choice', options: ['manuell', 'elektrisch'], when: { id: 'lueftungGewuenscht', is: 'ja' } },
     ],
   },
   {
-    title: 'Elektroinstallation',
+    title: 'Wände',
     questions: [
-      { id: 'fussbodenTemp', label: 'el. Fußbodentemperierung gewünscht?', kind: 'choice', options: JA_NEIN },
-      { id: 'kleinarbeiten', label: 'Kleinarbeiten nach Aufwand', kind: 'choice', options: JA_NEIN },
-      { id: 'elektriker', label: 'Besichtigung durch Elektriker erforderlich', kind: 'choice', options: JA_NEIN },
+      {
+        id: 'waende', label: 'Beschaffenheit der Wände (Trockenbau, Mauerwerk etc.)', kind: 'text',
+        hint: 'Bei RiGips-Wänden: Hinweis auf erforderliche neue Beplankung!',
+      },
+      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt', 'Holzpaneele'] },
+      { id: 'waendeTapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Tapete' } },
+      { id: 'waendePaneeleAb', label: 'Entfernung der Holzpaneele gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'waendeUeber', is: 'Holzpaneele' } },
+    ],
+  },
+  {
+    title: 'Decke',
+    questions: [
+      { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
+      { id: 'deckePaneeleAb', label: 'Entfernung der Holzpaneele gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'decke', is: 'Holzpaneele' } },
+      { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
+      { id: 'tapeteAb', label: 'Entfernung der Tapete gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
+      { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
+    ],
+  },
+  {
+    title: 'Malerarbeiten',
+    questions: [
+      { id: 'malerWand', label: 'Malerarbeiten Wand gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'spachtelWand', label: 'Spachtelung der Wand erforderlich?', kind: 'choice', options: JA_NEIN, when: { id: 'malerWand', is: 'ja' } },
+      { id: 'malerDecke', label: 'Malerarbeiten Decke gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'spachtelDecke', label: 'Spachtelung der Decke erforderlich?', kind: 'choice', options: JA_NEIN, when: { id: 'malerDecke', is: 'ja' } },
+    ],
+  },
+  {
+    title: 'Tür',
+    hint: 'Bei Öffnung nach innen bitte die Kunden auf eine evtl. erforderliche Kürzung hinweisen.',
+    questions: [
+      { id: 'tuer', label: 'Neue Tür/Zarge einbauen', kind: 'choice', options: JA_NEIN },
+      { id: 'tuerMasse', label: 'Maße der Tür', kind: 'choice', options: ['Maße beibehalten', 'neue Maße'], when: { id: 'tuer', is: 'ja' } },
+      { id: 'tuerMasseNeu', label: 'Welche Maße? (Breite × Höhe)', kind: 'text', when: { id: 'tuerMasse', is: 'neue Maße' } },
+      { id: 'anschlag', label: 'Anschlag ändern', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
     title: 'Fliesen',
     questions: [
       { id: 'fliesenhoeheIst', label: 'Fliesenhöhe momentan', kind: 'number', unit: 'm' },
-      { id: 'waendeUeber', label: 'Wände über Fliesenbelag', kind: 'choice', options: ['Tapete', 'gespachtelt'] },
       { id: 'fliesenhoeheSoll', label: 'Gewünschte Fliesenhöhe', kind: 'number', unit: 'm' },
       { id: 'fliesAufFliese', label: 'Fliese auf Fliese möglich?', kind: 'choice', options: ['ja', 'nein', 'teilweise'] },
-      { id: 'jalousie', label: 'Jalousiekasten vorhanden?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
-    title: 'Vorhandene WC-Anlage',
+    title: 'Sanitär',
     questions: [
-      { id: 'wc', label: 'WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
-      { id: 'bidet', label: 'Bidet', kind: 'choice', options: ['wandhängend', 'stehend', 'keins'] },
-      { id: 'urinal', label: 'Urinal', kind: 'choice', options: JA_NEIN },
+      { id: 'wc', label: 'Vorhandenes WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
+      { id: 'wcNeu', label: 'Neues WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
     ],
   },
   {
@@ -90,35 +129,17 @@ export const CHECKLIST: Section[] = [
       { id: 'absperrung', label: 'Separate Absperrung möglich?', kind: 'choice', options: JA_NEIN },
       { id: 'absperrungWo', label: 'Absperrung wo?', kind: 'text', when: { id: 'absperrung', is: 'nein' } },
       { id: 'absperrungZugang', label: 'Zugang?', kind: 'text', when: { id: 'absperrung', is: 'nein' } },
-      { id: 'heizkoerper', label: 'Vorhandener Heizkörper', kind: 'text' },
+      { id: 'heizkoerper', label: 'Vorhandener Heizkörper', kind: 'choice', options: ['Badheizkörper', 'Plattenheizkörper'] },
       { id: 'handtuch', label: 'Handtuchtrockner / Badheizkörper gewünscht?', kind: 'choice', options: JA_NEIN },
       { id: 'fbhWasser', label: 'Fußbodenheizung wasserführend gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
-    title: 'Tür',
-    hint: 'Bei Öffnung nach innen bitte die Kunden auf eine evtl. erforderliche Kürzung hinweisen.',
+    title: 'Elektroinstallation',
     questions: [
-      { id: 'tuer', label: 'Neue Tür/Zarge einbauen', kind: 'choice', options: JA_NEIN },
-      { id: 'anschlag', label: 'Anschlag ändern', kind: 'choice', options: JA_NEIN },
-    ],
-  },
-  {
-    title: 'Lüftung',
-    questions: [
-      { id: 'lueftung', label: 'Lüftung vorhanden?', kind: 'choice', options: JA_NEIN },
-      { id: 'lueftungGewuenscht', label: 'Lüftung gewünscht?', kind: 'choice', options: JA_NEIN, when: { id: 'lueftung', is: 'nein' } },
-      { id: 'lueftungArt', label: 'Art der Lüftung', kind: 'choice', options: ['manuell', 'elektrisch'], when: { id: 'lueftungGewuenscht', is: 'ja' } },
-    ],
-  },
-  {
-    title: 'Decke',
-    questions: [
-      { id: 'decke', label: 'Vorhandene Decke', kind: 'choice', options: ['Beton', 'RiGips', 'Holzpaneele'] },
-      { id: 'deckeOberflaeche', label: 'Oberfläche', kind: 'choice', options: ['gemalert', 'Tapete'] },
-      { id: 'tapeteAb', label: 'Tapete abmachen?', kind: 'choice', options: JA_NEIN, when: { id: 'deckeOberflaeche', is: 'Tapete' } },
-      { id: 'deckeAbhaengen', label: 'Decke mit RiGips abhängen', kind: 'choice', options: JA_NEIN },
-      { id: 'maler', label: 'Malerarbeiten gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'fussbodenTemp', label: 'el. Fußbodentemperierung gewünscht?', kind: 'choice', options: JA_NEIN },
+      { id: 'kleinarbeiten', label: 'Kleinarbeiten nach Aufwand', kind: 'choice', options: JA_NEIN },
+      { id: 'elektriker', label: 'Besichtigung durch Elektrofirma gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
   },
   {
@@ -126,7 +147,6 @@ export const CHECKLIST: Section[] = [
     hint: 'Genaue Zeichnung und Bilder nicht vergessen!!',
     questions: [
       { id: 'angrenzend', label: 'Umbauarbeiten in angrenzenden Räumen?', kind: 'text' },
-      { id: 'kalk', label: 'Kalkhaltiges Wasser / Wasserenthärtungsanlage', kind: 'text' },
       { id: 'notizen', label: 'Weitere Notizen', kind: 'note' },
     ],
   },
@@ -210,11 +230,11 @@ export const CALCULATION: CalcGroup[] = [
 export const CONFIRMATION = {
   title: 'Bestätigung Besichtigung',
   text:
-    'Vor-Ort-Termin zur Durchführung einer Besichtigung – Inaugenscheinnahme der Sanitäranlagen und technischen ' +
-    'Gegebenheiten, Erstellung eines Aufmaßes mit Ist- und Soll-Situation, Kundenberatung und Aufwandschätzung.',
+    'Durchführung einer Besichtigung – Inaugenscheinnahme der Sanitäranlagen und technischen Gegebenheiten, ' +
+    'Erstellung eines Aufmaßes mit Ist- und Soll-Situation, Kundenberatung und Aufwandschätzung',
   price: '89,00 EUR',
+  confirm: 'Hiermit bestätige ich, dass die Besichtigung durchgeführt wurde und ich die Kosten dafür übernehme.',
   credit: 'Der Preis für die Besichtigung in Höhe von 89,00 EUR brutto wird nach Auftragserteilung wieder gutgeschrieben.',
-  confirm: 'Hiermit bestätige ich, dass die Besichtigung durchgeführt wurde.',
 }
 
 /** A drawing (its ink, on squared paper) or a photo. */
@@ -261,7 +281,10 @@ export const protocolKey = (siteId: number, date: string) => `${siteId}|${date}`
 export function isAsked(question: Question, answers: Record<string, string>): boolean {
   if (!question.when) return true
   const wanted = Array.isArray(question.when.is) ? question.when.is : [question.when.is]
-  return wanted.includes(answers[question.when.id] ?? '')
+  if (!wanted.includes(answers[question.when.id] ?? '')) return false
+  // The question it depends on must be asked itself (e.g. the new sizes only while there is a new door at all).
+  const before = CHECKLIST.flatMap((section) => section.questions).find((q) => q.id === question.when!.id)
+  return !before || isAsked(before, answers)
 }
 
 /** "2,5" or "2.5" -> 2.5; nothing or text -> 0. */

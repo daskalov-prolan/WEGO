@@ -4410,7 +4410,7 @@ html.plan-full .shell-nav {
 
 .protocol-position {
   display: grid;
-  grid-template-columns: 80px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 10px;
   font-size: 14px;
   padding: 10px 0;
