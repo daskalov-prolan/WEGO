@@ -26,6 +26,16 @@ describe('freeGaps', () => {
     expect(freeGaps([at('12:00:00', '16:00:00')])).toEqual([{ start: '07:30', end: '11:30' }])
   })
 
+  it('counts the Bauberatung and other meetings as taken', () => {
+    // Stefan on 25.11.: service calls 7:30–8:00 and 11:00–12:00, the Bauberatung 9:00–10:30 in between.
+    const day = [at('07:30:00', '08:00:00'), at('11:00:00', '12:00:00'), at('14:00:00', '15:00:00')]
+    expect(freeGaps(day)).toEqual([{ start: '08:00', end: '11:00' }, { start: '12:00', end: '14:00' }])
+    // Around the Bauberatung no two hours are left in the morning; midday stays free.
+    expect(freeGaps(day, [{ startTime: '09:00:00', endTime: '10:30:00' }])).toEqual([{ start: '12:00', end: '14:00' }])
+    // Busy the whole day after his own calendar: nothing free.
+    expect(freeGaps([at('07:00:00', '11:30:00')], [{ startTime: null, endTime: null }])).toEqual([])
+  })
+
   it('offers nothing shorter than two hours, on an empty day or one taken without times', () => {
     expect(freeGaps([at('07:00:00', '11:30:00'), at('12:00:00', '16:00:00')])).toEqual([])
     // An hour and a half between two jobs is too little.
