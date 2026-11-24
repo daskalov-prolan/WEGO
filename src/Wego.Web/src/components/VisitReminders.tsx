@@ -1,5 +1,6 @@
 import { Button, Group, Modal, Stack, Text, UnstyledButton } from '@mantine/core'
 import { useEffect, useState } from 'react'
+import { usePopupTurn } from '../lib/popupTurn'
 import { api } from '../api/client'
 import type { VisitEnquiry } from '../api/types'
 import { todayIso } from '../lib/dates'
@@ -62,8 +63,11 @@ export function VisitReminders({ employeeId, version, onPlan }: { employeeId: nu
     }
   }, [employeeId, version, seenKey, remindedKey, today])
 
+  const waiting = enquiries ? waitingEnquiries(enquiries, today) : []
+  // One window at a time, also with the service calls to confirm (see usePopupTurn).
+  const waitingTurn = usePopupTurn('visit-waiting', popup && waiting.length > 0)
+  const freshTurn = usePopupTurn('visit-fresh', showFresh && fresh.length > 0)
   if (!enquiries) return null
-  const waiting = waitingEnquiries(enquiries, today)
 
   const markSeen = () => {
     write(seenKey, JSON.stringify(enquiries.map((e) => e.siteId)))
@@ -95,7 +99,7 @@ export function VisitReminders({ employeeId, version, onPlan }: { employeeId: nu
         </Group>
       )}
 
-      <Modal opened={popup && waiting.length > 0} onClose={closeWaiting} centered title="Kunden warten auf Ihren Anruf">
+      <Modal opened={waitingTurn} onClose={closeWaiting} centered title="Kunden warten auf Ihren Anruf">
         <Stack gap={6} mb="md">
           {waiting.slice(0, SHOWN).map(({ enquiry, days }) => (
             <UnstyledButton key={enquiry.siteId} className="visit-reminder-row" onClick={() => { closeWaiting(); onPlan() }}>
@@ -111,7 +115,7 @@ export function VisitReminders({ employeeId, version, onPlan }: { employeeId: nu
         </Group>
       </Modal>
 
-      <Modal opened={showFresh && fresh.length > 0} onClose={() => setShowFresh(false)} centered title="Neue Anfragen seit Ihrem letzten Besuch">
+      <Modal opened={freshTurn} onClose={() => setShowFresh(false)} centered title="Neue Anfragen seit Ihrem letzten Besuch">
         <Stack gap={6} mb="md">
           {fresh.map((e) => (
             <div key={e.siteId}>

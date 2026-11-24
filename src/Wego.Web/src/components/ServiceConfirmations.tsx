@@ -1,5 +1,6 @@
 import { Alert, Button, Group, Modal, Stack, Text, Textarea } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
+import { usePopupTurn } from '../lib/popupTurn'
 import { api, messageOf } from '../api/client'
 import type { Entry, Site } from '../api/types'
 import { formatDate, formatDayTime } from '../lib/dates'
@@ -40,6 +41,8 @@ export function ConfirmRequests({ asked, onAnswered }: { asked: Asked[]; onAnswe
       setOpen(true)
     }
   }, [asked.length])
+  // Opens once no other window that opened by itself is in front of it.
+  const confirmTurn = usePopupTurn('confirm-calls', open)
   // The one being said no to, with the field for why.
   const [declining, setDeclining] = useState<number | null>(null)
   const [note, setNote] = useState('')
@@ -68,7 +71,7 @@ export function ConfirmRequests({ asked, onAnswered }: { asked: Asked[]; onAnswe
       <Button fullWidth color="red" mt={6} className="visit-reminder" onClick={() => setOpen(true)}>
         ✋ {asked.length === 1 ? '1 Einsatz bestätigen' : `${asked.length} Einsätze bestätigen`}
       </Button>
-      <Modal opened={open} onClose={() => setOpen(false)} centered title="Bitte bestätigen: Serviceeinsätze">
+      <Modal opened={confirmTurn} onClose={() => setOpen(false)} centered title="Bitte bestätigen: Serviceeinsätze">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
             Der Planer möchte wissen, ob du diese Einsätze übernehmen kannst. Bis zu deiner Zusage stehen sie gestreift im Plan.
