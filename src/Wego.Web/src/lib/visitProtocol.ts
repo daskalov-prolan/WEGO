@@ -145,7 +145,6 @@ export const CHECKLIST: Section[] = [
     hint: 'Genaue Zeichnung und Bilder nicht vergessen!!',
     questions: [
       { id: 'angrenzend', label: 'Umbauarbeiten in angrenzenden Räumen?', kind: 'text' },
-      { id: 'kalk', label: 'Kalkhaltiges Wasser / Wasserenthärtungsanlage', kind: 'text' },
       { id: 'notizen', label: 'Weitere Notizen', kind: 'note' },
     ],
   },
