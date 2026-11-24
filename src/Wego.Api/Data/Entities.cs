@@ -360,6 +360,23 @@ public class SiteDocument
     /// Given by the tablet: sent a second time (the answer lost on a weak connection), the document is not kept twice.
     /// </summary>
     public required string ClientKey { get; set; }
+
+    /// <summary>
+    /// What was filled in on the tablet (the check list and the hours of the calculation, as JSON, without drawings
+    /// or signature): for the planners to price the calculation with the rates of the offers.
+    /// </summary>
+    public string? Data { get; set; }
+}
+
+/// <summary>
+/// The rate per hour (net, in euros) of a position of the calculation of a visit, e.g. "Wandfliesen abschlagen":
+/// set by Planer G, seen only by the planners, never by the visitor on his tablet.
+/// </summary>
+public class OfferRate
+{
+    /// <summary>The key of the position, as in the calculation of the web app (e.g. "demWandfliesen").</summary>
+    public required string Key { get; set; }
+    public decimal HourlyRate { get; set; }
 }
 
 public class PlanEntry
@@ -538,6 +555,8 @@ public enum ChangeArea
     Mitarbeiter,
     Baustelle,
     Taetigkeit,
+    /// <summary>Settings under Verwaltung, e.g. the rates of the offers.</summary>
+    Verwaltung,
 }
 
 /// <summary>

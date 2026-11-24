@@ -29,6 +29,7 @@ import { activitiesOfStatus, activityLabel } from '../lib/activities'
 import { toEmployeeInput } from '../lib/employees'
 import { AbsencesAdmin } from '../components/AbsencesAdmin'
 import { ActivitiesAdmin } from '../components/ActivitiesAdmin'
+import { OfferRatesAdmin } from '../components/OfferRatesAdmin'
 import { Sheet } from '../components/Sheet'
 import { YearPicker } from '../components/YearPicker'
 import { formatDate, PLAN_YEARS } from '../lib/dates'
@@ -51,7 +52,7 @@ export function AdminPage({ year, employeeId = null, onActivitiesChanged, tab = 
         Verwaltung
       </Title>
       <Text c="dimmed" mb="md">
-        Mitarbeiter, Tätigkeiten, Abwesenheiten, Ferien und Feiertage
+        Mitarbeiter, Tätigkeiten, Abwesenheiten, Ferien und Feiertage, Stundensätze für Angebote
       </Text>
       <Tabs defaultValue={tab === 'abwesenheiten' ? 'absences' : 'employees'} keepMounted={false} className="brand-tabs">
         <Tabs.List mb="md">
@@ -59,6 +60,7 @@ export function AdminPage({ year, employeeId = null, onActivitiesChanged, tab = 
           <Tabs.Tab value="activities">Tätigkeiten</Tabs.Tab>
           <Tabs.Tab value="absences">Abwesenheiten</Tabs.Tab>
           <Tabs.Tab value="holidays">Ferien & Feiertage</Tabs.Tab>
+          <Tabs.Tab value="rates">Stundensätze</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="employees">
           <EmployeesSection openId={employeeId} />
@@ -71,6 +73,9 @@ export function AdminPage({ year, employeeId = null, onActivitiesChanged, tab = 
         </Tabs.Panel>
         <Tabs.Panel value="holidays">
           <SchoolHolidaysSection year={year} />
+        </Tabs.Panel>
+        <Tabs.Panel value="rates">
+          <OfferRatesAdmin />
         </Tabs.Panel>
       </Tabs>
     </div>

@@ -4468,3 +4468,20 @@ html.plan-full .shell-nav {
   background: var(--wego-teal);
   color: #fff;
 }
+
+/* The calculation of a visit priced for the planners: the sums in petrol, the whole at the end. */
+.offer-calc-sum td {
+  font-weight: 700;
+  background: #e7f2f5;
+}
+
+.offer-calc-total {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 22px;
+  background: var(--wego-teal);
+  color: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+}

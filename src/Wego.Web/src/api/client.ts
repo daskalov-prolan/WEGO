@@ -1,5 +1,6 @@
 import type {
   DoneReport,
+  OfferRate,
   SiteDocument,
   MyCalendar,
   Meeting,
@@ -147,7 +148,11 @@ export const api = {
   site: (id: number) => request<Site>('GET', `/api/sites/${id}`),
   /** The documents of a site: planners and the visitor of the site. */
   siteDocuments: (siteId: number) => request<SiteDocument[]>('GET', `/api/sites/${siteId}/documents`),
-  uploadDocument: (siteId: number, input: { kind: string; fileName: string; contentBase64: string; clientKey: string }) =>
+  /** What was filled in on the tablet for a protocol (the planners only). */
+  documentData: (documentId: number) => request<unknown>('GET', `/api/sites/documents/${documentId}/data`),
+  offerRates: () => request<OfferRate[]>('GET', '/api/offer-rates'),
+  saveOfferRates: (rates: OfferRate[]) => request<OfferRate[]>('PUT', '/api/offer-rates', rates),
+  uploadDocument: (siteId: number, input: { kind: string; fileName: string; contentBase64: string; clientKey: string; data?: string }) =>
     request<SiteDocument>('POST', `/api/sites/${siteId}/documents`, input),
   /** Sites set to done by a Planer A, not seen by a Planer G yet (Planer G only). */
   doneReports: () => request<DoneReport[]>('GET', '/api/sites/done-reports'),

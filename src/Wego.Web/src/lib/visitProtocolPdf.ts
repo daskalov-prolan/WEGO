@@ -1,5 +1,6 @@
 import { COMPANY_ADDRESS } from './visitGroup'
 import { formatDate } from './dates'
+import { euros, type priceCalculation, type ProtocolData } from './offerCalc'
 import {
   CALCULATION,
   calcHours,
@@ -237,5 +238,64 @@ export async function buildConfirmationPdf(protocol: Protocol): Promise<Blob> {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
   confirmationPage(pdf, protocol, autoTable)
+  return pdf.output('blob')
+}
+
+/** The calculation of a visit priced with the rates of the offers (for the planners, as a basis of the offer). */
+export async function buildPricedCalcPdf(data: ProtocolData, priced: ReturnType<typeof priceCalculation>): Promise<Blob> {
+  const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+  letterhead(pdf)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(15)
+  pdf.text('Kalkulation mit Stundensätzen (netto)', LEFT, 35)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(10)
+  pdf.text(`${data.client} · ${data.address}`, LEFT, 42)
+  pdf.text(`Besichtigung am ${formatDate(data.date)} durch ${data.visitor} · nur für die Planer`, LEFT, 47)
+  let y = 53
+  const after = () => (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  for (const group of priced.groups) {
+    autoTable(pdf, {
+      startY: y,
+      margin: { left: LEFT, right: 15 },
+      head: [
+        [{ content: group.title, colSpan: 5, styles: { fillColor: TEAL, textColor: 255, fontStyle: 'bold' } }],
+        ['Position', 'Std.', 'Satz', 'Lohn', 'Material'],
+      ],
+      body: group.lines.map((line) => [
+        line.label,
+        line.hours ? formatNumber(line.hours) : '',
+        line.rate === null ? (line.hours ? 'kein Satz' : '') : euros(line.rate),
+        line.hours ? euros(line.amount) : '',
+        line.material,
+      ]),
+      foot: [['Summe', formatNumber(group.hours), '', euros(group.labour), group.material ? euros(group.material) : '']],
+      theme: 'striped',
+      styles: { fontSize: 9, cellPadding: 1.6 },
+      headStyles: { fillColor: [200, 225, 232], textColor: [7, 42, 54] },
+      footStyles: { fillColor: [214, 236, 240], textColor: [7, 42, 54], fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 72 }, 1: { halign: 'right', cellWidth: 14 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 28 } },
+    })
+    y = after() + 5
+  }
+  autoTable(pdf, {
+    startY: y,
+    margin: { left: LEFT + 90, right: 15 },
+    body: [
+      ['Stunden', formatNumber(priced.hours)],
+      ['Lohn netto', euros(priced.labour)],
+      ['Material netto (soweit Beträge)', euros(priced.material)],
+      ['Zusammen netto', euros(priced.net)],
+    ],
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 1.6 },
+    columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+  })
+  if (priced.missing.length > 0) {
+    pdf.setFontSize(9)
+    pdf.setTextColor(...RED)
+    pdf.text(pdf.splitTextToSize(`Ohne Stundensatz (nicht in der Summe): ${priced.missing.join(', ')}`, WIDTH), LEFT, after() + 6)
+  }
   return pdf.output('blob')
 }

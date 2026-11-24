@@ -442,6 +442,21 @@ namespace Wego.Api.Migrations
                     b.ToTable("MeetingParticipant");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.OfferRate", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("OfferRates");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.PlanEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -693,6 +708,9 @@ namespace Wego.Api.Migrations
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Data")
+                        .HasColumnType("text");
 
                     b.Property<string>("FileName")
                         .IsRequired()

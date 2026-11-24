@@ -30,6 +30,14 @@ export interface SiteDocument {
   /** ISO date and time (UTC) */
   createdAt: string
   createdBy: string | null
+  /** The protocol of a visit with what was filled in: the planners price its calculation. */
+  hasData?: boolean
+}
+
+/** The rate per hour (net, euros) of a position of the calculation of a visit; the planners only. */
+export interface OfferRate {
+  key: string
+  hourlyRate: number
 }
 
 /** A site set to done by a Planer A that no Planer G has seen yet. */
