@@ -101,6 +101,8 @@ export const CHECKLIST: Section[] = [
     hint: 'Bei Öffnung nach innen bitte die Kunden auf eine evtl. erforderliche Kürzung hinweisen.',
     questions: [
       { id: 'tuer', label: 'Neue Tür/Zarge einbauen', kind: 'choice', options: JA_NEIN },
+      { id: 'tuerMasse', label: 'Maße der Tür', kind: 'choice', options: ['Maße beibehalten', 'neue Maße'], when: { id: 'tuer', is: 'ja' } },
+      { id: 'tuerMasseNeu', label: 'Welche Maße? (Breite × Höhe)', kind: 'text', when: { id: 'tuerMasse', is: 'neue Maße' } },
       { id: 'anschlag', label: 'Anschlag ändern', kind: 'choice', options: JA_NEIN },
     ],
   },
@@ -116,8 +118,7 @@ export const CHECKLIST: Section[] = [
     title: 'Sanitär',
     questions: [
       { id: 'wc', label: 'Vorhandenes WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
-      { id: 'bidet', label: 'Bidet', kind: 'choice', options: ['wandhängend', 'stehend', 'keins'] },
-      { id: 'urinal', label: 'Urinal', kind: 'choice', options: JA_NEIN },
+      { id: 'wcNeu', label: 'Neues WC', kind: 'choice', options: ['wandhängend', 'stehend'] },
     ],
   },
   {
@@ -279,7 +280,10 @@ export const protocolKey = (siteId: number, date: string) => `${siteId}|${date}`
 export function isAsked(question: Question, answers: Record<string, string>): boolean {
   if (!question.when) return true
   const wanted = Array.isArray(question.when.is) ? question.when.is : [question.when.is]
-  return wanted.includes(answers[question.when.id] ?? '')
+  if (!wanted.includes(answers[question.when.id] ?? '')) return false
+  // The question it depends on must be asked itself (e.g. the new sizes only while there is a new door at all).
+  const before = CHECKLIST.flatMap((section) => section.questions).find((q) => q.id === question.when!.id)
+  return !before || isAsked(before, answers)
 }
 
 /** "2,5" or "2.5" -> 2.5; nothing or text -> 0. */

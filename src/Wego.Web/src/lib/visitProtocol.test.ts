@@ -10,6 +10,14 @@ describe('visit protocol', () => {
     expect(isAsked(anzahl, { kernbohrung: 'ja' })).toBe(true)
   })
 
+  it('asks a follow-up only while the question before it is asked too (new sizes of the door only with a new door)', () => {
+    const all = CHECKLIST.flatMap((s) => s.questions)
+    const sizes = all.find((q) => q.id === 'tuerMasseNeu')!
+    expect(isAsked(sizes, { tuer: 'ja', tuerMasse: 'neue Maße' })).toBe(true)
+    expect(isAsked(sizes, { tuer: 'ja', tuerMasse: 'Maße beibehalten' })).toBe(false)
+    expect(isAsked(sizes, { tuer: 'nein', tuerMasse: 'neue Maße' })).toBe(false)
+  })
+
   it('asks for the lift and the distance of the container', () => {
     const ids = CHECKLIST.flatMap((s) => s.questions).map((q) => q.id)
     expect(ids).toContain('aufzug')
