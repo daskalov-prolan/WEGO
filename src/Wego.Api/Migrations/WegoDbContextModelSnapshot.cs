@@ -670,6 +670,51 @@ namespace Wego.Api.Migrations
                     b.ToTable("Sites");
                 });
 
+            modelBuilder.Entity("Wego.Api.Data.SiteDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SiteId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ClientKey")
+                        .IsUnique();
+
+                    b.ToTable("SiteDocuments");
+                });
+
             modelBuilder.Entity("Wego.Api.Data.SiteHourlyRate", b =>
                 {
                     b.Property<int>("SiteId")
@@ -925,6 +970,17 @@ namespace Wego.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("ResponsiblePlanner");
+                });
+
+            modelBuilder.Entity("Wego.Api.Data.SiteDocument", b =>
+                {
+                    b.HasOne("Wego.Api.Data.Site", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Site");
                 });
 
             modelBuilder.Entity("Wego.Api.Data.SiteHourlyRate", b =>

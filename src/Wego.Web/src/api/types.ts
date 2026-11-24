@@ -20,6 +20,18 @@ export type ActivityInput = Pick<ActivityDef, 'label' | 'phase' | 'color'>
 /** Abgelehnt: the customer said no to the offer, with a reason. */
 export type SiteStatus = 'Angebot' | 'Bauphase' | 'Abgeschlossen' | 'Storniert' | 'Abgelehnt'
 
+/** A document kept with a site, e.g. the protocol of a visit made on the tablet (a PDF). */
+export interface SiteDocument {
+  id: number
+  siteId: number
+  kind: string
+  fileName: string
+  size: number
+  /** ISO date and time (UTC) */
+  createdAt: string
+  createdBy: string | null
+}
+
 /** A site set to done by a Planer A that no Planer G has seen yet. */
 export interface DoneReport {
   id: number

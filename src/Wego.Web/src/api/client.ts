@@ -1,5 +1,6 @@
 import type {
   DoneReport,
+  SiteDocument,
   MyCalendar,
   Meeting,
   MeetingInput,
@@ -144,6 +145,10 @@ export const api = {
   discardDeclineReport: (siteId: number) => request<Offers>('POST', `/api/offers/${siteId}/decline-report/discard`),
   siteHistory: (id: number) => request<StatusChange[]>('GET', `/api/sites/${id}/history`),
   site: (id: number) => request<Site>('GET', `/api/sites/${id}`),
+  /** The documents of a site: planners and the visitor of the site. */
+  siteDocuments: (siteId: number) => request<SiteDocument[]>('GET', `/api/sites/${siteId}/documents`),
+  uploadDocument: (siteId: number, input: { kind: string; fileName: string; contentBase64: string; clientKey: string }) =>
+    request<SiteDocument>('POST', `/api/sites/${siteId}/documents`, input),
   /** Sites set to done by a Planer A, not seen by a Planer G yet (Planer G only). */
   doneReports: () => request<DoneReport[]>('GET', '/api/sites/done-reports'),
   doneReportSeen: (siteId: number) => request<void>('POST', `/api/sites/${siteId}/done-report/seen`),
