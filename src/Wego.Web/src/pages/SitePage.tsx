@@ -249,7 +249,7 @@ export function SitePage({ siteId, canSeeEmployees = false }: Props) {
       )}
 
       {/* The protocol of the visit and the confirmation signed by the customer, sent from the tablet. */}
-      <SiteDocuments siteId={siteId} />
+      <SiteDocuments siteId={siteId} prices />
 
       {current && !declined && (
         <>

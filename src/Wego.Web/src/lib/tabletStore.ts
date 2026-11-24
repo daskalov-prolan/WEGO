@@ -17,6 +17,8 @@ export interface OutboxItem {
   fileName: string
   base64: string
   createdAt: string
+  /** What was filled in (JSON), kept with the protocol for the planners to price its calculation. */
+  data?: string
 }
 
 const DB = 'wego-tablet'
@@ -109,7 +111,7 @@ export function flushOutbox(): Promise<number> {
     try {
       for (const item of await outbox()) {
         try {
-          await api.uploadDocument(item.siteId, { kind: item.kind, fileName: item.fileName, contentBase64: item.base64, clientKey: item.key })
+          await api.uploadDocument(item.siteId, { kind: item.kind, fileName: item.fileName, contentBase64: item.base64, clientKey: item.key, data: item.data })
           await remove(OUTBOX, item.key)
           window.dispatchEvent(new Event(OUTBOX_EVENT))
         } catch {

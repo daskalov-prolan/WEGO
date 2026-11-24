@@ -20,6 +20,7 @@ import {
   type Sheet,
 } from '../lib/visitProtocol'
 import { DrawPad } from './DrawPad'
+import { protocolData } from '../lib/offerCalc'
 
 interface Props {
   site: Site
@@ -192,7 +193,7 @@ export function VisitProtocol({ site, entry, visitor, onClose }: Props) {
       setProtocol(finished)
       await enqueue([
         { ...base, key: `${finished.key}|protokoll|${finished.finishedAt}`, kind: 'Besichtigungsprotokoll',
-          fileName: documentFileName('Besichtigungsprotokoll', finished), base64: await toBase64(whole) },
+          fileName: documentFileName('Besichtigungsprotokoll', finished), base64: await toBase64(whole), data: protocolData(finished) },
         { ...base, key: `${finished.key}|bestaetigung|${finished.finishedAt}`, kind: CONFIRMATION.title,
           fileName: documentFileName(CONFIRMATION.title, finished), base64: await toBase64(confirmation) },
       ])

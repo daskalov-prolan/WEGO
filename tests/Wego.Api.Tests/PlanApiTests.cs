@@ -350,6 +350,39 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task Rates_of_the_offers_are_set_by_Planer_G_read_by_planners_and_the_visit_data_only_by_planners()
+    {
+        var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        await CreateEmployeeAsync(g, "Satz Planer A", "rates.planer.a", "rates-a-pw-1", "PlanerA");
+        var visitorId = await CreateEmployeeAsync(g, "Satz Besichtiger", "rates.visitor", "rates-v-pw-1");
+        var a = await LoginAsync("rates.planer.a", "rates-a-pw-1");
+        var visitor = await LoginAsync("rates.visitor", "rates-v-pw-1");
+        var rates = new[] { new { key = "demWandfliesen", hourlyRate = 52.5m }, new { key = "frischwasser", hourlyRate = 61m } };
+
+        // Only Planer G sets them; the planners read them; a craftsman does not.
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.PutAsJsonAsync("/api/offer-rates", rates)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await g.PutAsJsonAsync("/api/offer-rates", rates)).StatusCode);
+        var read = await a.GetFromJsonAsync<JsonElement>("/api/offer-rates");
+        Assert.Equal(52.5m, read.EnumerateArray().First(r => r.GetProperty("key").GetString() == "demWandfliesen").GetProperty("hourlyRate").GetDecimal());
+        Assert.Equal(HttpStatusCode.Forbidden, (await visitor.GetAsync("/api/offer-rates")).StatusCode);
+
+        // The protocol of a visit keeps what was filled in: the planners read it, the visitor does not.
+        var siteId = await CreateSiteAsync(g, "Satz-Kunde");
+        await g.PutAsJsonAsync($"/api/plan/{visitorId}/{Year}-07-16", new object[]
+            { new { type = "Baustelle", siteId, activity = "Besichtigung", startTime = "10:00", endTime = "11:00" } });
+        var pdf = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 Protokoll"));
+        var created = await (await visitor.PostAsJsonAsync($"/api/sites/{siteId}/documents", new
+        {
+            kind = "Besichtigungsprotokoll", fileName = "p.pdf", contentBase64 = pdf, clientKey = "rates-1",
+            data = """{"calc":{"demWandfliesen":{"hours":"5"}}}""",
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(created.GetProperty("hasData").GetBoolean());
+        var id = created.GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Forbidden, (await visitor.GetAsync($"/api/sites/documents/{id}/data")).StatusCode);
+        Assert.Contains("demWandfliesen", await a.GetStringAsync($"/api/sites/documents/{id}/data"));
+    }
+
+    [Fact]
     public async Task A_site_a_Planer_A_sets_done_is_shown_to_Planer_G_until_he_saw_it()
     {
         var g = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);

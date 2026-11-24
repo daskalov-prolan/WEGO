@@ -11,6 +11,7 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
     public DbSet<SiteTask> SiteTasks => Set<SiteTask>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<SiteDocument> SiteDocuments => Set<SiteDocument>();
+    public DbSet<OfferRate> OfferRates => Set<OfferRate>();
     public DbSet<SiteHourlyRate> SiteHourlyRates => Set<SiteHourlyRate>();
     public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
     public DbSet<CalendarNote> CalendarNotes => Set<CalendarNote>();
@@ -107,6 +108,13 @@ public class WegoDbContext(DbContextOptions<WegoDbContext> options) : DbContext(
             // A deleted activity is no task of any site any more.
             e.HasOne<ActivityType>().WithMany().HasForeignKey(x => x.Activity).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.Activity }).IsUnique();
+        });
+
+        modelBuilder.Entity<OfferRate>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(50);
+            e.Property(x => x.HourlyRate).HasPrecision(8, 2);
         });
 
         modelBuilder.Entity<SiteDocument>(e =>

@@ -2,6 +2,7 @@ import { Button, Group, Text, Title } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { SiteDocument } from '../api/types'
+import { OfferCalcSheet } from './OfferCalcSheet'
 
 /** "2026-11-26T10:52:00Z" -> "26.11.2026, 11:52" (local time). */
 const at = (iso: string) =>
@@ -14,8 +15,13 @@ const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round
  * The documents of a site (e.g. the protocol of the visit and the confirmation signed by the customer): each to
  * open in the browser or to save elsewhere. Nothing shows while there are none, or without internet.
  */
-export function SiteDocuments({ siteId }: { siteId: number }) {
+export function SiteDocuments({ siteId, prices = false }: {
+  siteId: number
+  /** The planners: a protocol with its calculation priced with the rates of the offers (never for the visitor). */
+  prices?: boolean
+}) {
   const [documents, setDocuments] = useState<SiteDocument[]>([])
+  const [pricing, setPricing] = useState<SiteDocument | null>(null)
   useEffect(() => {
     let cancelled = false
     api.siteDocuments(siteId).then(
@@ -40,6 +46,9 @@ export function SiteDocuments({ siteId }: { siteId: number }) {
             </Text>
           </div>
           <Group gap="xs">
+            {prices && document.hasData && (
+              <Button size="compact-sm" variant="light" color="green" onClick={() => setPricing(document)}>💶 Kalkulation mit Stundensätzen</Button>
+            )}
             <Button component="a" size="compact-sm" href={`/api/sites/documents/${document.id}`} target="_blank" rel="noreferrer">
               Öffnen
             </Button>
@@ -49,6 +58,7 @@ export function SiteDocuments({ siteId }: { siteId: number }) {
           </Group>
         </Group>
       ))}
+      {pricing && <OfferCalcSheet document={pricing} onClose={() => setPricing(null)} />}
     </div>
   )
 }
