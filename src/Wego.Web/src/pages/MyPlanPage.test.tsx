@@ -101,6 +101,27 @@ describe('MyPlanPage', () => {
     expect(within(thursday).getByText('12–16 Uhr')).toBeInTheDocument()
   })
 
+  it('lists the busy times of the own calendar among the work of the day by their time', async () => {
+    // Tsonyo on 25.11.: the site 7–12, busy 12:00–12:30 and 15:00–16:00, free 12:30–15.
+    const day: Plan = {
+      ...plan,
+      entries: [...plan.entries, entry(21, 1, 'Anna', '2026-03-05', 10, 'Familie Schulze', '07:00:00', '12:00:00')],
+      busy: [
+        { employeeId: 1, date: '2026-03-05', startTime: '15:00:00', endTime: '16:00:00' },
+        { employeeId: 1, date: '2026-03-05', startTime: '12:00:00', endTime: '12:30:00' },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(day), { status: 200 })))
+    renderWithProviders(<MyPlanPage year={2026} user={user} />)
+
+    const thursday = (await screen.findByText('Donnerstag, 05.03.2026')).closest('article')!
+    // Shown in the order of the column (CSS order): by the time each begins.
+    const shown = [...thursday.querySelectorAll<HTMLElement>('.my-entry')]
+      .sort((a, b) => Number(a.style.order) - Number(b.style.order))
+      .map((item) => item.querySelector('.when')?.textContent)
+    expect(shown).toEqual(['7–12 Uhr', '12:00–12:30', '12:30–15 Uhr', '15:00–16:00'])
+  })
+
   it('shows the own notes of a day and the free half of a day as "verfügbar"', async () => {
     const withNotes: Plan = {
       ...plan,
