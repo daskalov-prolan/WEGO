@@ -18,12 +18,39 @@ const WIDTH = 180
 
 type Pdf = InstanceType<(typeof import('jspdf'))['jsPDF']>
 
-/** The head of each document: WEGO, the shop and the address. */
-function letterhead(pdf: Pdf) {
+const GREEN: [number, number, number] = [0, 151, 72]
+
+/** A square standing on its tip, around its centre; r is half its height. */
+function diamond(pdf: Pdf, cx: number, cy: number, r: number, style: 'F' | 'FD') {
+  pdf.lines([[r, -r], [r, r], [-r, r], [-r, -r]], cx - r, cy, [1, 1], style, true)
+}
+
+/**
+ * The mark of WEGO as on the letters: a white square on its tip with a dark edge in front, the green one behind it
+ * and the red arrow, a thin white gap between them; then WEGO in red.
+ */
+function logo(pdf: Pdf, x: number, cy: number) {
+  const r = 5.6
+  pdf.setLineWidth(0.25)
+  pdf.setFillColor(...RED)
+  diamond(pdf, x + 2.15 * r, cy, r, 'F')
+  // The gap that cuts the red square into an arrow, and parts it from the green one.
+  pdf.setFillColor(255, 255, 255)
+  diamond(pdf, x + 1.05 * r, cy, r * 1.12, 'F')
+  pdf.setFillColor(...GREEN)
+  diamond(pdf, x + 1.05 * r, cy, r, 'F')
+  pdf.setFillColor(255, 255, 255)
+  pdf.setDrawColor(30)
+  diamond(pdf, x, cy, r, 'FD')
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(24)
+  pdf.setFontSize(27)
   pdf.setTextColor(...RED)
-  pdf.text('WEGO', LEFT, 20)
+  pdf.text('WEGO', x + 3.4 * r, cy + 3.6)
+}
+
+/** The head of each document: the logo of WEGO, the shop and the address. */
+function letterhead(pdf: Pdf) {
+  logo(pdf, LEFT + 5.6, 16)
   pdf.setFontSize(12)
   pdf.setTextColor(...TEAL)
   pdf.text('SANITÄR- & FLIESEN Fachgeschäft', LEFT + WIDTH, 16, { align: 'right' })
