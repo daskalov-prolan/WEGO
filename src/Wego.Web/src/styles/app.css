@@ -1304,9 +1304,11 @@ a:hover {
   text-align: left;
 }
 
-.my-visit-customer > span:last-child {
+/* The customer of a visit: the name, its address on the next line; "ändern" stays at the right. */
+.my-visit-customer > .my-visit-name {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
 }
 

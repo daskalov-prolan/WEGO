@@ -550,7 +550,7 @@ export function MyPlanPage({ year, user, onYearChange }: Props) {
                                 {...(site ? { onClick: () => setDetails(visit), 'aria-label': `${visit.siteName}: Details öffnen` } : {})}
                               >
                                 <span className="my-visit-time">{visit.startTime?.slice(0, 5)}</span>
-                                <span>
+                                <span className="my-visit-name">
                                   <strong>{visit.siteName}</strong>
                                   {addresses[i] && <span className="detail">{addresses[i]}</span>}
                                 </span>
