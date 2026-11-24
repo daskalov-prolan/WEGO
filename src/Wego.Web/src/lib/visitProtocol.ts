@@ -127,7 +127,7 @@ export const CHECKLIST: Section[] = [
       { id: 'absperrung', label: 'Separate Absperrung möglich?', kind: 'choice', options: JA_NEIN },
       { id: 'absperrungWo', label: 'Absperrung wo?', kind: 'text', when: { id: 'absperrung', is: 'nein' } },
       { id: 'absperrungZugang', label: 'Zugang?', kind: 'text', when: { id: 'absperrung', is: 'nein' } },
-      { id: 'heizkoerper', label: 'Vorhandener Heizkörper', kind: 'text' },
+      { id: 'heizkoerper', label: 'Vorhandener Heizkörper', kind: 'choice', options: ['Badheizkörper', 'Plattenheizkörper'] },
       { id: 'handtuch', label: 'Handtuchtrockner / Badheizkörper gewünscht?', kind: 'choice', options: JA_NEIN },
       { id: 'fbhWasser', label: 'Fußbodenheizung wasserführend gewünscht?', kind: 'choice', options: JA_NEIN },
     ],
