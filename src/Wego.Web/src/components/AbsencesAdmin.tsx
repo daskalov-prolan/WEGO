@@ -39,8 +39,8 @@ export function AbsencesAdmin({ year }: { year: number }) {
   }, [year])
   useEffect(() => {
     load()
-    // The craftsmen in the plan, but not one who is Planer G as well.
-    api.employees().then((list) => setEmployees(list.filter((e) => e.isActive && e.showInPlan && e.role !== 'PlanerG')), () => {})
+    // The craftsmen in the plan and the office planners (Planer A), but no Planer G (not one on the plan either).
+    api.employees().then((list) => setEmployees(list.filter((e) => e.isActive && e.role !== 'PlanerG')), () => {})
   }, [load])
 
   const change = (next: Partial<Draft>) => {

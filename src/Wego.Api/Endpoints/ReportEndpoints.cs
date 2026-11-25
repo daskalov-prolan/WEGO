@@ -78,7 +78,7 @@ public static class ReportEndpoints
             var byEmployee = absences.ToLookup(e => e.EmployeeId);
 
             var employees = await db.Employees.AsNoTracking()
-                .Where(e => e.IsActive && e.ShowInPlan)
+                .Where(e => e.IsActive && (e.ShowInPlan || e.Role == Roles.PlanerA))
                 .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
                 .ToListAsync();
 
