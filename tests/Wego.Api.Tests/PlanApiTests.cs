@@ -138,6 +138,30 @@ public class PlanApiTests(WegoApiFactory factory) : IClassFixture<WegoApiFactory
     }
 
     [Fact]
+    public async Task An_office_planner_not_in_the_plan_gets_vacation_and_is_in_the_vacation_sums()
+    {
+        var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
+        var created = await planer.PostAsJsonAsync("/api/employees", new
+        {
+            name = "Büro Planerin", sortOrder = 0, isActive = true, showInPlan = false, vacationDaysPerYear = 28,
+            userName = "buero.planerin", role = "PlanerA", password = "buero-planerin-2026",
+            mainActivity = (string?)null, additionalActivities = Array.Empty<string>(),
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        // Monday to Wednesday.
+        var saved = await planer.PostAsJsonAsync("/api/absences",
+            new { employeeId = id, type = "Urlaub", from = $"{Year}-06-08", to = $"{Year}-06-10" });
+        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+
+        var sums = await planer.GetFromJsonAsync<JsonElement>($"/api/reports/vacation?year={Year}");
+        var row = sums.EnumerateArray().Single(r => r.GetProperty("employeeId").GetInt32() == id);
+        Assert.Equal(3, row.GetProperty("used").GetInt32());
+        Assert.Equal(25, row.GetProperty("remaining").GetInt32());
+    }
+
+    [Fact]
     public async Task Employee_without_planning_rights_can_read_but_not_change_the_plan()
     {
         var planer = await LoginAsync(WegoApiFactory.PlanerUserName, WegoApiFactory.PlanerPassword);
